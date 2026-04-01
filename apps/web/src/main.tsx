@@ -3,11 +3,11 @@ import ReactDOM from "react-dom/client";
 import { BrowserRouter } from "react-router-dom";
 import { MantineProvider, createTheme } from "@mantine/core";
 import "@mantine/core/styles.css";
+import "@mantine/dates/styles.css";
 import App from "./App";
 
 const theme = createTheme({
   fontFamily: "'Space Grotesk', 'Segoe UI', sans-serif",
-  primaryColor: "teal",
   components: {
     InputWrapper: {
       styles: {

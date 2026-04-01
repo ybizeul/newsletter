@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import {
   ActionIcon,
-  Badge,
   Box,
   Button,
   Group,
@@ -13,7 +12,6 @@ import {
   TextInput
 } from "@mantine/core";
 import {
-  IconEye,
   IconFilePlus,
   IconGripVertical,
   IconRefresh,
@@ -32,12 +30,25 @@ import {
 } from "../lib/api";
 import type { Article, Newsletter } from "../types/domain";
 import { useNavigate } from "react-router-dom";
+import { DateTimePicker } from "@mantine/dates";
 import MDEditor from "@uiw/react-md-editor";
 import "@uiw/react-md-editor/markdown-editor.css";
 import "@uiw/react-markdown-preview/markdown.css";
 import "../styles/markdown-editor.css";
 
 const DEMO_CREATOR_ID = "demo-user";
+
+function formatNewsletterCreatedAt(value: string): string {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return "Unknown date";
+  }
+  return date.toLocaleDateString(undefined, {
+    year: "numeric",
+    month: "short",
+    day: "numeric"
+  });
+}
 
 export default function NewslettersPage() {
   const navigate = useNavigate();
@@ -49,7 +60,7 @@ export default function NewslettersPage() {
   const [articleIds, setArticleIDs] = useState<string[]>([]);
   const [draggedArticleId, setDraggedArticleId] = useState<string | null>(null);
   const [recipientRaw, setRecipientRaw] = useState("first@example.com,second@example.com");
-  const [scheduledAtInput, setScheduledAtInput] = useState("");
+  const [scheduledAtInput, setScheduledAtInput] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -103,7 +114,7 @@ export default function NewslettersPage() {
     setArticleIDs([]);
     setDraggedArticleId(null);
     setRecipientRaw("first@example.com,second@example.com");
-    setScheduledAtInput("");
+    setScheduledAtInput(null);
   };
 
   const onSelectNewsletter = (newsletter: Newsletter) => {
@@ -113,9 +124,9 @@ export default function NewslettersPage() {
     setArticleIDs(newsletter.articleIds);
     setRecipientRaw(newsletter.recipientIds.join(","));
     if (newsletter.scheduledAt) {
-      setScheduledAtInput(newsletter.scheduledAt.slice(0, 16));
+      setScheduledAtInput(newsletter.scheduledAt);
     } else {
-      setScheduledAtInput("");
+      setScheduledAtInput(null);
     }
   };
 
@@ -296,9 +307,9 @@ export default function NewslettersPage() {
                     <Text fw={600} lineClamp={1}>
                       {newsletter.title}
                     </Text>
-                    <Badge variant="light" size="sm" w="fit-content">
-                      {newsletter.status}
-                    </Badge>
+                    <Text size="xs" c="dimmed">
+                      {formatNewsletterCreatedAt(newsletter.createdAt)}
+                    </Text>
                   </Stack>
                   <ActionIcon
                     color="red"
@@ -329,9 +340,9 @@ export default function NewslettersPage() {
             {selectedNewsletterId ? (
               <Group gap="xs">
                 <Button
-                  variant="subtle"
+                  variant="light"
+                  color="blue"
                   size="xs"
-                  leftSection={<IconEye size={16} />}
                   onClick={() => navigate(`/newsletters/${selectedNewsletterId}/preview`)}
                 >
                   Preview
@@ -494,24 +505,30 @@ export default function NewslettersPage() {
           />
 
           <Group grow>
-            <TextInput
-              type="datetime-local"
+            <DateTimePicker
               label="Schedule send"
               description="Set when this newsletter should be sent automatically."
               value={scheduledAtInput}
-              onChange={(event) => setScheduledAtInput(event.currentTarget.value)}
+              onChange={setScheduledAtInput}
+              clearable
             />
           </Group>
 
           <Group justify="space-between">
             <Group gap="xs">
-              <Button leftSection={<IconSend size={16} />} onClick={() => void onSave()} loading={isSubmitting}>
+              <Button onClick={() => void onSave()} loading={isSubmitting}>
                 {selectedNewsletterId ? "Save Changes" : "Create Newsletter"}
               </Button>
               <Button variant="light" onClick={() => void onSchedule()} disabled={!selectedNewsletterId}>
                 Schedule
               </Button>
-              <Button color="green" variant="light" onClick={() => void onSendNow()} disabled={!selectedNewsletterId}>
+              <Button
+                color="green"
+                variant="light"
+                leftSection={<IconSend size={16} />}
+                onClick={() => void onSendNow()}
+                disabled={!selectedNewsletterId}
+              >
                 Send Now
               </Button>
             </Group>

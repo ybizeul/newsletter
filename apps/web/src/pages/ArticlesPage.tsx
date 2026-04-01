@@ -1,7 +1,6 @@
 import { type ClipboardEvent, useEffect, useMemo, useState } from "react";
 import {
   ActionIcon,
-  Badge,
   Box,
   Button,
   ColorPicker,
@@ -111,6 +110,18 @@ function resolveTablerIconName(input: string): string {
     name.replace(/^Icon/, "").toLowerCase().includes(normalized)
   );
   return partial ?? "";
+}
+
+function formatArticleCreatedAt(value: string): string {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return "Unknown date";
+  }
+  return date.toLocaleDateString(undefined, {
+    year: "numeric",
+    month: "short",
+    day: "numeric"
+  });
 }
 
 export default function ArticlesPage() {
@@ -404,9 +415,9 @@ export default function ArticlesPage() {
                     <Text fw={600} lineClamp={1}>
                       {article.title}
                     </Text>
-                    <Badge variant="light" size="sm" w="fit-content">
-                      {article.status}
-                    </Badge>
+                    <Text size="xs" c="dimmed">
+                      {formatArticleCreatedAt(article.createdAt)}
+                    </Text>
                   </Stack>
                   <ActionIcon
                     color="red"
