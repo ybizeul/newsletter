@@ -1,0 +1,19 @@
+[tasks."deps:up"]
+description = "Start local dependencies (MongoDB)"
+run = "docker compose -f local/docker-compose.yml up -d"
+
+[tasks."deps:down"]
+description = "Stop local dependencies"
+run = "docker compose -f local/docker-compose.yml down"
+
+[tasks."deps:logs"]
+description = "Tail local dependency logs"
+run = "docker compose -f local/docker-compose.yml logs -f --tail=200"
+
+[tasks."deps:status"]
+description = "Show local dependency status"
+run = "docker compose -f local/docker-compose.yml ps"
+
+[tasks."deps:restart"]
+description = "Restart local dependencies"
+run = "mise run deps:down && mise run deps:up"

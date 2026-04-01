@@ -1,0 +1,8 @@
+.markdown-editor-monospace .w-md-editor-text-input,
+.markdown-editor-monospace .w-md-editor-text-pre,
+.markdown-editor-monospace .w-md-editor-text-pre > code,
+.markdown-editor-monospace .w-md-editor-text textarea {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace !important;
+  font-size: 14px;
+  line-height: 1.6;
+}

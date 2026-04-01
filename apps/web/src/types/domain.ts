@@ -1,0 +1,42 @@
+export type ArticleStatus = "draft" | "published" | "archived";
+
+export interface Article {
+  id: string;
+  authorId: string;
+  title: string;
+  markdown: string;
+  topicIcon?: string;
+  illustration?: string;
+  status: ArticleStatus;
+  version: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type NewsletterStatus = "draft" | "scheduled" | "sending" | "sent" | "failed";
+
+export interface Newsletter {
+  id: string;
+  creatorId: string;
+  title: string;
+  introMarkdown: string;
+  articleIds: string[];
+  recipientIds: string[];
+  status: NewsletterStatus;
+  deliveryError?: string;
+  scheduledAt?: string;
+  sentAt?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface NewsletterPreview {
+  newsletter: Newsletter;
+  articles: Article[];
+  html: string;
+  text: string;
+}
+
+export interface ListResponse<T> {
+  items: T[];
+}
