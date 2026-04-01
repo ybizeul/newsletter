@@ -74,7 +74,7 @@ function buildTopicIconIllustration(iconName: string, circleColor: string, strok
     .replace(/<\/svg>$/i, "");
   const iconSvg = `<g transform="translate(8 8)" color="${strokeColor}" stroke="currentColor" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${iconInner}</g>`;
 
-  const finalSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 40 40" role="img" aria-label="${iconName}"><circle cx="20" cy="20" r="20" fill="${circleColor}"/>${iconSvg}</svg>`;
+  const finalSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 40 40"><circle cx="20" cy="20" r="20" fill="${circleColor}"/>${iconSvg}</svg>`;
   return `data:image/svg+xml,${encodeURIComponent(finalSvg)}`;
 }
 

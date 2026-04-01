@@ -22,6 +22,7 @@ import (
 
 	"github.com/microcosm-cc/bluemonday"
 	"github.com/yuin/goldmark"
+	"github.com/yuin/goldmark/extension"
 	gmhtml "github.com/yuin/goldmark/renderer/html"
 	"go.mongodb.org/mongo-driver/v2/bson"
 	"go.mongodb.org/mongo-driver/v2/mongo"
@@ -592,7 +593,7 @@ func (h *Handler) renderNewsletter(newsletter model.Newsletter, articles []model
 			return "", "", err
 		}
 		articleHTML = enforceImageFullWidth(articleHTML)
-		hasIconIllustration := article.Illustration != "" && strings.HasPrefix(article.Illustration, "data:image/svg+xml")
+		hasIconIllustration := regexp.MustCompile(`(?i)^data:image/svg\+xml(?:;[^,]*)?,`).MatchString(article.Illustration)
 
 		body.WriteString("<article style=\"margin-bottom:32px;border-top:1px solid #e5e7eb;padding-top:20px\">\n")
 		if hasIconIllustration {
@@ -637,7 +638,10 @@ func enforceImageFullWidth(input string) string {
 
 func renderMarkdownToSafeHTML(markdown string) (string, error) {
 	var raw bytes.Buffer
-	md := goldmark.New(goldmark.WithRendererOptions(gmhtml.WithUnsafe()))
+	md := goldmark.New(
+		goldmark.WithExtensions(extension.GFM),
+		goldmark.WithRendererOptions(gmhtml.WithUnsafe()),
+	)
 	if err := md.Convert([]byte(markdown), &raw); err != nil {
 		return "", err
 	}
@@ -650,6 +654,8 @@ func renderMarkdownToSafeHTML(markdown string) (string, error) {
 	policy.AllowAttrs("alt", "title").OnElements("img")
 	policy.AllowAttrs("style").OnElements("p", "img")
 	policy.AllowStyles("text-align").OnElements("p")
+	policy.AllowElements("table", "thead", "tbody", "tfoot", "tr", "th", "td")
+	policy.AllowAttrs("align", "colspan", "rowspan").OnElements("th", "td")
 
 	return policy.Sanitize(raw.String()), nil
 }
