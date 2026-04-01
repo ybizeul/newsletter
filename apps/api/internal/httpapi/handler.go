@@ -11,6 +11,7 @@ import (
 	"log"
 	"net/http"
 	"net/smtp"
+	"net/url"
 	"regexp"
 	"sort"
 	"strings"
@@ -660,7 +661,7 @@ type inlineAttachment struct {
 }
 
 func extractInlineDataImages(htmlBody string) (string, []inlineAttachment, error) {
-	re := regexp.MustCompile(`src="data:(image/[a-zA-Z0-9.+-]+);base64,([^"]+)"`)
+	re := regexp.MustCompile(`src="(data:[^"]+)"`)
 	matches := re.FindAllStringSubmatch(htmlBody, -1)
 	if len(matches) == 0 {
 		return htmlBody, nil, nil
@@ -668,26 +669,83 @@ func extractInlineDataImages(htmlBody string) (string, []inlineAttachment, error
 
 	attachments := make([]inlineAttachment, 0, len(matches))
 	updated := htmlBody
+	seen := make(map[string]string, len(matches))
 
-	for i, m := range matches {
-		mimeType := m[1]
-		encoded := strings.ReplaceAll(m[2], "\n", "")
-		encoded = strings.ReplaceAll(encoded, "\r", "")
-
-		data, err := base64.StdEncoding.DecodeString(encoded)
-		if err != nil {
-			return "", nil, err
+	for _, m := range matches {
+		dataURI := m[1]
+		if !strings.HasPrefix(strings.ToLower(dataURI), "data:image/") {
+			continue
 		}
 
-		cid := fmt.Sprintf("inline-image-%d", i+1)
-		attachments = append(attachments, inlineAttachment{CID: cid, MimeType: mimeType, Data: data})
+		cid, ok := seen[dataURI]
+		if !ok {
+			mimeType, data, err := decodeDataImageURI(dataURI)
+			if err != nil {
+				return "", nil, err
+			}
 
-		dataSrc := fmt.Sprintf(`src="data:%s;base64,%s"`, mimeType, encoded)
-		cidSrc := fmt.Sprintf(`src="cid:%s"`, cid)
-		updated = strings.ReplaceAll(updated, dataSrc, cidSrc)
+			cid = fmt.Sprintf("inline-image-%d", len(attachments)+1)
+			attachments = append(attachments, inlineAttachment{CID: cid, MimeType: mimeType, Data: data})
+			seen[dataURI] = cid
+		}
+
+		updated = strings.ReplaceAll(updated, `src="`+dataURI+`"`, `src="cid:`+cid+`"`)
 	}
 
 	return updated, attachments, nil
+}
+
+func decodeDataImageURI(dataURI string) (string, []byte, error) {
+	if !strings.HasPrefix(dataURI, "data:") {
+		return "", nil, fmt.Errorf("invalid data uri")
+	}
+
+	payload := strings.TrimPrefix(dataURI, "data:")
+	comma := strings.Index(payload, ",")
+	if comma < 0 {
+		return "", nil, fmt.Errorf("invalid data uri payload")
+	}
+
+	meta := payload[:comma]
+	encoded := payload[comma+1:]
+	parts := strings.Split(meta, ";")
+	mimeType := parts[0]
+	if mimeType == "" {
+		mimeType = "application/octet-stream"
+	}
+
+	isBase64 := false
+	if len(parts) > 1 {
+		filtered := make([]string, 0, len(parts)-1)
+		for _, part := range parts[1:] {
+			if strings.EqualFold(part, "base64") {
+				isBase64 = true
+				continue
+			}
+			if part != "" {
+				filtered = append(filtered, part)
+			}
+		}
+		if len(filtered) > 0 {
+			mimeType += ";" + strings.Join(filtered, ";")
+		}
+	}
+
+	if isBase64 {
+		clean := strings.ReplaceAll(encoded, "\n", "")
+		clean = strings.ReplaceAll(clean, "\r", "")
+		data, err := base64.StdEncoding.DecodeString(clean)
+		if err != nil {
+			return "", nil, err
+		}
+		return mimeType, data, nil
+	}
+
+	decoded, err := url.PathUnescape(encoded)
+	if err != nil {
+		return "", nil, err
+	}
+	return mimeType, []byte(decoded), nil
 }
 
 func (h *Handler) sendSMTP(recipient, subject, htmlBody, textBody string) error {
