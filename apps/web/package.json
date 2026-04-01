@@ -9,8 +9,8 @@
     "preview": "vite preview --host 0.0.0.0 --port 4173"
   },
   "dependencies": {
-    "@mantine/core": "^7.17.8",
-    "@mantine/hooks": "^7.17.8",
+    "@mantine/core": "^8.0.0",
+    "@mantine/hooks": "^8.0.0",
     "@tabler/icons-react": "^3.31.0",
     "@uiw/react-md-editor": "^4.0.8",
     "react": "^18.3.1",

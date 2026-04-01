@@ -1,14 +1,23 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
 import { BrowserRouter } from "react-router-dom";
-import { MantineProvider } from "@mantine/core";
+import { MantineProvider, createTheme } from "@mantine/core";
 import "@mantine/core/styles.css";
 import App from "./App";
 
-const theme = {
+const theme = createTheme({
   fontFamily: "'Space Grotesk', 'Segoe UI', sans-serif",
-  primaryColor: "teal" as const
-};
+  primaryColor: "teal",
+  components: {
+    InputWrapper: {
+      styles: {
+        label: {
+          fontWeight: 700
+        }
+      }
+    }
+  }
+});
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Button, Code, Group, Loader, Paper, Stack, Text, Title } from "@mantine/core";
+import { Button, Group, Loader, Paper, Stack, Text, Title } from "@mantine/core";
 import { Link, useParams } from "react-router-dom";
 import { getNewsletterPreview } from "../lib/api";
 import type { NewsletterPreview } from "../types/domain";
@@ -63,13 +63,6 @@ export default function NewsletterPreviewPage() {
             <div style={{ padding: 16 }}>
               <div dangerouslySetInnerHTML={{ __html: data.html }} />
             </div>
-          </Paper>
-
-          <Paper withBorder radius={0} p="md">
-            <Title order={4} mb="sm">
-              Text Fallback
-            </Title>
-            <Code block>{data.text}</Code>
           </Paper>
         </>
       ) : null}

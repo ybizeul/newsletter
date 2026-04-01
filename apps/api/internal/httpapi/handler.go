@@ -591,14 +591,19 @@ func (h *Handler) renderNewsletter(newsletter model.Newsletter, articles []model
 			return "", "", err
 		}
 		articleHTML = enforceImageFullWidth(articleHTML)
+		hasIconIllustration := article.Illustration != "" && strings.HasPrefix(article.Illustration, "data:image/svg+xml")
 
 		body.WriteString("<article style=\"margin-bottom:32px;border-top:1px solid #e5e7eb;padding-top:20px\">\n")
-		body.WriteString("<h2 style=\"margin:0 0 8px\">" + html.EscapeString(article.Title) + "</h2>\n")
-		if article.TopicIcon != "" {
-			body.WriteString("<p style=\"margin:0 0 8px;color:#4b5563\">" + html.EscapeString(article.TopicIcon) + "</p>\n")
+		if hasIconIllustration {
+			body.WriteString("<table role=\"presentation\" cellpadding=\"0\" cellspacing=\"0\" style=\"border-collapse:collapse;margin:0 0 8px;width:100%\"><tr>")
+			body.WriteString("<td style=\"width:40px;vertical-align:middle;padding:0 10px 0 0\"><img src=\"" + html.EscapeString(article.Illustration) + "\" alt=\"\" width=\"40\" height=\"40\" style=\"display:block;width:40px;height:40px;border-radius:9999px\" /></td>")
+			body.WriteString("<td style=\"vertical-align:middle\"><h2 style=\"margin:0;font-size:20px;line-height:1.3\">" + html.EscapeString(article.Title) + "</h2></td>")
+			body.WriteString("</tr></table>\n")
+		} else {
+			body.WriteString("<h2 style=\"margin:0 0 8px;font-size:20px;line-height:1.3\">" + html.EscapeString(article.Title) + "</h2>\n")
 		}
-		if article.Illustration != "" {
-			body.WriteString("<p style=\"text-align:center;margin:12px 0\"><img src=\"" + html.EscapeString(article.Illustration) + "\" alt=\"" + html.EscapeString(article.Title) + "\" style=\"max-width:100%;height:auto;border-radius:8px\" /></p>\n")
+		if article.Illustration != "" && !hasIconIllustration {
+			body.WriteString("<p style=\"margin:12px 0\"><img src=\"" + html.EscapeString(article.Illustration) + "\" alt=\"" + html.EscapeString(article.Title) + "\" style=\"max-width:100%;width:100%;height:auto;display:block;margin:0 auto;float:none;border-radius:8px\" /></p>\n")
 		}
 		body.WriteString(articleHTML + "\n")
 		body.WriteString("</article>\n")
@@ -621,11 +626,11 @@ func enforceImageFullWidth(input string) string {
 			if styleValue != "" && !strings.HasSuffix(styleValue, ";") {
 				styleValue += ";"
 			}
-			styleValue += "width:100%;height:auto;display:block;"
+			styleValue += "max-width:100%;width:100%;height:auto;display:block;margin:0 auto;float:none;"
 			return styleRe.ReplaceAllString(tag, `style="`+styleValue+`"`)
 		}
 
-		return strings.Replace(tag, "<img", `<img style="width:100%;height:auto;display:block;"`, 1)
+		return strings.Replace(tag, "<img", `<img style="max-width:100%;width:100%;height:auto;display:block;margin:0 auto;float:none;"`, 1)
 	})
 }
 

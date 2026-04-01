@@ -2,8 +2,10 @@ import { useEffect, useMemo, useState } from "react";
 import {
   ActionIcon,
   Badge,
+  Box,
   Button,
   Group,
+  Input,
   ScrollArea,
   Select,
   Stack,
@@ -14,7 +16,6 @@ import {
   IconEye,
   IconFilePlus,
   IconGripVertical,
-  IconPlus,
   IconRefresh,
   IconSend,
   IconTrash,
@@ -46,7 +47,6 @@ export default function NewslettersPage() {
   const [title, setTitle] = useState("");
   const [introMarkdown, setIntroMarkdown] = useState("");
   const [articleIds, setArticleIDs] = useState<string[]>([]);
-  const [articleToAddId, setArticleToAddId] = useState<string | null>(null);
   const [draggedArticleId, setDraggedArticleId] = useState<string | null>(null);
   const [recipientRaw, setRecipientRaw] = useState("first@example.com,second@example.com");
   const [scheduledAtInput, setScheduledAtInput] = useState("");
@@ -66,6 +66,7 @@ export default function NewslettersPage() {
         return {
           id: articleId,
           title: article?.title ?? "(missing article)",
+          illustration: article?.illustration ?? "",
           exists: Boolean(article)
         };
       }),
@@ -100,7 +101,6 @@ export default function NewslettersPage() {
     setTitle("");
     setIntroMarkdown("");
     setArticleIDs([]);
-    setArticleToAddId(null);
     setDraggedArticleId(null);
     setRecipientRaw("first@example.com,second@example.com");
     setScheduledAtInput("");
@@ -230,18 +230,6 @@ export default function NewslettersPage() {
     }
   };
 
-  const addArticleToNewsletter = () => {
-    if (!articleToAddId) {
-      return;
-    }
-    if (articleIds.includes(articleToAddId)) {
-      setArticleToAddId(null);
-      return;
-    }
-    setArticleIDs((current) => [...current, articleToAddId]);
-    setArticleToAddId(null);
-  };
-
   const removeArticleFromNewsletter = (articleId: string) => {
     setArticleIDs((current) => current.filter((id) => id !== articleId));
   };
@@ -340,6 +328,14 @@ export default function NewslettersPage() {
             <Text fw={700}>{selectedNewsletterId ? "Edit Newsletter" : "New Newsletter"}</Text>
             {selectedNewsletterId ? (
               <Group gap="xs">
+                <Button
+                  variant="subtle"
+                  size="xs"
+                  leftSection={<IconEye size={16} />}
+                  onClick={() => navigate(`/newsletters/${selectedNewsletterId}/preview`)}
+                >
+                  Preview
+                </Button>
                 <Button variant="default" size="xs" onClick={resetForm}>
                   Cancel
                 </Button>
@@ -352,15 +348,16 @@ export default function NewslettersPage() {
 
           <TextInput
             label="Title"
+            description="Display title for this newsletter edition."
             placeholder="April Product Digest"
             value={title}
             onChange={(event) => setTitle(event.currentTarget.value)}
           />
 
-          <Stack gap={6}>
-            <Text size="sm" fw={500}>
-              Introduction (Markdown)
-            </Text>
+          <Input.Wrapper
+            label="Introduction (Markdown)"
+            description="Write the opening section shown before the selected articles."
+          >
             <div data-color-mode="light">
               <MDEditor
                 className="markdown-editor-monospace"
@@ -379,31 +376,26 @@ export default function NewslettersPage() {
                 }}
               />
             </div>
-          </Stack>
+          </Input.Wrapper>
 
-          <Stack gap="xs">
-            <Text size="sm" fw={500}>
-              Articles to include
-            </Text>
+            <Stack gap="xs">
 
             <Group align="end" grow>
               <Select
                 label="Add existing article"
+                description="Choose an article from the library to append to this newsletter."
                 placeholder="Choose an article"
                 data={articleOptionsForAdd}
-                value={articleToAddId}
-                onChange={setArticleToAddId}
+                value={null}
+                onChange={(value) => {
+                  if (!value || articleIds.includes(value)) {
+                    return;
+                  }
+                  setArticleIDs((current) => [...current, value]);
+                }}
                 searchable
                 nothingFoundMessage="No more articles available"
               />
-              <Button
-                leftSection={<IconPlus size={16} />}
-                variant="light"
-                onClick={addArticleToNewsletter}
-                disabled={!articleToAddId}
-              >
-                Add
-              </Button>
             </Group>
 
             <Stack gap={8}>
@@ -440,6 +432,35 @@ export default function NewslettersPage() {
                       >
                         <IconGripVertical size={16} color="#868e96" />
                       </div>
+                      <Box
+                        style={{
+                          width: 26,
+                          height: 26,
+                          borderRadius: 9999,
+                          border: "1px solid #dee2e6",
+                          display: "inline-flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          overflow: "hidden",
+                          background: "#f8f9fa",
+                          flexShrink: 0
+                        }}
+                      >
+                        {article.illustration ? (
+                          <Box
+                            component="img"
+                            src={article.illustration}
+                            alt="Article icon"
+                            w={26}
+                            h={26}
+                            style={{ display: "block" }}
+                          />
+                        ) : (
+                          <Text size="xs" c="dimmed">
+                            -
+                          </Text>
+                        )}
+                      </Box>
                       <Text size="sm" c={article.exists ? undefined : "dimmed"} truncate="end">
                         {article.title}
                       </Text>
@@ -462,10 +483,11 @@ export default function NewslettersPage() {
                 </Text>
               ) : null}
             </Stack>
-          </Stack>
-
+            </Stack>
+            
           <TextInput
             label="Recipients (emails, comma-separated)"
+            description="Comma-separated recipient addresses used for send and schedule actions."
             placeholder="first@example.com,second@example.com"
             value={recipientRaw}
             onChange={(event) => setRecipientRaw(event.currentTarget.value)}
@@ -475,6 +497,7 @@ export default function NewslettersPage() {
             <TextInput
               type="datetime-local"
               label="Schedule send"
+              description="Set when this newsletter should be sent automatically."
               value={scheduledAtInput}
               onChange={(event) => setScheduledAtInput(event.currentTarget.value)}
             />
@@ -492,16 +515,6 @@ export default function NewslettersPage() {
                 Send Now
               </Button>
             </Group>
-
-            {selectedNewsletterId ? (
-              <Button
-                variant="subtle"
-                leftSection={<IconEye size={16} />}
-                onClick={() => navigate(`/newsletters/${selectedNewsletterId}/preview`)}
-              >
-                Preview
-              </Button>
-            ) : null}
           </Group>
 
           {selectedNewsletter?.deliveryError ? (
