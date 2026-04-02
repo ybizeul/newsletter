@@ -20,6 +20,7 @@ export interface Newsletter {
   creatorId: string;
   title: string;
   introMarkdown: string;
+  includeIndex: boolean;
   articleIds: string[];
   recipientIds: string[];
   status: NewsletterStatus;

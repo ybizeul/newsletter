@@ -177,6 +177,7 @@ type createNewsletterRequest struct {
 	CreatorID     string   `json:"creatorId"`
 	Title         string   `json:"title"`
 	IntroMarkdown string   `json:"introMarkdown"`
+	IncludeIndex  bool     `json:"includeIndex"`
 	ArticleIDs    []string `json:"articleIds"`
 	RecipientIDs  []string `json:"recipientIds"`
 }
@@ -184,6 +185,7 @@ type createNewsletterRequest struct {
 type updateNewsletterRequest struct {
 	Title         string   `json:"title"`
 	IntroMarkdown string   `json:"introMarkdown"`
+	IncludeIndex  bool     `json:"includeIndex"`
 	ArticleIDs    []string `json:"articleIds"`
 	RecipientIDs  []string `json:"recipientIds"`
 }
@@ -206,6 +208,7 @@ func (h *Handler) CreateNewsletter(w http.ResponseWriter, r *http.Request) {
 		CreatorID:     req.CreatorID,
 		Title:         req.Title,
 		IntroMarkdown: req.IntroMarkdown,
+		IncludeIndex:  req.IncludeIndex,
 		ArticleIDs:    req.ArticleIDs,
 		RecipientIDs:  req.RecipientIDs,
 		Status:        model.NewsletterStatusDraft,
@@ -261,6 +264,7 @@ func (h *Handler) UpdateNewsletter(w http.ResponseWriter, r *http.Request, id st
 		"$set": bson.M{
 			"title":         strings.TrimSpace(req.Title),
 			"introMarkdown": req.IntroMarkdown,
+			"includeIndex":  req.IncludeIndex,
 			"articleIds":    req.ArticleIDs,
 			"recipientIds":  req.RecipientIDs,
 			"updatedAt":     time.Now().UTC(),
@@ -587,6 +591,23 @@ func (h *Handler) renderNewsletter(newsletter model.Newsletter, articles []model
 	var text strings.Builder
 	text.WriteString(newsletter.IntroMarkdown + "\n\n")
 
+	if newsletter.IncludeIndex && len(articles) > 0 {
+		body.WriteString("<section style=\"margin:0 0 24px;background:#f1f3f5;border:1px solid #e9ecef;border-radius:8px;padding:14px 16px\">\n")
+		body.WriteString("<p style=\"margin:0 0 10px;font-size:14px;line-height:1.4;font-weight:700;color:#343a40\">In this issue</p>\n")
+		body.WriteString("<ul style=\"margin:0;padding:0 0 0 18px\">\n")
+		for _, article := range articles {
+			body.WriteString("<li style=\"margin:0 0 6px 0;color:#343a40\">" + html.EscapeString(article.Title) + "</li>\n")
+		}
+		body.WriteString("</ul>\n")
+		body.WriteString("</section>\n")
+
+		text.WriteString("In this issue\n")
+		for _, article := range articles {
+			text.WriteString("- " + article.Title + "\n")
+		}
+		text.WriteString("\n")
+	}
+
 	for _, article := range articles {
 		articleHTML, err := renderMarkdownToSafeHTML(article.Markdown)
 		if err != nil {
@@ -597,12 +618,13 @@ func (h *Handler) renderNewsletter(newsletter model.Newsletter, articles []model
 
 		body.WriteString("<article style=\"margin-bottom:32px;border-top:1px solid #e5e7eb;padding-top:20px\">\n")
 		if hasIconIllustration {
-			body.WriteString("<table role=\"presentation\" cellpadding=\"0\" cellspacing=\"0\" style=\"border-collapse:collapse;margin:0 0 8px;width:100%\"><tr>")
-			body.WriteString("<td style=\"width:40px;vertical-align:middle;padding:0 10px 0 0\"><img src=\"" + html.EscapeString(article.Illustration) + "\" alt=\"\" width=\"40\" height=\"40\" style=\"display:block;width:40px;height:40px;border-radius:9999px\" /></td>")
-			body.WriteString("<td style=\"vertical-align:middle\"><h2 style=\"margin:0;font-size:20px;line-height:1.3\">" + html.EscapeString(article.Title) + "</h2></td>")
+			body.WriteString("<table role=\"presentation\" cellpadding=\"0\" cellspacing=\"0\" style=\"border-collapse:collapse;table-layout:fixed;margin:0 0 8px;width:100%\"><tr>")
+			body.WriteString("<td style=\"width:40px;vertical-align:middle\"><img src=\"" + html.EscapeString(article.Illustration) + "\" alt=\"\" width=\"40\" height=\"40\" style=\"display:block;width:40px;height:40px;border-radius:9999px\" /></td>")
+			body.WriteString("<td style=\"width:10px;font-size:0;line-height:0\">&nbsp;</td>")
+			body.WriteString("<td style=\"vertical-align:middle;word-break:break-word;overflow-wrap:anywhere\"><p style=\"margin:0;font-size:20px;line-height:26px;font-weight:700;word-break:break-word;overflow-wrap:anywhere\">" + html.EscapeString(article.Title) + "</p></td>")
 			body.WriteString("</tr></table>\n")
 		} else {
-			body.WriteString("<h2 style=\"margin:0 0 8px;font-size:20px;line-height:1.3\">" + html.EscapeString(article.Title) + "</h2>\n")
+			body.WriteString("<p style=\"margin:0 0 8px;font-size:20px;line-height:26px;font-weight:700;word-break:break-word;overflow-wrap:anywhere\">" + html.EscapeString(article.Title) + "</p>\n")
 		}
 		if article.Illustration != "" && !hasIconIllustration {
 			body.WriteString("<p style=\"margin:12px 0\"><img src=\"" + html.EscapeString(article.Illustration) + "\" alt=\"" + html.EscapeString(article.Title) + "\" style=\"max-width:100%;width:100%;height:auto;display:block;margin:0 auto;float:none;border-radius:8px\" /></p>\n")

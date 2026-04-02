@@ -17,6 +17,7 @@ type Newsletter struct {
 	CreatorID     string           `bson:"creatorId" json:"creatorId"`
 	Title         string           `bson:"title" json:"title"`
 	IntroMarkdown string           `bson:"introMarkdown" json:"introMarkdown"`
+	IncludeIndex  bool             `bson:"includeIndex" json:"includeIndex"`
 	ArticleIDs    []string         `bson:"articleIds" json:"articleIds"`
 	RecipientIDs  []string         `bson:"recipientIds" json:"recipientIds"`
 	Status        NewsletterStatus `bson:"status" json:"status"`

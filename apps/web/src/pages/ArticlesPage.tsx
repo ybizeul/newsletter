@@ -1,4 +1,4 @@
-import { type ClipboardEvent, useEffect, useMemo, useState } from "react";
+import { type ClipboardEvent, type MouseEvent as ReactMouseEvent, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActionIcon,
   Box,
@@ -32,6 +32,16 @@ const TABLER_ICON_MAP = TablerIcons as unknown as Record<string, React.Component
 
 const DEFAULT_TOPIC_ICON_BG = "#228be6";
 const DEFAULT_TOPIC_ICON_STROKE = "#ffffff";
+const ARTICLES_PANE_WIDTH_STORAGE_KEY = "newsletter.articles.pane.width";
+
+function getStoredArticlesPaneWidth(): number {
+  const raw = window.localStorage.getItem(ARTICLES_PANE_WIDTH_STORAGE_KEY);
+  const parsed = Number(raw);
+  if (!Number.isFinite(parsed)) {
+    return 340;
+  }
+  return Math.min(Math.max(parsed, 260), 900);
+}
 
 function extractTopicIconBackgroundColor(illustration?: string): string {
   if (!illustration || !illustration.startsWith("data:image/svg+xml,")) {
@@ -125,6 +135,8 @@ function formatArticleCreatedAt(value: string): string {
 }
 
 export default function ArticlesPage() {
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const [leftPaneWidth, setLeftPaneWidth] = useState(getStoredArticlesPaneWidth);
   const [articles, setArticles] = useState<Article[]>([]);
   const [selectedArticleId, setSelectedArticleID] = useState<string | null>(null);
   const [title, setTitle] = useState("");
@@ -374,17 +386,43 @@ export default function ArticlesPage() {
       .slice(0, 300);
   }, [iconSearch]);
 
+  const startPaneResize = (event: ReactMouseEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    const containerRect = containerRef.current?.getBoundingClientRect();
+    const containerLeft = containerRect?.left ?? 0;
+
+    const onMouseMove = (moveEvent: MouseEvent) => {
+      const containerWidth = containerRef.current?.getBoundingClientRect().width ?? 1200;
+      const minWidth = 260;
+      const maxWidth = Math.max(minWidth, containerWidth - 420);
+      const nextWidth = moveEvent.clientX - containerLeft;
+      const clampedWidth = Math.min(Math.max(nextWidth, minWidth), maxWidth);
+      setLeftPaneWidth(clampedWidth);
+      window.localStorage.setItem(ARTICLES_PANE_WIDTH_STORAGE_KEY, String(clampedWidth));
+    };
+
+    const onMouseUp = () => {
+      window.removeEventListener("mousemove", onMouseMove);
+      window.removeEventListener("mouseup", onMouseUp);
+    };
+
+    window.addEventListener("mousemove", onMouseMove);
+    window.addEventListener("mouseup", onMouseUp);
+  };
+
   return (
     <div
+      ref={containerRef}
       style={{
         display: "grid",
-        gridTemplateColumns: "340px 1fr",
+        gridTemplateColumns: `${leftPaneWidth}px 1fr`,
         gap: 0,
         height: "calc(100vh - 120px)",
-        minHeight: 560
+        minHeight: 560,
+        position: "relative"
       }}
     >
-      <div style={{ borderRight: "1px solid #e9ecef", overflow: "hidden" }}>
+      <div style={{ overflow: "hidden" }}>
         <Group justify="space-between" p="sm" style={{ borderBottom: "1px solid #e9ecef" }}>
           <Text fw={600}>Articles ({articles.length})</Text>
           <Group gap="xs">
@@ -440,6 +478,20 @@ export default function ArticlesPage() {
           </Stack>
         </ScrollArea>
       </div>
+
+      <div
+        onMouseDown={startPaneResize}
+        style={{
+          position: "absolute",
+          top: 0,
+          bottom: 0,
+          left: leftPaneWidth - 4,
+          width: 8,
+          cursor: "col-resize",
+          zIndex: 20,
+          background: "linear-gradient(to right, transparent 3px, #e9ecef 3px, #e9ecef 4px, transparent 4px)"
+        }}
+      />
 
       <div style={{ padding: 12, overflow: "auto" }}>
         <Stack>

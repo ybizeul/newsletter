@@ -14,6 +14,7 @@ type CreateNewsletterPayload = {
   creatorId: string;
   title: string;
   introMarkdown: string;
+  includeIndex: boolean;
   articleIds: string[];
   recipientIds: string[];
 };
@@ -21,6 +22,7 @@ type CreateNewsletterPayload = {
 type UpdateNewsletterPayload = {
   title: string;
   introMarkdown: string;
+  includeIndex: boolean;
   articleIds: string[];
   recipientIds: string[];
 };

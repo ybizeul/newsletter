@@ -1,8 +1,9 @@
-import { useEffect, useMemo, useState } from "react";
+import { type MouseEvent as ReactMouseEvent, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActionIcon,
   Box,
   Button,
+  Checkbox,
   Group,
   Input,
   ScrollArea,
@@ -38,6 +39,16 @@ import "@uiw/react-markdown-preview/markdown.css";
 import "../styles/markdown-editor.css";
 
 const DEMO_CREATOR_ID = "demo-user";
+const NEWSLETTERS_PANE_WIDTH_STORAGE_KEY = "newsletter.newsletters.pane.width";
+
+function getStoredNewslettersPaneWidth(): number {
+  const raw = window.localStorage.getItem(NEWSLETTERS_PANE_WIDTH_STORAGE_KEY);
+  const parsed = Number(raw);
+  if (!Number.isFinite(parsed)) {
+    return 340;
+  }
+  return Math.min(Math.max(parsed, 260), 900);
+}
 
 function formatNewsletterCreatedAt(value: string): string {
   const date = new Date(value);
@@ -52,12 +63,15 @@ function formatNewsletterCreatedAt(value: string): string {
 }
 
 export default function NewslettersPage() {
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const [leftPaneWidth, setLeftPaneWidth] = useState(getStoredNewslettersPaneWidth);
   const navigate = useNavigate();
   const [articles, setArticles] = useState<Article[]>([]);
   const [newsletters, setNewsletters] = useState<Newsletter[]>([]);
   const [selectedNewsletterId, setSelectedNewsletterID] = useState<string | null>(null);
   const [title, setTitle] = useState("");
   const [introMarkdown, setIntroMarkdown] = useState("");
+  const [includeIndex, setIncludeIndex] = useState(false);
   const [articleIds, setArticleIDs] = useState<string[]>([]);
   const [draggedArticleId, setDraggedArticleId] = useState<string | null>(null);
   const [recipientRaw, setRecipientRaw] = useState("first@example.com,second@example.com");
@@ -118,6 +132,7 @@ export default function NewslettersPage() {
     setSelectedNewsletterID(null);
     setTitle("");
     setIntroMarkdown("");
+    setIncludeIndex(false);
     setArticleIDs([]);
     setDraggedArticleId(null);
     setRecipientRaw("first@example.com,second@example.com");
@@ -128,6 +143,7 @@ export default function NewslettersPage() {
     setSelectedNewsletterID(newsletter.id);
     setTitle(newsletter.title);
     setIntroMarkdown(newsletter.introMarkdown);
+    setIncludeIndex(Boolean(newsletter.includeIndex));
     setArticleIDs(newsletter.articleIds);
     setRecipientRaw(newsletter.recipientIds.join(","));
     if (newsletter.scheduledAt) {
@@ -172,6 +188,7 @@ export default function NewslettersPage() {
         const updated = await updateNewsletter(selectedNewsletterId, {
           title: title.trim(),
           introMarkdown: introMarkdown.trim(),
+          includeIndex,
           articleIds,
           recipientIds: parseRecipients()
         });
@@ -183,6 +200,7 @@ export default function NewslettersPage() {
           creatorId: DEMO_CREATOR_ID,
           title: title.trim(),
           introMarkdown: introMarkdown.trim(),
+          includeIndex,
           articleIds,
           recipientIds: parseRecipients()
         });
@@ -273,17 +291,43 @@ export default function NewslettersPage() {
 
   const selectedNewsletter = newsletters.find((newsletter) => newsletter.id === selectedNewsletterId) ?? null;
 
+  const startPaneResize = (event: ReactMouseEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    const containerRect = containerRef.current?.getBoundingClientRect();
+    const containerLeft = containerRect?.left ?? 0;
+
+    const onMouseMove = (moveEvent: MouseEvent) => {
+      const containerWidth = containerRef.current?.getBoundingClientRect().width ?? 1200;
+      const minWidth = 260;
+      const maxWidth = Math.max(minWidth, containerWidth - 420);
+      const nextWidth = moveEvent.clientX - containerLeft;
+      const clampedWidth = Math.min(Math.max(nextWidth, minWidth), maxWidth);
+      setLeftPaneWidth(clampedWidth);
+      window.localStorage.setItem(NEWSLETTERS_PANE_WIDTH_STORAGE_KEY, String(clampedWidth));
+    };
+
+    const onMouseUp = () => {
+      window.removeEventListener("mousemove", onMouseMove);
+      window.removeEventListener("mouseup", onMouseUp);
+    };
+
+    window.addEventListener("mousemove", onMouseMove);
+    window.addEventListener("mouseup", onMouseUp);
+  };
+
   return (
     <div
+      ref={containerRef}
       style={{
         display: "grid",
-        gridTemplateColumns: "340px 1fr",
+        gridTemplateColumns: `${leftPaneWidth}px 1fr`,
         gap: 0,
         height: "calc(100vh - 120px)",
-        minHeight: 560
+        minHeight: 560,
+        position: "relative"
       }}
     >
-      <div style={{ borderRight: "1px solid #e9ecef", overflow: "hidden" }}>
+      <div style={{ overflow: "hidden" }}>
         <Group justify="space-between" p="sm" style={{ borderBottom: "1px solid #e9ecef" }}>
           <Text fw={600}>Newsletters ({newsletters.length})</Text>
           <Group gap="xs">
@@ -340,6 +384,20 @@ export default function NewslettersPage() {
         </ScrollArea>
       </div>
 
+      <div
+        onMouseDown={startPaneResize}
+        style={{
+          position: "absolute",
+          top: 0,
+          bottom: 0,
+          left: leftPaneWidth - 4,
+          width: 8,
+          cursor: "col-resize",
+          zIndex: 20,
+          background: "linear-gradient(to right, transparent 3px, #e9ecef 3px, #e9ecef 4px, transparent 4px)"
+        }}
+      />
+
       <div style={{ padding: 12, overflow: "auto" }}>
         <Stack>
           <Group justify="space-between">
@@ -395,6 +453,13 @@ export default function NewslettersPage() {
               />
             </div>
           </Input.Wrapper>
+
+          <Checkbox
+            label="Index"
+            description="Generate an index of the articles after the introduction"
+            checked={includeIndex}
+            onChange={(event) => setIncludeIndex(event.currentTarget.checked)}
+          />
 
             <Stack gap="xs">
 

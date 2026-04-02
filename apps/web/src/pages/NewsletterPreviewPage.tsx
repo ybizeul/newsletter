@@ -21,20 +21,25 @@ export default function NewsletterPreviewPage() {
     setCopyMessage(null);
 
     try {
-      const plainText = data.text?.trim() || (() => {
-        const parser = document.createElement("div");
-        parser.innerHTML = data.html;
-        return parser.textContent?.trim() ?? "";
-      })();
+      const parsed = new DOMParser().parseFromString(data.html, "text/html");
+      const htmlFragment = parsed.body?.innerHTML?.trim() || data.html;
+      const wrappedHtml = `<div style="max-width:680px;margin:0 auto;font-family:Arial,Helvetica,sans-serif;line-height:1.5;color:#111">${htmlFragment}</div>`;
+
+      const plainText =
+        data.text?.trim() || parsed.body?.textContent?.trim() || (() => {
+          const parser = document.createElement("div");
+          parser.innerHTML = htmlFragment;
+          return parser.textContent?.trim() ?? "";
+        })();
 
       if (typeof window.ClipboardItem !== "undefined" && navigator.clipboard?.write) {
         const item = new ClipboardItem({
-          "text/html": new Blob([data.html], { type: "text/html" }),
+          "text/html": new Blob([wrappedHtml], { type: "text/html" }),
           "text/plain": new Blob([plainText], { type: "text/plain" })
         });
         await navigator.clipboard.write([item]);
       } else if (navigator.clipboard?.writeText) {
-        await navigator.clipboard.writeText(plainText || data.html);
+        await navigator.clipboard.writeText(plainText || htmlFragment);
       } else {
         throw new Error("Clipboard API is not available in this browser");
       }
