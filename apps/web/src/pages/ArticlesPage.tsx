@@ -23,7 +23,7 @@ import {
   UnstyledButton,
   useCombobox
 } from "@mantine/core";
-import { IconChevronDown, IconFilePlus, IconPencil, IconRefresh, IconSearch, IconTrash } from "@tabler/icons-react";
+import { IconCheck, IconChevronDown, IconFilePlus, IconPencil, IconRefresh, IconSearch, IconTrash } from "@tabler/icons-react";
 import * as TablerIcons from "@tabler/icons-react";
 import MDEditor from "@uiw/react-md-editor";
 import { renderToStaticMarkup } from "react-dom/server";
@@ -165,7 +165,11 @@ export default function ArticlesPage() {
   const [isStrokePickerOpen, setIsStrokePickerOpen] = useState(false);
   const [isIconBrowserOpen, setIsIconBrowserOpen] = useState(false);
   const [articleSearchQuery, setArticleSearchQuery] = useState("");
-  const [articleSearchScope, setArticleSearchScope] = useState<"title" | "title-content" | "tags">("title-content");
+  const [articleSearchCriteria, setArticleSearchCriteria] = useState({
+    title: true,
+    content: true,
+    tag: false
+  });
   const [iconSearch, setIconSearch] = useState("");
   const [tagSearch, setTagSearch] = useState("");
   const [pastedImageMap, setPastedImageMap] = useState<Record<string, string>>({});
@@ -416,17 +420,29 @@ export default function ArticlesPage() {
       return articles;
     }
 
+    const hasAnyCriteria =
+      articleSearchCriteria.title || articleSearchCriteria.content || articleSearchCriteria.tag;
+    if (!hasAnyCriteria) {
+      return articles;
+    }
+
     const words = query.split(/\s+/).filter(Boolean);
     return articles.filter((article) => {
-      const haystack =
-        articleSearchScope === "title"
-          ? article.title.toLowerCase()
-          : articleSearchScope === "tags"
-            ? (article.tags ?? []).join(" ").toLowerCase()
-            : `${article.title} ${article.markdown}`.toLowerCase();
+      const haystackParts: string[] = [];
+      if (articleSearchCriteria.title) {
+        haystackParts.push(article.title);
+      }
+      if (articleSearchCriteria.content) {
+        haystackParts.push(article.markdown);
+      }
+      if (articleSearchCriteria.tag) {
+        haystackParts.push((article.tags ?? []).join(" "));
+      }
+
+      const haystack = haystackParts.join(" ").toLowerCase();
       return words.every((word) => haystack.includes(word));
     });
-  }, [articleSearchQuery, articleSearchScope, articles]);
+  }, [articleSearchQuery, articleSearchCriteria, articles]);
 
   const existingTags = useMemo(() => {
     const unique = new Set<string>();
@@ -531,22 +547,43 @@ export default function ArticlesPage() {
                 </Menu.Target>
                 <Menu.Dropdown>
                   <Menu.Item
-                    onClick={() => setArticleSearchScope("title")}
-                    fw={articleSearchScope === "title" ? 700 : undefined}
+                    closeMenuOnClick={false}
+                    onClick={() =>
+                      setArticleSearchCriteria((current) => ({
+                        ...current,
+                        title: !current.title
+                      }))
+                    }
+                    leftSection={articleSearchCriteria.title ? <IconCheck size={14} /> : undefined}
+                    fw={articleSearchCriteria.title ? 700 : undefined}
                   >
-                    Search in title
+                    title
                   </Menu.Item>
                   <Menu.Item
-                    onClick={() => setArticleSearchScope("title-content")}
-                    fw={articleSearchScope === "title-content" ? 700 : undefined}
+                    closeMenuOnClick={false}
+                    onClick={() =>
+                      setArticleSearchCriteria((current) => ({
+                        ...current,
+                        content: !current.content
+                      }))
+                    }
+                    leftSection={articleSearchCriteria.content ? <IconCheck size={14} /> : undefined}
+                    fw={articleSearchCriteria.content ? 700 : undefined}
                   >
-                    Search in title and content
+                    content
                   </Menu.Item>
                   <Menu.Item
-                    onClick={() => setArticleSearchScope("tags")}
-                    fw={articleSearchScope === "tags" ? 700 : undefined}
+                    closeMenuOnClick={false}
+                    onClick={() =>
+                      setArticleSearchCriteria((current) => ({
+                        ...current,
+                        tag: !current.tag
+                      }))
+                    }
+                    leftSection={articleSearchCriteria.tag ? <IconCheck size={14} /> : undefined}
+                    fw={articleSearchCriteria.tag ? 700 : undefined}
                   >
-                    Search in tags
+                    tag
                   </Menu.Item>
                 </Menu.Dropdown>
               </Menu>
