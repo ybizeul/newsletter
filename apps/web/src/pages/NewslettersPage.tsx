@@ -22,6 +22,7 @@ import {
 import {
   createNewsletter,
   deleteNewsletter,
+  getRuntimeConfig,
   listArticles,
   listNewsletters,
   scheduleNewsletter,
@@ -61,6 +62,7 @@ export default function NewslettersPage() {
   const [draggedArticleId, setDraggedArticleId] = useState<string | null>(null);
   const [recipientRaw, setRecipientRaw] = useState("first@example.com,second@example.com");
   const [scheduledAtInput, setScheduledAtInput] = useState<string | null>(null);
+  const [smtpConfigured, setSmtpConfigured] = useState(true);
   const [isLoading, setIsLoading] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -93,9 +95,14 @@ export default function NewslettersPage() {
     setIsLoading(true);
     setError(null);
     try {
-      const [articleItems, newsletterItems] = await Promise.all([listArticles(), listNewsletters()]);
+      const [articleItems, newsletterItems, runtimeConfig] = await Promise.all([
+        listArticles(),
+        listNewsletters(),
+        getRuntimeConfig()
+      ]);
       setArticles(articleItems);
       setNewsletters(newsletterItems);
+      setSmtpConfigured(runtimeConfig.smtpConfigured);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load newsletters");
     } finally {
@@ -496,41 +503,49 @@ export default function NewslettersPage() {
             </Stack>
             </Stack>
             
-          <TextInput
-            label="Recipients (emails, comma-separated)"
-            description="Comma-separated recipient addresses used for send and schedule actions."
-            placeholder="first@example.com,second@example.com"
-            value={recipientRaw}
-            onChange={(event) => setRecipientRaw(event.currentTarget.value)}
-          />
-
-          <Group grow>
-            <DateTimePicker
-              label="Schedule send"
-              description="Set when this newsletter should be sent automatically."
-              value={scheduledAtInput}
-              onChange={setScheduledAtInput}
-              clearable
+          {smtpConfigured ? (
+            <TextInput
+              label="Recipients (emails, comma-separated)"
+              description="Comma-separated recipient addresses used for send and schedule actions."
+              placeholder="first@example.com,second@example.com"
+              value={recipientRaw}
+              onChange={(event) => setRecipientRaw(event.currentTarget.value)}
             />
-          </Group>
+          ) : null}
+
+          {smtpConfigured ? (
+            <Group grow>
+              <DateTimePicker
+                label="Schedule send"
+                description="Set when this newsletter should be sent automatically."
+                value={scheduledAtInput}
+                onChange={setScheduledAtInput}
+                clearable
+              />
+            </Group>
+          ) : null}
 
           <Group justify="space-between">
             <Group gap="xs">
               <Button onClick={() => void onSave()} loading={isSubmitting}>
                 {selectedNewsletterId ? "Save Changes" : "Create Newsletter"}
               </Button>
-              <Button variant="light" onClick={() => void onSchedule()} disabled={!selectedNewsletterId}>
-                Schedule
-              </Button>
-              <Button
-                color="green"
-                variant="light"
-                leftSection={<IconSend size={16} />}
-                onClick={() => void onSendNow()}
-                disabled={!selectedNewsletterId}
-              >
-                Send Now
-              </Button>
+              {smtpConfigured ? (
+                <Button variant="light" onClick={() => void onSchedule()} disabled={!selectedNewsletterId}>
+                  Schedule
+                </Button>
+              ) : null}
+              {smtpConfigured ? (
+                <Button
+                  color="green"
+                  variant="light"
+                  leftSection={<IconSend size={16} />}
+                  onClick={() => void onSendNow()}
+                  disabled={!selectedNewsletterId}
+                >
+                  Send Now
+                </Button>
+              ) : null}
             </Group>
           </Group>
 

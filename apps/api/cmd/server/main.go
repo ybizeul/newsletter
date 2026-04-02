@@ -84,6 +84,7 @@ func main() {
 		})
 
 		api.Post("/render/markdown", h.RenderMarkdown)
+		api.Get("/runtime-config", h.GetRuntimeConfig)
 	})
 
 	r.NotFound(func(w http.ResponseWriter, r *http.Request) {

@@ -32,6 +32,10 @@ type UpdateArticlePayload = {
   illustration?: string;
 };
 
+type RuntimeConfig = {
+  smtpConfigured: boolean;
+};
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(`${API_ROOT}${path}`, {
     headers: {
@@ -134,4 +138,8 @@ export async function renderMarkdown(markdown: string): Promise<string> {
     body: JSON.stringify({ markdown })
   });
   return response.html;
+}
+
+export async function getRuntimeConfig(): Promise<RuntimeConfig> {
+  return request<RuntimeConfig>("/runtime-config");
 }

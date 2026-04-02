@@ -837,3 +837,9 @@ func (h *Handler) writeJSON(w http.ResponseWriter, status int, payload any) {
 func (h *Handler) writeError(w http.ResponseWriter, status int, message string) {
 	h.writeJSON(w, status, map[string]string{"error": message})
 }
+
+func (h *Handler) GetRuntimeConfig(w http.ResponseWriter, _ *http.Request) {
+	h.writeJSON(w, http.StatusOK, map[string]any{
+		"smtpConfigured": h.cfg.SMTPHost != "" && h.cfg.SMTPFrom != "",
+	})
+}
