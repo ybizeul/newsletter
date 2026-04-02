@@ -5,6 +5,7 @@ export interface Article {
   authorId: string;
   title: string;
   markdown: string;
+  tags?: string[];
   topicIcon?: string;
   illustration?: string;
   status: ArticleStatus;

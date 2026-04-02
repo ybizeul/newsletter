@@ -15,6 +15,7 @@ type Article struct {
 	AuthorID      string        `bson:"authorId" json:"authorId"`
 	Title         string        `bson:"title" json:"title"`
 	Markdown      string        `bson:"markdown" json:"markdown"`
+	Tags          []string      `bson:"tags,omitempty" json:"tags,omitempty"`
 	TopicIcon     string        `bson:"topicIcon,omitempty" json:"topicIcon,omitempty"`
 	Illustration  string        `bson:"illustration,omitempty" json:"illustration,omitempty"`
 	Status        ArticleStatus `bson:"status" json:"status"`

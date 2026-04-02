@@ -6,6 +6,7 @@ type CreateArticlePayload = {
   authorId: string;
   title: string;
   markdown: string;
+  tags?: string[];
   topicIcon?: string;
   illustration?: string;
 };
@@ -30,6 +31,7 @@ type UpdateNewsletterPayload = {
 type UpdateArticlePayload = {
   title: string;
   markdown: string;
+  tags?: string[];
   topicIcon?: string;
   illustration?: string;
 };

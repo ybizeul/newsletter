@@ -1,23 +1,29 @@
 import { type ClipboardEvent, type MouseEvent as ReactMouseEvent, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActionIcon,
+  Badge,
   Box,
   Button,
+  Combobox,
   ColorPicker,
   ColorSwatch,
   Group,
   Input,
+  Menu,
   Modal,
   Paper,
+  Pill,
+  PillsInput,
   Popover,
   ScrollArea,
   SimpleGrid,
   Stack,
   Text,
   TextInput,
-  UnstyledButton
+  UnstyledButton,
+  useCombobox
 } from "@mantine/core";
-import { IconFilePlus, IconPencil, IconRefresh, IconTrash } from "@tabler/icons-react";
+import { IconChevronDown, IconFilePlus, IconPencil, IconRefresh, IconSearch, IconTrash } from "@tabler/icons-react";
 import * as TablerIcons from "@tabler/icons-react";
 import MDEditor from "@uiw/react-md-editor";
 import { renderToStaticMarkup } from "react-dom/server";
@@ -33,6 +39,7 @@ const TABLER_ICON_MAP = TablerIcons as unknown as Record<string, React.Component
 const DEFAULT_TOPIC_ICON_BG = "#228be6";
 const DEFAULT_TOPIC_ICON_STROKE = "#ffffff";
 const ARTICLES_PANE_WIDTH_STORAGE_KEY = "newsletter.articles.pane.width";
+const TAG_COLORS = ["blue", "teal", "cyan", "grape", "indigo", "violet", "lime", "orange", "pink"] as const;
 
 function getStoredArticlesPaneWidth(): number {
   const raw = window.localStorage.getItem(ARTICLES_PANE_WIDTH_STORAGE_KEY);
@@ -134,6 +141,15 @@ function formatArticleCreatedAt(value: string): string {
   });
 }
 
+function colorForTag(tag: string): (typeof TAG_COLORS)[number] {
+  let hash = 0;
+  for (let i = 0; i < tag.length; i += 1) {
+    hash = (hash << 5) - hash + tag.charCodeAt(i);
+    hash |= 0;
+  }
+  return TAG_COLORS[Math.abs(hash) % TAG_COLORS.length];
+}
+
 export default function ArticlesPage() {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const [leftPaneWidth, setLeftPaneWidth] = useState(getStoredArticlesPaneWidth);
@@ -141,13 +157,17 @@ export default function ArticlesPage() {
   const [selectedArticleId, setSelectedArticleID] = useState<string | null>(null);
   const [title, setTitle] = useState("");
   const [markdown, setMarkdown] = useState("");
+  const [tags, setTags] = useState<string[]>([]);
   const [topicIcon, setTopicIcon] = useState("");
   const [topicIconBgColor, setTopicIconBgColor] = useState(DEFAULT_TOPIC_ICON_BG);
   const [topicIconStrokeColor, setTopicIconStrokeColor] = useState(DEFAULT_TOPIC_ICON_STROKE);
   const [isBgPickerOpen, setIsBgPickerOpen] = useState(false);
   const [isStrokePickerOpen, setIsStrokePickerOpen] = useState(false);
   const [isIconBrowserOpen, setIsIconBrowserOpen] = useState(false);
+  const [articleSearchQuery, setArticleSearchQuery] = useState("");
+  const [articleSearchScope, setArticleSearchScope] = useState<"title" | "title-content" | "tags">("title-content");
   const [iconSearch, setIconSearch] = useState("");
+  const [tagSearch, setTagSearch] = useState("");
   const [pastedImageMap, setPastedImageMap] = useState<Record<string, string>>({});
   const [editingId, setEditingID] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -174,6 +194,7 @@ export default function ArticlesPage() {
   const resetForm = () => {
     setTitle("");
     setMarkdown("");
+    setTags([]);
     setTopicIcon("");
     setTopicIconBgColor(DEFAULT_TOPIC_ICON_BG);
     setTopicIconStrokeColor(DEFAULT_TOPIC_ICON_STROKE);
@@ -214,6 +235,7 @@ export default function ArticlesPage() {
     setEditingID(article.id);
     setSelectedArticleID(article.id);
     setTitle(article.title);
+    setTags(article.tags ?? []);
     const normalized = normalizeMarkdownForEditor(article.markdown);
     setMarkdown(normalized.normalized);
     setPastedImageMap(normalized.imageMap);
@@ -258,6 +280,7 @@ export default function ArticlesPage() {
         const updated = await updateArticle(editingId, {
           title: title.trim(),
           markdown: resolvePastedImageTokens(markdown.trim()),
+          tags,
           topicIcon: topicIcon.trim(),
           illustration: generatedTopicIconIllustration
         });
@@ -271,6 +294,7 @@ export default function ArticlesPage() {
           authorId: DEMO_AUTHOR_ID,
           title: title.trim(),
           markdown: resolvePastedImageTokens(markdown.trim()),
+          tags,
           topicIcon: topicIcon.trim(),
           illustration: generatedTopicIconIllustration
         });
@@ -386,6 +410,65 @@ export default function ArticlesPage() {
       .slice(0, 300);
   }, [iconSearch]);
 
+  const filteredArticles = useMemo(() => {
+    const query = articleSearchQuery.trim().toLowerCase();
+    if (!query) {
+      return articles;
+    }
+
+    const words = query.split(/\s+/).filter(Boolean);
+    return articles.filter((article) => {
+      const haystack =
+        articleSearchScope === "title"
+          ? article.title.toLowerCase()
+          : articleSearchScope === "tags"
+            ? (article.tags ?? []).join(" ").toLowerCase()
+            : `${article.title} ${article.markdown}`.toLowerCase();
+      return words.every((word) => haystack.includes(word));
+    });
+  }, [articleSearchQuery, articleSearchScope, articles]);
+
+  const existingTags = useMemo(() => {
+    const unique = new Set<string>();
+    for (const article of articles) {
+      for (const tag of article.tags ?? []) {
+        const normalized = tag.trim();
+        if (normalized) {
+          unique.add(normalized);
+        }
+      }
+    }
+    return Array.from(unique).sort((a, b) => a.localeCompare(b));
+  }, [articles]);
+
+  const tagCombobox = useCombobox({
+    onDropdownClose: () => {
+      tagCombobox.resetSelectedOption();
+      setTagSearch("");
+    }
+  });
+
+  const addTag = (raw: string) => {
+    const trimmed = raw.trim();
+    if (!trimmed) {
+      return;
+    }
+
+    const exists = tags.some((tag) => tag.toLowerCase() === trimmed.toLowerCase());
+    if (exists) {
+      return;
+    }
+
+    setTags((current) => [...current, trimmed]);
+  };
+
+  const filteredTagOptions = useMemo(() => {
+    const query = tagSearch.trim().toLowerCase();
+    return existingTags
+      .filter((tag) => !tags.some((selected) => selected.toLowerCase() === tag.toLowerCase()))
+      .filter((tag) => (query ? tag.toLowerCase().includes(query) : true));
+  }, [existingTags, tagSearch, tags]);
+
   const startPaneResize = (event: ReactMouseEvent<HTMLDivElement>) => {
     event.preventDefault();
     const containerRect = containerRef.current?.getBoundingClientRect();
@@ -435,9 +518,48 @@ export default function ArticlesPage() {
           </Group>
         </Group>
 
-        <ScrollArea h="calc(100% - 52px)" offsetScrollbars>
+        <div style={{ padding: 10, borderBottom: "1px solid #e9ecef" }}>
+          <TextInput
+            radius="xl"
+            leftSection={<IconSearch size={14} />}
+            rightSection={
+              <Menu position="bottom-end" withArrow>
+                <Menu.Target>
+                  <ActionIcon variant="subtle" size="sm" aria-label="Search scope">
+                    <IconChevronDown size={14} />
+                  </ActionIcon>
+                </Menu.Target>
+                <Menu.Dropdown>
+                  <Menu.Item
+                    onClick={() => setArticleSearchScope("title")}
+                    fw={articleSearchScope === "title" ? 700 : undefined}
+                  >
+                    Search in title
+                  </Menu.Item>
+                  <Menu.Item
+                    onClick={() => setArticleSearchScope("title-content")}
+                    fw={articleSearchScope === "title-content" ? 700 : undefined}
+                  >
+                    Search in title and content
+                  </Menu.Item>
+                  <Menu.Item
+                    onClick={() => setArticleSearchScope("tags")}
+                    fw={articleSearchScope === "tags" ? 700 : undefined}
+                  >
+                    Search in tags
+                  </Menu.Item>
+                </Menu.Dropdown>
+              </Menu>
+            }
+            placeholder="Search in title and content"
+            value={articleSearchQuery}
+            onChange={(event) => setArticleSearchQuery(event.currentTarget.value)}
+          />
+        </div>
+
+        <ScrollArea h="calc(100% - 110px)" offsetScrollbars>
           <Stack gap={0}>
-            {articles.map((article) => (
+            {filteredArticles.map((article) => (
               <div
                 key={article.id}
                 onClick={() => onEdit(article)}
@@ -453,6 +575,15 @@ export default function ArticlesPage() {
                     <Text fw={600} lineClamp={1}>
                       {article.title}
                     </Text>
+                    {article.tags && article.tags.length > 0 ? (
+                      <Group gap={4} wrap="wrap">
+                        {article.tags.map((tag) => (
+                          <Badge key={`${article.id}-${tag}`} size="xs" variant="light" color={colorForTag(tag)}>
+                            {tag}
+                          </Badge>
+                        ))}
+                      </Group>
+                    ) : null}
                     <Text size="xs" c="dimmed">
                       {formatArticleCreatedAt(article.createdAt)}
                     </Text>
@@ -473,6 +604,10 @@ export default function ArticlesPage() {
             {articles.length === 0 ? (
               <Text c="dimmed" size="sm" p="md">
                 No articles yet.
+              </Text>
+            ) : filteredArticles.length === 0 ? (
+              <Text c="dimmed" size="sm" p="md">
+                No articles match your search.
               </Text>
             ) : null}
           </Stack>
@@ -553,6 +688,92 @@ export default function ArticlesPage() {
               onChange={(event) => setTitle(event.currentTarget.value)}
             />
           </Group>
+
+          <Combobox
+            store={tagCombobox}
+            onOptionSubmit={(value) => {
+              addTag(value);
+              setTagSearch("");
+              tagCombobox.closeDropdown();
+            }}
+          >
+            <Combobox.DropdownTarget>
+              <PillsInput
+                label="Tags"
+                description="Optional tags for organizing and searching articles."
+                onClick={() => tagCombobox.openDropdown()}
+                style={{ fontFamily: "var(--mantine-font-family)" }}
+              >
+                <Pill.Group>
+                  {tags.map((tag) => {
+                    const color = colorForTag(tag);
+                    return (
+                      <Pill
+                        key={`edit-tag-${tag}`}
+                        withRemoveButton
+                        onRemove={() => setTags((current) => current.filter((item) => item !== tag))}
+                        style={{
+                          backgroundColor: `var(--mantine-color-${color}-1)`,
+                          color: `var(--mantine-color-${color}-8)`,
+                          border: `1px solid var(--mantine-color-${color}-3)`,
+                          fontFamily: "var(--mantine-font-family)",
+                          fontWeight: 700,
+                          textTransform: "uppercase"
+                        }}
+                      >
+                        {tag}
+                      </Pill>
+                    );
+                  })}
+
+                  <Combobox.EventsTarget>
+                    <PillsInput.Field
+                      style={{ fontFamily: "var(--mantine-font-family)" }}
+                      value={tagSearch}
+                      placeholder={tags.length === 0 ? "Add tag and press Enter" : "Add tag"}
+                      onFocus={() => tagCombobox.openDropdown()}
+                      onBlur={() => {
+                        addTag(tagSearch);
+                        setTagSearch("");
+                        tagCombobox.closeDropdown();
+                      }}
+                      onChange={(event) => {
+                        tagCombobox.openDropdown();
+                        tagCombobox.updateSelectedOptionIndex();
+                        setTagSearch(event.currentTarget.value);
+                      }}
+                      onKeyDown={(event) => {
+                        if (event.key === "Backspace" && tagSearch.length === 0) {
+                          event.preventDefault();
+                          setTags((current) => current.slice(0, -1));
+                        }
+
+                        if (event.key === "Enter" || event.key === ",") {
+                          event.preventDefault();
+                          addTag(tagSearch);
+                          setTagSearch("");
+                        }
+                      }}
+                    />
+                  </Combobox.EventsTarget>
+                </Pill.Group>
+              </PillsInput>
+            </Combobox.DropdownTarget>
+
+            <Combobox.Dropdown>
+              <Combobox.Options>
+                {filteredTagOptions.length > 0 ? (
+                  filteredTagOptions.map((tag) => (
+                    <Combobox.Option value={tag} key={`tag-option-${tag}`}>
+                      {tag}
+                    </Combobox.Option>
+                  ))
+                ) : (
+                  <Combobox.Empty>No matching tags</Combobox.Empty>
+                )}
+              </Combobox.Options>
+            </Combobox.Dropdown>
+          </Combobox>
 
           <Input.Wrapper
             label="Content"

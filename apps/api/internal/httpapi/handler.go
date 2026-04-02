@@ -45,11 +45,12 @@ func NewHandler(db *mongo.Database, cfg config.Config) *Handler {
 }
 
 type createArticleRequest struct {
-	AuthorID     string `json:"authorId"`
-	Title        string `json:"title"`
-	Markdown     string `json:"markdown"`
-	TopicIcon    string `json:"topicIcon"`
-	Illustration string `json:"illustration"`
+	AuthorID     string   `json:"authorId"`
+	Title        string   `json:"title"`
+	Markdown     string   `json:"markdown"`
+	Tags         []string `json:"tags"`
+	TopicIcon    string   `json:"topicIcon"`
+	Illustration string   `json:"illustration"`
 }
 
 func (h *Handler) CreateArticle(w http.ResponseWriter, r *http.Request) {
@@ -70,6 +71,7 @@ func (h *Handler) CreateArticle(w http.ResponseWriter, r *http.Request) {
 		AuthorID:     req.AuthorID,
 		Title:        req.Title,
 		Markdown:     req.Markdown,
+		Tags:         normalizeArticleTags(req.Tags),
 		TopicIcon:    req.TopicIcon,
 		Illustration: req.Illustration,
 		Status:       model.ArticleStatusDraft,
@@ -111,10 +113,11 @@ func (h *Handler) ListArticles(w http.ResponseWriter, r *http.Request) {
 }
 
 type updateArticleRequest struct {
-	Title        string `json:"title"`
-	Markdown     string `json:"markdown"`
-	TopicIcon    string `json:"topicIcon"`
-	Illustration string `json:"illustration"`
+	Title        string   `json:"title"`
+	Markdown     string   `json:"markdown"`
+	Tags         []string `json:"tags"`
+	TopicIcon    string   `json:"topicIcon"`
+	Illustration string   `json:"illustration"`
 }
 
 func (h *Handler) UpdateArticle(w http.ResponseWriter, r *http.Request, id string) {
@@ -133,6 +136,7 @@ func (h *Handler) UpdateArticle(w http.ResponseWriter, r *http.Request, id strin
 		"$set": bson.M{
 			"title":        strings.TrimSpace(req.Title),
 			"markdown":     req.Markdown,
+			"tags":         normalizeArticleTags(req.Tags),
 			"topicIcon":    strings.TrimSpace(req.TopicIcon),
 			"illustration": strings.TrimSpace(req.Illustration),
 			"updatedAt":    time.Now().UTC(),
@@ -157,6 +161,29 @@ func (h *Handler) UpdateArticle(w http.ResponseWriter, r *http.Request, id strin
 	}
 
 	h.writeJSON(w, http.StatusOK, article)
+}
+
+func normalizeArticleTags(tags []string) []string {
+	if len(tags) == 0 {
+		return []string{}
+	}
+
+	normalized := make([]string, 0, len(tags))
+	seen := make(map[string]struct{}, len(tags))
+	for _, raw := range tags {
+		tag := strings.TrimSpace(raw)
+		if tag == "" {
+			continue
+		}
+		key := strings.ToLower(tag)
+		if _, ok := seen[key]; ok {
+			continue
+		}
+		seen[key] = struct{}{}
+		normalized = append(normalized, tag)
+	}
+
+	return normalized
 }
 
 func (h *Handler) DeleteArticle(w http.ResponseWriter, r *http.Request, id string) {
