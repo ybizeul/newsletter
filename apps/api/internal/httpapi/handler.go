@@ -592,14 +592,18 @@ func (h *Handler) renderNewsletter(newsletter model.Newsletter, articles []model
 	text.WriteString(newsletter.IntroMarkdown + "\n\n")
 
 	if newsletter.IncludeIndex && len(articles) > 0 {
-		body.WriteString("<section style=\"margin:0 0 24px;background:#f1f3f5;border:1px solid #e9ecef;border-radius:8px;padding:14px 16px\">\n")
-		body.WriteString("<p style=\"margin:0 0 10px;font-size:14px;line-height:1.4;font-weight:700;color:#343a40\">In this issue</p>\n")
-		body.WriteString("<ul style=\"margin:0;padding:0 0 0 18px\">\n")
+		body.WriteString("<table role=\"presentation\" cellpadding=\"0\" cellspacing=\"0\" width=\"100%\" style=\"margin:0 0 24px;border-collapse:collapse;background:#f1f3f5;border:1px solid #e9ecef\">\n")
+		body.WriteString("<tr><td style=\"padding:14px 16px\">\n")
+		body.WriteString("<p style=\"margin:0 0 10px;font-size:14px;line-height:20px;font-weight:700;color:#343a40\">In this issue</p>\n")
+		body.WriteString("<table role=\"presentation\" cellpadding=\"0\" cellspacing=\"0\" width=\"100%\" style=\"border-collapse:collapse\">\n")
 		for _, article := range articles {
-			body.WriteString("<li style=\"margin:0 0 6px 0;color:#343a40\">" + html.EscapeString(article.Title) + "</li>\n")
+			body.WriteString("<tr>")
+			body.WriteString("<td style=\"width:16px;vertical-align:top;font-size:14px;line-height:20px;color:#343a40\">&bull;</td>")
+			body.WriteString("<td style=\"vertical-align:top;font-size:14px;line-height:20px;color:#343a40;padding:0 0 6px\">" + html.EscapeString(article.Title) + "</td>")
+			body.WriteString("</tr>\n")
 		}
-		body.WriteString("</ul>\n")
-		body.WriteString("</section>\n")
+		body.WriteString("</table>\n")
+		body.WriteString("</td></tr></table>\n")
 
 		text.WriteString("In this issue\n")
 		for _, article := range articles {
