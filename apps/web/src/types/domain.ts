@@ -1,5 +1,7 @@
 export type ArticleStatus = "draft" | "published" | "archived";
 
+export type HeaderStatus = "draft" | "published" | "archived";
+
 export interface Article {
   id: string;
   authorId: string;
@@ -20,6 +22,7 @@ export interface Newsletter {
   id: string;
   creatorId: string;
   title: string;
+  headerId?: string;
   introMarkdown: string;
   includeIndex: boolean;
   articleIds: string[];
@@ -28,6 +31,17 @@ export interface Newsletter {
   deliveryError?: string;
   scheduledAt?: string;
   sentAt?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface Header {
+  id: string;
+  creatorId: string;
+  title: string;
+  markdown: string;
+  status: HeaderStatus;
+  version: number;
   createdAt: string;
   updatedAt: string;
 }

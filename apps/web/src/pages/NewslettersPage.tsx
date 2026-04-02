@@ -6,6 +6,7 @@ import {
   Checkbox,
   Group,
   Input,
+  Modal,
   ScrollArea,
   Select,
   Stack,
@@ -25,12 +26,13 @@ import {
   deleteNewsletter,
   getRuntimeConfig,
   listArticles,
+  listHeaders,
   listNewsletters,
   scheduleNewsletter,
   sendNewsletterNow,
   updateNewsletter
 } from "../lib/api";
-import type { Article, Newsletter } from "../types/domain";
+import type { Article, Header, Newsletter } from "../types/domain";
 import { useNavigate } from "react-router-dom";
 import { DateTimePicker } from "@mantine/dates";
 import MDEditor from "@uiw/react-md-editor";
@@ -67,9 +69,11 @@ export default function NewslettersPage() {
   const [leftPaneWidth, setLeftPaneWidth] = useState(getStoredNewslettersPaneWidth);
   const navigate = useNavigate();
   const [articles, setArticles] = useState<Article[]>([]);
+  const [headers, setHeaders] = useState<Header[]>([]);
   const [newsletters, setNewsletters] = useState<Newsletter[]>([]);
   const [selectedNewsletterId, setSelectedNewsletterID] = useState<string | null>(null);
   const [title, setTitle] = useState("");
+  const [headerId, setHeaderId] = useState<string | null>(null);
   const [introMarkdown, setIntroMarkdown] = useState("");
   const [includeIndex, setIncludeIndex] = useState(false);
   const [articleIds, setArticleIDs] = useState<string[]>([]);
@@ -80,10 +84,17 @@ export default function NewslettersPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [deleteNewsletterId, setDeleteNewsletterId] = useState<string | null>(null);
+  const [removeArticleId, setRemoveArticleId] = useState<string | null>(null);
 
   const availableArticleOptions = useMemo(
     () => articles.map((article) => ({ value: article.id, label: article.title })),
     [articles]
+  );
+
+  const headerOptions = useMemo(
+    () => headers.map((header) => ({ value: header.id, label: header.title })),
+    [headers]
   );
 
   const selectedArticleRows = useMemo(
@@ -109,12 +120,14 @@ export default function NewslettersPage() {
     setIsLoading(true);
     setError(null);
     try {
-      const [articleItems, newsletterItems, runtimeConfig] = await Promise.all([
+      const [articleItems, headerItems, newsletterItems, runtimeConfig] = await Promise.all([
         listArticles(),
+        listHeaders(),
         listNewsletters(),
         getRuntimeConfig()
       ]);
       setArticles(articleItems);
+      setHeaders(headerItems);
       setNewsletters(newsletterItems);
       setSmtpConfigured(runtimeConfig.smtpConfigured);
     } catch (err) {
@@ -131,6 +144,7 @@ export default function NewslettersPage() {
   const resetForm = () => {
     setSelectedNewsletterID(null);
     setTitle("");
+    setHeaderId(null);
     setIntroMarkdown("");
     setIncludeIndex(false);
     setArticleIDs([]);
@@ -142,6 +156,7 @@ export default function NewslettersPage() {
   const onSelectNewsletter = (newsletter: Newsletter) => {
     setSelectedNewsletterID(newsletter.id);
     setTitle(newsletter.title);
+    setHeaderId(newsletter.headerId ?? null);
     setIntroMarkdown(newsletter.introMarkdown);
     setIncludeIndex(Boolean(newsletter.includeIndex));
     setArticleIDs(newsletter.articleIds);
@@ -187,6 +202,7 @@ export default function NewslettersPage() {
       if (selectedNewsletterId) {
         const updated = await updateNewsletter(selectedNewsletterId, {
           title: title.trim(),
+          headerId: headerId ?? "",
           introMarkdown: introMarkdown.trim(),
           includeIndex,
           articleIds,
@@ -199,6 +215,7 @@ export default function NewslettersPage() {
         const created = await createNewsletter({
           creatorId: DEMO_CREATOR_ID,
           title: title.trim(),
+          headerId: headerId ?? "",
           introMarkdown: introMarkdown.trim(),
           includeIndex,
           articleIds,
@@ -248,26 +265,38 @@ export default function NewslettersPage() {
     }
   };
 
-  const onDelete = async (newsletterId: string) => {
-    const ok = window.confirm("Delete this newsletter?");
-    if (!ok) {
+  const requestDeleteNewsletter = (newsletterId: string) => {
+    setDeleteNewsletterId(newsletterId);
+  };
+
+  const confirmDeleteNewsletter = async () => {
+    if (!deleteNewsletterId) {
       return;
     }
 
     setError(null);
     try {
-      await deleteNewsletter(newsletterId);
-      setNewsletters((current) => current.filter((newsletter) => newsletter.id !== newsletterId));
-      if (selectedNewsletterId === newsletterId) {
+      await deleteNewsletter(deleteNewsletterId);
+      setNewsletters((current) => current.filter((newsletter) => newsletter.id !== deleteNewsletterId));
+      if (selectedNewsletterId === deleteNewsletterId) {
         resetForm();
       }
+      setDeleteNewsletterId(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to delete newsletter");
     }
   };
 
-  const removeArticleFromNewsletter = (articleId: string) => {
-    setArticleIDs((current) => current.filter((id) => id !== articleId));
+  const requestRemoveArticleFromNewsletter = (articleId: string) => {
+    setRemoveArticleId(articleId);
+  };
+
+  const confirmRemoveArticleFromNewsletter = () => {
+    if (!removeArticleId) {
+      return;
+    }
+    setArticleIDs((current) => current.filter((id) => id !== removeArticleId));
+    setRemoveArticleId(null);
   };
 
   const moveArticle = (sourceId: string, targetId: string) => {
@@ -367,7 +396,7 @@ export default function NewslettersPage() {
                     variant="subtle"
                     onClick={(event) => {
                       event.stopPropagation();
-                      void onDelete(newsletter.id);
+                      requestDeleteNewsletter(newsletter.id);
                     }}
                   >
                     <IconTrash size={16} />
@@ -415,7 +444,7 @@ export default function NewslettersPage() {
                 <Button variant="default" size="xs" onClick={resetForm}>
                   Cancel
                 </Button>
-                <Button color="red" variant="light" size="xs" onClick={() => void onDelete(selectedNewsletterId)}>
+                <Button color="red" variant="light" size="xs" onClick={() => requestDeleteNewsletter(selectedNewsletterId)}>
                   Delete
                 </Button>
               </Group>
@@ -428,6 +457,18 @@ export default function NewslettersPage() {
             placeholder="April Product Digest"
             value={title}
             onChange={(event) => setTitle(event.currentTarget.value)}
+          />
+
+          <Select
+            label="Header"
+            description="Pick a reusable header inserted before the introduction in generated HTML."
+            placeholder="No header"
+            data={headerOptions}
+            value={headerId}
+            onChange={setHeaderId}
+            clearable
+            searchable
+            nothingFoundMessage="No headers found"
           />
 
           <Input.Wrapper
@@ -551,7 +592,7 @@ export default function NewslettersPage() {
                     <ActionIcon
                       color="red"
                       variant="subtle"
-                      onClick={() => removeArticleFromNewsletter(article.id)}
+                      onClick={() => requestRemoveArticleFromNewsletter(article.id)}
                       title="Remove"
                     >
                       <IconX size={16} />
@@ -623,6 +664,46 @@ export default function NewslettersPage() {
           {error ? <Text c="red">{error}</Text> : null}
         </Stack>
       </div>
+
+      <Modal
+        opened={Boolean(deleteNewsletterId)}
+        onClose={() => setDeleteNewsletterId(null)}
+        title="Confirm deletion"
+        centered
+      >
+        <Stack>
+          <Text size="sm">Delete this newsletter? This action cannot be undone.</Text>
+          <Group justify="flex-end">
+            <Button variant="default" onClick={() => setDeleteNewsletterId(null)}>
+              Cancel
+            </Button>
+            <Button color="red" onClick={() => void confirmDeleteNewsletter()}>
+              Delete newsletter
+            </Button>
+          </Group>
+        </Stack>
+      </Modal>
+
+      <Modal
+        opened={Boolean(removeArticleId)}
+        onClose={() => setRemoveArticleId(null)}
+        title="Remove article"
+        centered
+      >
+        <Stack>
+          <Text size="sm">
+            Remove this article from the newsletter sequence?
+          </Text>
+          <Group justify="flex-end">
+            <Button variant="default" onClick={() => setRemoveArticleId(null)}>
+              Cancel
+            </Button>
+            <Button color="red" onClick={confirmRemoveArticleFromNewsletter}>
+              Remove article
+            </Button>
+          </Group>
+        </Stack>
+      </Modal>
     </div>
   );
 }

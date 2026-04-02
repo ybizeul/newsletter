@@ -30,6 +30,7 @@ import (
 
 type Handler struct {
 	articles    *mongo.Collection
+	headers     *mongo.Collection
 	newsletters *mongo.Collection
 	cfg         config.Config
 }
@@ -39,6 +40,7 @@ var errNewsletterAlreadySending = errors.New("newsletter is already sending")
 func NewHandler(db *mongo.Database, cfg config.Config) *Handler {
 	return &Handler{
 		articles:    db.Collection("articles"),
+		headers:     db.Collection("headers"),
 		newsletters: db.Collection("newsletters"),
 		cfg:         cfg,
 	}
@@ -200,9 +202,131 @@ func (h *Handler) DeleteArticle(w http.ResponseWriter, r *http.Request, id strin
 	w.WriteHeader(http.StatusNoContent)
 }
 
+type createHeaderRequest struct {
+	CreatorID string `json:"creatorId"`
+	Title     string `json:"title"`
+	Markdown  string `json:"markdown"`
+}
+
+type updateHeaderRequest struct {
+	Title    string `json:"title"`
+	Markdown string `json:"markdown"`
+}
+
+func (h *Handler) CreateHeader(w http.ResponseWriter, r *http.Request) {
+	var req createHeaderRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		h.writeError(w, http.StatusBadRequest, "invalid payload")
+		return
+	}
+
+	if strings.TrimSpace(req.CreatorID) == "" || strings.TrimSpace(req.Title) == "" {
+		h.writeError(w, http.StatusBadRequest, "creatorId and title are required")
+		return
+	}
+
+	now := time.Now().UTC()
+	header := model.Header{
+		ID:        bson.NewObjectID().Hex(),
+		CreatorID: strings.TrimSpace(req.CreatorID),
+		Title:     strings.TrimSpace(req.Title),
+		Markdown:  req.Markdown,
+		Status:    model.HeaderStatusDraft,
+		Version:   1,
+		CreatedAt: now,
+		UpdatedAt: now,
+	}
+
+	if _, err := h.headers.InsertOne(r.Context(), header); err != nil {
+		h.writeError(w, http.StatusInternalServerError, "failed to create header")
+		return
+	}
+
+	h.writeJSON(w, http.StatusCreated, header)
+}
+
+func (h *Handler) ListHeaders(w http.ResponseWriter, r *http.Request) {
+	cursor, err := h.headers.Find(r.Context(), bson.M{})
+	if err != nil {
+		h.writeError(w, http.StatusInternalServerError, "failed to list headers")
+		return
+	}
+	defer cursor.Close(r.Context())
+
+	var headers []model.Header
+	if err := cursor.All(r.Context(), &headers); err != nil {
+		h.writeError(w, http.StatusInternalServerError, "failed to decode headers")
+		return
+	}
+	if headers == nil {
+		headers = []model.Header{}
+	}
+
+	sort.Slice(headers, func(i, j int) bool {
+		return headers[i].CreatedAt.After(headers[j].CreatedAt)
+	})
+
+	h.writeJSON(w, http.StatusOK, map[string]any{"items": headers})
+}
+
+func (h *Handler) UpdateHeader(w http.ResponseWriter, r *http.Request, id string) {
+	var req updateHeaderRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		h.writeError(w, http.StatusBadRequest, "invalid payload")
+		return
+	}
+
+	if strings.TrimSpace(req.Title) == "" {
+		h.writeError(w, http.StatusBadRequest, "title is required")
+		return
+	}
+
+	update := bson.M{
+		"$set": bson.M{
+			"title":     strings.TrimSpace(req.Title),
+			"markdown":  req.Markdown,
+			"updatedAt": time.Now().UTC(),
+		},
+		"$inc": bson.M{"version": 1},
+	}
+
+	result, err := h.headers.UpdateByID(r.Context(), id, update)
+	if err != nil {
+		h.writeError(w, http.StatusInternalServerError, "failed to update header")
+		return
+	}
+	if result.MatchedCount == 0 {
+		h.writeError(w, http.StatusNotFound, "header not found")
+		return
+	}
+
+	var header model.Header
+	if err := h.headers.FindOne(r.Context(), bson.M{"_id": id}).Decode(&header); err != nil {
+		h.writeError(w, http.StatusInternalServerError, "failed to fetch updated header")
+		return
+	}
+
+	h.writeJSON(w, http.StatusOK, header)
+}
+
+func (h *Handler) DeleteHeader(w http.ResponseWriter, r *http.Request, id string) {
+	result, err := h.headers.DeleteOne(r.Context(), bson.M{"_id": id})
+	if err != nil {
+		h.writeError(w, http.StatusInternalServerError, "failed to delete header")
+		return
+	}
+	if result.DeletedCount == 0 {
+		h.writeError(w, http.StatusNotFound, "header not found")
+		return
+	}
+
+	w.WriteHeader(http.StatusNoContent)
+}
+
 type createNewsletterRequest struct {
 	CreatorID     string   `json:"creatorId"`
 	Title         string   `json:"title"`
+	HeaderID      string   `json:"headerId"`
 	IntroMarkdown string   `json:"introMarkdown"`
 	IncludeIndex  bool     `json:"includeIndex"`
 	ArticleIDs    []string `json:"articleIds"`
@@ -211,6 +335,7 @@ type createNewsletterRequest struct {
 
 type updateNewsletterRequest struct {
 	Title         string   `json:"title"`
+	HeaderID      string   `json:"headerId"`
 	IntroMarkdown string   `json:"introMarkdown"`
 	IncludeIndex  bool     `json:"includeIndex"`
 	ArticleIDs    []string `json:"articleIds"`
@@ -234,6 +359,7 @@ func (h *Handler) CreateNewsletter(w http.ResponseWriter, r *http.Request) {
 		ID:            bson.NewObjectID().Hex(),
 		CreatorID:     req.CreatorID,
 		Title:         req.Title,
+		HeaderID:      strings.TrimSpace(req.HeaderID),
 		IntroMarkdown: req.IntroMarkdown,
 		IncludeIndex:  req.IncludeIndex,
 		ArticleIDs:    req.ArticleIDs,
@@ -290,6 +416,7 @@ func (h *Handler) UpdateNewsletter(w http.ResponseWriter, r *http.Request, id st
 	update := bson.M{
 		"$set": bson.M{
 			"title":         strings.TrimSpace(req.Title),
+			"headerId":      strings.TrimSpace(req.HeaderID),
 			"introMarkdown": req.IntroMarkdown,
 			"includeIndex":  req.IncludeIndex,
 			"articleIds":    req.ArticleIDs,
@@ -328,7 +455,7 @@ func (h *Handler) GetNewsletterPreview(w http.ResponseWriter, r *http.Request, i
 		return
 	}
 
-	htmlBody, textBody, err := h.renderNewsletter(*newsletter, articles)
+	htmlBody, textBody, err := h.renderNewsletter(r.Context(), *newsletter, articles)
 	if err != nil {
 		h.writeError(w, http.StatusInternalServerError, "failed to render newsletter")
 		return
@@ -360,6 +487,12 @@ func (h *Handler) RenderMarkdown(w http.ResponseWriter, r *http.Request) {
 	}
 
 	h.writeJSON(w, http.StatusOK, map[string]string{"html": htmlBody})
+}
+
+func (h *Handler) GetRuntimeConfig(w http.ResponseWriter, r *http.Request) {
+	h.writeJSON(w, http.StatusOK, map[string]any{
+		"smtpConfigured": h.cfg.SMTPHost != "" && h.cfg.SMTPFrom != "",
+	})
 }
 
 type scheduleRequest struct {
@@ -537,7 +670,7 @@ func (h *Handler) processScheduledNewsletter(ctx context.Context, newsletter mod
 		return err
 	}
 
-	htmlBody, textBody, err := h.renderNewsletter(*loadedNewsletter, articles)
+	htmlBody, textBody, err := h.renderNewsletter(ctx, *loadedNewsletter, articles)
 	if err != nil {
 		return err
 	}
@@ -603,7 +736,24 @@ func (h *Handler) loadNewsletterWithArticles(ctx context.Context, id string) (*m
 	return &newsletter, ordered, nil
 }
 
-func (h *Handler) renderNewsletter(newsletter model.Newsletter, articles []model.Article) (string, string, error) {
+func (h *Handler) renderNewsletter(ctx context.Context, newsletter model.Newsletter, articles []model.Article) (string, string, error) {
+	headerHTML := ""
+	headerText := ""
+	if strings.TrimSpace(newsletter.HeaderID) != "" {
+		var header model.Header
+		err := h.headers.FindOne(ctx, bson.M{"_id": strings.TrimSpace(newsletter.HeaderID)}).Decode(&header)
+		if err == nil {
+			renderedHeader, renderErr := renderMarkdownToSafeHTML(header.Markdown)
+			if renderErr != nil {
+				return "", "", renderErr
+			}
+			headerHTML = enforceTableCellAlignment(enforceImageNaturalWidth(renderedHeader))
+			headerText = strings.TrimSpace(header.Markdown)
+		} else if err != mongo.ErrNoDocuments {
+			return "", "", err
+		}
+	}
+
 	introHTML, err := renderMarkdownToSafeHTML(newsletter.IntroMarkdown)
 	if err != nil {
 		return "", "", err
@@ -613,9 +763,15 @@ func (h *Handler) renderNewsletter(newsletter model.Newsletter, articles []model
 	var body strings.Builder
 	body.WriteString("<!doctype html><html><body style=\"font-family:Arial,Helvetica,sans-serif;line-height:1.5;color:#111\">\n")
 	body.WriteString("<div style=\"max-width:680px;margin:0 auto;padding:24px\">\n")
+	if headerHTML != "" {
+		body.WriteString("<section style=\"margin-bottom:20px\">" + headerHTML + "</section>\n")
+	}
 	body.WriteString("<section style=\"margin-bottom:28px\">" + introHTML + "</section>\n")
 
 	var text strings.Builder
+	if headerText != "" {
+		text.WriteString(headerText + "\n\n")
+	}
 	text.WriteString(newsletter.IntroMarkdown + "\n\n")
 
 	if newsletter.IncludeIndex && len(articles) > 0 {
@@ -689,6 +845,61 @@ func enforceImageFullWidth(input string) string {
 	})
 }
 
+func enforceImageNaturalWidth(input string) string {
+	re := regexp.MustCompile(`(?i)<img\b([^>]*)>`)
+
+	return re.ReplaceAllStringFunc(input, func(tag string) string {
+		styleRe := regexp.MustCompile(`(?i)style\s*=\s*"([^"]*)"`)
+		if matches := styleRe.FindStringSubmatch(tag); len(matches) == 2 {
+			styleValue := strings.TrimSpace(matches[1])
+			if styleValue != "" && !strings.HasSuffix(styleValue, ";") {
+				styleValue += ";"
+			}
+			styleValue += "max-width:100%;width:auto;height:auto;display:block;float:none;"
+			return styleRe.ReplaceAllString(tag, `style="`+styleValue+`"`)
+		}
+
+		return strings.Replace(tag, "<img", `<img style="max-width:100%;width:auto;height:auto;display:block;float:none;"`, 1)
+	})
+}
+
+func enforceTableCellAlignment(input string) string {
+	cellRe := regexp.MustCompile(`(?i)<(td|th)\b[^>]*>`)
+	styleRe := regexp.MustCompile(`(?i)\bstyle\s*=\s*"([^"]*)"`)
+	alignStyleRe := regexp.MustCompile(`(?i)(?:^|;)\s*text-align\s*:\s*(left|center|right|justify)\s*(?:;|$)`)
+	valignStyleRe := regexp.MustCompile(`(?i)(?:^|;)\s*vertical-align\s*:\s*(top|middle|bottom)\s*(?:;|$)`)
+	alignAttrRe := regexp.MustCompile(`(?i)\salign\s*=\s*"[^"]*"`)
+	valignAttrRe := regexp.MustCompile(`(?i)\svalign\s*=\s*"[^"]*"`)
+
+	return cellRe.ReplaceAllStringFunc(input, func(tag string) string {
+		styleMatch := styleRe.FindStringSubmatch(tag)
+		if len(styleMatch) != 2 {
+			return tag
+		}
+
+		styleValue := styleMatch[1]
+		align := ""
+		valign := ""
+
+		if m := alignStyleRe.FindStringSubmatch(styleValue); len(m) == 2 {
+			align = strings.ToLower(m[1])
+		}
+		if m := valignStyleRe.FindStringSubmatch(styleValue); len(m) == 2 {
+			valign = strings.ToLower(m[1])
+		}
+
+		updated := tag
+		if align != "" && !alignAttrRe.MatchString(updated) {
+			updated = strings.Replace(updated, ">", ` align="`+align+`">`, 1)
+		}
+		if valign != "" && !valignAttrRe.MatchString(updated) {
+			updated = strings.Replace(updated, ">", ` valign="`+valign+`">`, 1)
+		}
+
+		return updated
+	})
+}
+
 func renderMarkdownToSafeHTML(markdown string) (string, error) {
 	var raw bytes.Buffer
 	md := goldmark.New(
@@ -705,10 +916,46 @@ func renderMarkdownToSafeHTML(markdown string) (string, error) {
 	policy.AllowURLSchemes("http", "https", "data")
 	policy.AllowAttrs("src").Matching(regexp.MustCompile(`^(?i)(https?://|data:image/)`)).OnElements("img")
 	policy.AllowAttrs("alt", "title").OnElements("img")
-	policy.AllowAttrs("style").OnElements("p", "img")
-	policy.AllowStyles("text-align").OnElements("p")
+	policy.AllowAttrs("style").OnElements(
+		"p", "span", "div",
+		"table", "thead", "tbody", "tfoot", "tr", "th", "td",
+		"h1", "h2", "h3", "h4", "h5", "h6",
+		"ul", "ol", "li",
+		"strong", "em", "u", "a", "img",
+	)
+	styleValuePattern := regexp.MustCompile(`(?i)^[a-z0-9\s#(),.%'"\-+/]+$`)
+	policy.AllowStyles(
+		"text-align",
+		"font-size",
+		"font-family",
+		"font-weight",
+		"font-style",
+		"text-decoration",
+		"line-height",
+		"color",
+		"background-color",
+		"vertical-align",
+		"width",
+		"max-width",
+		"height",
+		"display",
+		"margin",
+		"margin-left",
+		"margin-right",
+		"margin-top",
+		"margin-bottom",
+		"border",
+		"border-collapse",
+		"table-layout",
+	).Matching(styleValuePattern).OnElements(
+		"p", "span", "div",
+		"table", "thead", "tbody", "tfoot", "tr", "th", "td",
+		"h1", "h2", "h3", "h4", "h5", "h6",
+		"ul", "ol", "li",
+		"strong", "em", "u", "a", "img",
+	)
 	policy.AllowElements("table", "thead", "tbody", "tfoot", "tr", "th", "td")
-	policy.AllowAttrs("align", "colspan", "rowspan").OnElements("th", "td")
+	policy.AllowAttrs("align", "valign", "colspan", "rowspan").OnElements("th", "td")
 
 	return policy.Sanitize(raw.String()), nil
 }
@@ -889,10 +1136,4 @@ func (h *Handler) writeJSON(w http.ResponseWriter, status int, payload any) {
 
 func (h *Handler) writeError(w http.ResponseWriter, status int, message string) {
 	h.writeJSON(w, status, map[string]string{"error": message})
-}
-
-func (h *Handler) GetRuntimeConfig(w http.ResponseWriter, _ *http.Request) {
-	h.writeJSON(w, http.StatusOK, map[string]any{
-		"smtpConfigured": h.cfg.SMTPHost != "" && h.cfg.SMTPFrom != "",
-	})
 }

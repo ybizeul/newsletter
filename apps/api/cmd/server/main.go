@@ -63,6 +63,17 @@ func main() {
 			})
 		})
 
+			api.Route("/headers", func(header chi.Router) {
+				header.Post("/", h.CreateHeader)
+				header.Get("/", h.ListHeaders)
+				header.Put("/{id}", func(w http.ResponseWriter, r *http.Request) {
+					h.UpdateHeader(w, r, chi.URLParam(r, "id"))
+				})
+				header.Delete("/{id}", func(w http.ResponseWriter, r *http.Request) {
+					h.DeleteHeader(w, r, chi.URLParam(r, "id"))
+				})
+			})
+
 		api.Route("/newsletters", func(newsletter chi.Router) {
 			newsletter.Post("/", h.CreateNewsletter)
 			newsletter.Get("/", h.ListNewsletters)

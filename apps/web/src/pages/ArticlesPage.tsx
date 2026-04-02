@@ -177,6 +177,7 @@ export default function ArticlesPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [deleteArticleId, setDeleteArticleId] = useState<string | null>(null);
 
   const loadArticles = async () => {
     setIsLoading(true);
@@ -314,18 +315,21 @@ export default function ArticlesPage() {
     }
   };
 
-  const onDelete = async (articleId: string) => {
-    const ok = window.confirm("Delete this article?");
-    if (!ok) {
+  const requestDeleteArticle = (articleId: string) => {
+    setDeleteArticleId(articleId);
+  };
+
+  const confirmDeleteArticle = async () => {
+    if (!deleteArticleId) {
       return;
     }
 
     setError(null);
     try {
-      await deleteArticle(articleId);
+      await deleteArticle(deleteArticleId);
       setArticles((current) => {
-        const next = current.filter((article) => article.id !== articleId);
-        if (selectedArticleId === articleId) {
+        const next = current.filter((article) => article.id !== deleteArticleId);
+        if (selectedArticleId === deleteArticleId) {
           if (next.length > 0) {
             onEdit(next[0]);
           } else {
@@ -334,6 +338,7 @@ export default function ArticlesPage() {
         }
         return next;
       });
+      setDeleteArticleId(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to delete article");
     }
@@ -630,7 +635,7 @@ export default function ArticlesPage() {
                     variant="subtle"
                     onClick={(event) => {
                       event.stopPropagation();
-                      void onDelete(article.id);
+                      requestDeleteArticle(article.id);
                     }}
                   >
                     <IconTrash size={16} />
@@ -674,7 +679,7 @@ export default function ArticlesPage() {
                 <Button variant="default" size="xs" onClick={resetForm}>
                   Cancel
                 </Button>
-                <Button color="red" variant="light" size="xs" onClick={() => void onDelete(editingId)}>
+                <Button color="red" variant="light" size="xs" onClick={() => requestDeleteArticle(editingId)}>
                   Delete
                 </Button>
               </Group>
@@ -862,6 +867,25 @@ export default function ArticlesPage() {
           {error ? <Text c="red">{error}</Text> : null}
         </Stack>
       </div>
+
+      <Modal
+        opened={Boolean(deleteArticleId)}
+        onClose={() => setDeleteArticleId(null)}
+        title="Confirm deletion"
+        centered
+      >
+        <Stack>
+          <Text size="sm">Delete this article? This action cannot be undone.</Text>
+          <Group justify="flex-end">
+            <Button variant="default" onClick={() => setDeleteArticleId(null)}>
+              Cancel
+            </Button>
+            <Button color="red" onClick={() => void confirmDeleteArticle()}>
+              Delete article
+            </Button>
+          </Group>
+        </Stack>
+      </Modal>
 
       <Modal
         opened={isIconBrowserOpen}

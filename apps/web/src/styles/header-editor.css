@@ -1,0 +1,129 @@
+.header-editor-shell {
+  border: 1px solid #dee2e6;
+  border-radius: 10px;
+  overflow: hidden;
+  background: #ffffff;
+  width: 680px;
+  max-width: 100%;
+}
+
+.header-editor-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 10px;
+  border-bottom: 1px solid #e9ecef;
+  background: #f8f9fa;
+}
+
+.header-editor-content {
+  min-height: 320px;
+  padding: 14px;
+}
+
+.header-editor-content .ProseMirror {
+  min-height: 280px;
+  outline: none;
+  font-size: 15px;
+  line-height: 1.55;
+}
+
+.header-editor-content .ProseMirror p {
+  margin: 0.4rem 0;
+}
+
+.header-editor-content .ProseMirror table {
+  border-collapse: collapse;
+  width: 100%;
+  min-width: 100%;
+  max-width: 100%;
+  table-layout: fixed;
+  margin: 0.6rem 0;
+}
+
+.header-editor-content .ProseMirror td,
+.header-editor-content .ProseMirror th {
+  border: var(--header-cell-border, 1px solid #ced4da);
+  padding: 6px 8px;
+  vertical-align: top;
+}
+
+.header-editor-content .ProseMirror table[data-hide-borders="true"] td,
+.header-editor-content .ProseMirror table[data-hide-borders="true"] th {
+  border: 0 !important;
+  box-shadow: none !important;
+}
+
+.header-editor-content .ProseMirror table[style*="--header-cell-border:0"] td,
+.header-editor-content .ProseMirror table[style*="--header-cell-border:0"] th,
+.header-editor-content .ProseMirror table[style*="--header-cell-border: 0"] td,
+.header-editor-content .ProseMirror table[style*="--header-cell-border: 0"] th,
+.header-editor-content .ProseMirror table[style*="border:0"] td,
+.header-editor-content .ProseMirror table[style*="border:0"] th,
+.header-editor-content .ProseMirror table[style*="border: 0"] td,
+.header-editor-content .ProseMirror table[style*="border: 0"] th {
+  border: 0 !important;
+  box-shadow: none !important;
+}
+
+.header-editor-content .ProseMirror table[data-hide-borders="true"] {
+  border: 0 !important;
+}
+
+.header-editor-content .ProseMirror table[style*="--header-cell-border:0"],
+.header-editor-content .ProseMirror table[style*="--header-cell-border: 0"],
+.header-editor-content .ProseMirror table[style*="border:0"],
+.header-editor-content .ProseMirror table[style*="border: 0"] {
+  border: 0 !important;
+}
+
+.header-editor-content .ProseMirror table[data-hide-borders="true"] .selectedCell:after,
+.header-editor-content .ProseMirror table[data-hide-borders="true"] td.selectedCell:after,
+.header-editor-content .ProseMirror table[data-hide-borders="true"] th.selectedCell:after {
+  box-shadow: none !important;
+  border: 0 !important;
+  background: transparent !important;
+}
+
+.header-editor-content .ProseMirror table[style*="--header-cell-border:0"] .selectedCell:after,
+.header-editor-content .ProseMirror table[style*="--header-cell-border:0"] td.selectedCell:after,
+.header-editor-content .ProseMirror table[style*="--header-cell-border:0"] th.selectedCell:after,
+.header-editor-content .ProseMirror table[style*="--header-cell-border: 0"] .selectedCell:after,
+.header-editor-content .ProseMirror table[style*="--header-cell-border: 0"] td.selectedCell:after,
+.header-editor-content .ProseMirror table[style*="--header-cell-border: 0"] th.selectedCell:after,
+.header-editor-content .ProseMirror table[style*="border:0"] .selectedCell:after,
+.header-editor-content .ProseMirror table[style*="border:0"] td.selectedCell:after,
+.header-editor-content .ProseMirror table[style*="border:0"] th.selectedCell:after,
+.header-editor-content .ProseMirror table[style*="border: 0"] .selectedCell:after,
+.header-editor-content .ProseMirror table[style*="border: 0"] td.selectedCell:after,
+.header-editor-content .ProseMirror table[style*="border: 0"] th.selectedCell:after {
+  box-shadow: none !important;
+  border: 0 !important;
+  background: transparent !important;
+}
+
+.header-editor-content .ProseMirror table[data-hide-borders="true"] .column-resize-handle {
+  background: transparent !important;
+}
+
+.header-editor-content .ProseMirror table[style*="--header-cell-border:0"] .column-resize-handle,
+.header-editor-content .ProseMirror table[style*="--header-cell-border: 0"] .column-resize-handle,
+.header-editor-content .ProseMirror table[style*="border:0"] .column-resize-handle,
+.header-editor-content .ProseMirror table[style*="border: 0"] .column-resize-handle {
+  background: transparent !important;
+}
+
+.header-editor-content .ProseMirror img {
+  max-width: none;
+  width: auto;
+  height: auto;
+  display: block;
+  margin: 8px auto;
+}
+
+.header-editor-content .ProseMirror td:has(img),
+.header-editor-content .ProseMirror th:has(img) {
+  width: auto !important;
+  min-width: max-content;
+  white-space: nowrap;
+}

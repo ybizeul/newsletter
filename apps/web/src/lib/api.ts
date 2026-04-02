@@ -1,4 +1,4 @@
-import type { Article, ListResponse, Newsletter, NewsletterPreview } from "../types/domain";
+import type { Article, Header, ListResponse, Newsletter, NewsletterPreview } from "../types/domain";
 
 const API_ROOT = "/api";
 
@@ -14,6 +14,7 @@ type CreateArticlePayload = {
 type CreateNewsletterPayload = {
   creatorId: string;
   title: string;
+  headerId?: string;
   introMarkdown: string;
   includeIndex: boolean;
   articleIds: string[];
@@ -22,6 +23,7 @@ type CreateNewsletterPayload = {
 
 type UpdateNewsletterPayload = {
   title: string;
+  headerId?: string;
   introMarkdown: string;
   includeIndex: boolean;
   articleIds: string[];
@@ -34,6 +36,17 @@ type UpdateArticlePayload = {
   tags?: string[];
   topicIcon?: string;
   illustration?: string;
+};
+
+type CreateHeaderPayload = {
+  creatorId: string;
+  title: string;
+  markdown: string;
+};
+
+type UpdateHeaderPayload = {
+  title: string;
+  markdown: string;
 };
 
 type RuntimeConfig = {
@@ -97,6 +110,31 @@ export async function deleteArticle(id: string): Promise<void> {
 export async function listNewsletters(): Promise<Newsletter[]> {
   const data = await request<ListResponse<Newsletter>>("/newsletters/");
   return data.items;
+}
+
+export async function listHeaders(): Promise<Header[]> {
+  const data = await request<ListResponse<Header>>("/headers/");
+  return data.items;
+}
+
+export async function createHeader(payload: CreateHeaderPayload): Promise<Header> {
+  return request<Header>("/headers/", {
+    method: "POST",
+    body: JSON.stringify(payload)
+  });
+}
+
+export async function updateHeader(id: string, payload: UpdateHeaderPayload): Promise<Header> {
+  return request<Header>(`/headers/${id}`, {
+    method: "PUT",
+    body: JSON.stringify(payload)
+  });
+}
+
+export async function deleteHeader(id: string): Promise<void> {
+  await request(`/headers/${id}`, {
+    method: "DELETE"
+  });
 }
 
 export async function createNewsletter(payload: CreateNewsletterPayload): Promise<Newsletter> {

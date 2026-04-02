@@ -1,9 +1,10 @@
 import { type MouseEvent as ReactMouseEvent, useState } from "react";
 import { AppShell, Box, Burger, Group, NavLink, Text } from "@mantine/core";
 import { useDisclosure } from "@mantine/hooks";
-import { IconArticle, IconMail } from "@tabler/icons-react";
+import { IconAlignBoxCenterTop, IconArticle, IconMail } from "@tabler/icons-react";
 import { Navigate, Route, Routes, useLocation, useNavigate } from "react-router-dom";
 import ArticlesPage from "./pages/ArticlesPage";
+import HeadersPage from "./pages/HeadersPage";
 import NewslettersPage from "./pages/NewslettersPage";
 import NewsletterPreviewPage from "./pages/NewsletterPreviewPage";
 
@@ -81,6 +82,12 @@ function App() {
           leftSection={<IconMail size={16} />}
           onClick={() => navigate("/newsletters")}
         />
+        <NavLink
+          label="Headers"
+          active={location.pathname.startsWith("/headers")}
+          leftSection={<IconAlignBoxCenterTop size={16} />}
+          onClick={() => navigate("/headers")}
+        />
       </AppShell.Navbar>
 
       <Box
@@ -102,6 +109,7 @@ function App() {
         <Routes>
           <Route path="/articles" element={<ArticlesPage />} />
           <Route path="/newsletters" element={<NewslettersPage />} />
+          <Route path="/headers" element={<HeadersPage />} />
           <Route path="/newsletters/:id/preview" element={<NewsletterPreviewPage />} />
           <Route path="*" element={<Navigate to="/articles" replace />} />
         </Routes>
