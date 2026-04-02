@@ -31,8 +31,8 @@ import { Extension } from "@tiptap/core";
 import StarterKit from "@tiptap/starter-kit";
 import Underline from "@tiptap/extension-underline";
 import Image from "@tiptap/extension-image";
-import TextStyle from "@tiptap/extension-text-style";
-import Table from "@tiptap/extension-table";
+import { TextStyle } from "@tiptap/extension-text-style";
+import { Table } from "@tiptap/extension-table";
 import TableRow from "@tiptap/extension-table-row";
 import TableHeader from "@tiptap/extension-table-header";
 import TableCell from "@tiptap/extension-table-cell";
@@ -118,7 +118,7 @@ const HeaderTable = Table.extend({
       ...this.parent?.(),
       style: {
         default: "width:100%;border-collapse:collapse;table-layout:fixed;--header-cell-border:1px solid #ced4da;",
-        parseHTML: (element) => {
+        parseHTML: (element: HTMLElement) => {
           const rawStyle = (element.getAttribute("style") ?? "").trim();
           if (!rawStyle) {
             return "width:100%;border-collapse:collapse;table-layout:fixed;--header-cell-border:1px solid #ced4da;";
@@ -128,7 +128,7 @@ const HeaderTable = Table.extend({
       },
       hideBorders: {
         default: false,
-        parseHTML: (element) => {
+        parseHTML: (element: HTMLElement) => {
           if (element.getAttribute("data-hide-borders") === "true") {
             return true;
           }
@@ -136,7 +136,7 @@ const HeaderTable = Table.extend({
           return /--header-cell-border\s*:\s*0(?:\b|;)/.test(style) ||
             /\bborder\s*:\s*(?:0|none|0px(?:\s+none)?(?:\s+transparent)?)\b/.test(style);
         },
-        renderHTML: (attributes) => {
+        renderHTML: (attributes: { hideBorders?: boolean }) => {
           if (!attributes.hideBorders) {
             return {};
           }
