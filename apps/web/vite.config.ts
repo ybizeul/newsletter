@@ -16,5 +16,10 @@ export default defineConfig({
         changeOrigin: true
       }
     }
+  },
+  resolve: {
+    alias: {
+      '@tabler/icons-react': '@tabler/icons-react/dist/esm/icons/index.mjs',
+    },
   }
 });
