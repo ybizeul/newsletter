@@ -19,6 +19,7 @@
 .header-editor-content {
   min-height: 320px;
   padding: 14px;
+  overflow-x: hidden;
 }
 
 .header-editor-content .ProseMirror {
@@ -34,9 +35,9 @@
 
 .header-editor-content .ProseMirror table {
   border-collapse: collapse;
-  width: 100%;
-  min-width: 100%;
-  max-width: 100%;
+  width: 100% !important;
+  min-width: 100% !important;
+  max-width: 100% !important;
   table-layout: fixed;
   margin: 0.6rem 0;
 }

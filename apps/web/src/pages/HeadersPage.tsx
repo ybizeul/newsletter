@@ -217,13 +217,17 @@ function hasHiddenBorderMarker(styleValue: string): boolean {
 function withHeaderCellBorderStyle(currentStyle: string | null | undefined, hidden: boolean): string {
   const base = (currentStyle ?? "").trim();
   const cleaned = base
+    .replace(/(?:^|;)\s*width\s*:\s*[^;]+;?/gi, "")
+    .replace(/(?:^|;)\s*max-width\s*:\s*[^;]+;?/gi, "")
+    .replace(/(?:^|;)\s*min-width\s*:\s*[^;]+;?/gi, "")
+    .replace(/(?:^|;)\s*table-layout\s*:\s*[^;]+;?/gi, "")
     .replace(/--header-cell-border\s*:\s*[^;]+;?/gi, "")
     .replace(/border\s*:\s*(?:0|none|0px(?:\s+none)?(?:\s+transparent)?|1px\s+solid\s+#ced4da)\s*;?/gi, "")
     .trim();
   const normalized = cleaned.length > 0 ? (cleaned.endsWith(";") ? cleaned : `${cleaned};`) : "";
   const borderValue = hidden ? "0" : "1px solid #ced4da";
   const tableBorder = hidden ? "0" : "1px solid #ced4da";
-  return `${normalized}--header-cell-border:${borderValue};border:${tableBorder};`;
+  return `width:100%;max-width:100%;table-layout:fixed;${normalized}--header-cell-border:${borderValue};border:${tableBorder};`;
 }
 
 function readFileAsDataURL(file: File): Promise<string> {
@@ -402,6 +406,73 @@ export default function HeadersPage() {
       editor.view.dispatch(transaction);
     }
   };
+
+  const enforceEditorTableWidthBounds = () => {
+    if (!editor) {
+      return;
+    }
+
+    const domTables = Array.from(editor.view.dom.querySelectorAll("table"));
+    domTables.forEach((table) => {
+      // Keep visual table bounds pinned to newsletter width while resizing columns.
+      table.style.setProperty("width", "100%", "important");
+      table.style.setProperty("min-width", "100%", "important");
+      table.style.setProperty("max-width", "100%", "important");
+      table.style.setProperty("table-layout", "fixed", "important");
+
+      const cols = Array.from(table.querySelectorAll<HTMLTableColElement>("colgroup col"));
+      if (cols.length === 0) {
+        return;
+      }
+
+      const widths = cols.map((col) => {
+        const styleWidth = parseFloat(col.style.width || "");
+        if (Number.isFinite(styleWidth) && styleWidth > 0) {
+          return styleWidth;
+        }
+
+        const attrWidth = parseFloat(col.getAttribute("width") ?? "");
+        return Number.isFinite(attrWidth) && attrWidth > 0 ? attrWidth : 0;
+      });
+
+      if (widths.some((width) => width <= 0)) {
+        return;
+      }
+
+      const totalWidth = widths.reduce((sum, width) => sum + width, 0);
+      const tableMaxWidth = table.parentElement?.clientWidth ?? table.clientWidth;
+      if (tableMaxWidth <= 0 || totalWidth <= tableMaxWidth) {
+        return;
+      }
+
+      const scale = tableMaxWidth / totalWidth;
+      cols.forEach((col, index) => {
+        const nextWidth = Math.max(24, Math.round(widths[index] * scale));
+        col.style.width = `${nextWidth}px`;
+        col.style.minWidth = `${nextWidth}px`;
+        col.setAttribute("width", String(nextWidth));
+      });
+    });
+  };
+
+  useEffect(() => {
+    if (!editor) {
+      return;
+    }
+
+    const syncTableBounds = () => {
+      requestAnimationFrame(enforceEditorTableWidthBounds);
+    };
+
+    syncTableBounds();
+    editor.on("create", syncTableBounds);
+    editor.on("update", syncTableBounds);
+
+    return () => {
+      editor.off("create", syncTableBounds);
+      editor.off("update", syncTableBounds);
+    };
+  }, [editor]);
 
   const onSelectHeader = async (header: Header) => {
     setSelectedHeaderID(header.id);
