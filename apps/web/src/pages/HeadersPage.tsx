@@ -4,6 +4,7 @@ import {
   Badge,
   Button,
   Group,
+  Loader,
   Menu,
   Modal,
   ScrollArea,
@@ -1044,9 +1045,14 @@ export default function HeadersPage() {
                 );
               })()
             ))}
-            {headers.length === 0 ? (
+            {isLoading ? (
+              <Group justify="center" p="md" gap="xs">
+                <Loader size="sm" />
+                <Text c="dimmed" size="sm">Loading headers...</Text>
+              </Group>
+            ) : headers.length === 0 ? (
               <Text c="dimmed" size="sm" p="md">
-                No headers yet.
+                No headers.
               </Text>
             ) : null}
           </Stack>

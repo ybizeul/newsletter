@@ -879,9 +879,14 @@ export default function ArticlesPage() {
                 );
               })()
             ))}
-            {articles.length === 0 ? (
+            {isLoading ? (
+              <Group justify="center" p="md" gap="xs">
+                <Loader size="sm" />
+                <Text c="dimmed" size="sm">Loading articles...</Text>
+              </Group>
+            ) : articles.length === 0 ? (
               <Text c="dimmed" size="sm" p="md">
-                No articles yet.
+                No articles.
               </Text>
             ) : sortedArticles.length === 0 ? (
               <Text c="dimmed" size="sm" p="md">

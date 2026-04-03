@@ -588,9 +588,14 @@ export default function NewslettersPage() {
                 );
               })()
             ))}
-            {newsletters.length === 0 ? (
+            {isLoading ? (
+              <Group justify="center" p="md" gap="xs">
+                <Loader size="sm" />
+                <Text c="dimmed" size="sm">Loading newsletters...</Text>
+              </Group>
+            ) : newsletters.length === 0 ? (
               <Text c="dimmed" size="sm" p="md">
-                No newsletters yet.
+                No newsletters.
               </Text>
             ) : null}
           </Stack>
