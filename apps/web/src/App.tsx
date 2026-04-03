@@ -45,6 +45,12 @@ function App() {
     window.addEventListener("mouseup", onMouseUp);
   };
 
+  const isArticlesRoute = location.pathname.startsWith("/articles");
+  const isNewslettersRoute = location.pathname.startsWith("/newsletters") && !/\/newsletters\/[^/]+\/preview$/.test(location.pathname);
+  const isHeadersRoute = location.pathname.startsWith("/headers");
+  const isPreviewRoute = /\/newsletters\/[^/]+\/preview$/.test(location.pathname);
+  const isMainRoute = isArticlesRoute || isNewslettersRoute || isHeadersRoute;
+
   return (
     <AppShell
       header={{ height: 60 }}
@@ -103,13 +109,26 @@ function App() {
       />
 
       <AppShell.Main>
-        <Routes>
-          <Route path="/articles" element={<ArticlesPage />} />
-          <Route path="/newsletters" element={<NewslettersPage />} />
-          <Route path="/headers" element={<HeadersPage />} />
-          <Route path="/newsletters/:id/preview" element={<NewsletterPreviewPage />} />
-          <Route path="*" element={<Navigate to="/articles" replace />} />
-        </Routes>
+        {isPreviewRoute ? (
+          <Routes>
+            <Route path="/newsletters/:id/preview" element={<NewsletterPreviewPage />} />
+            <Route path="*" element={<Navigate to="/articles" replace />} />
+          </Routes>
+        ) : isMainRoute ? (
+          <>
+            <Box style={{ display: isArticlesRoute ? "block" : "none" }}>
+              <ArticlesPage />
+            </Box>
+            <Box style={{ display: isNewslettersRoute ? "block" : "none" }}>
+              <NewslettersPage />
+            </Box>
+            <Box style={{ display: isHeadersRoute ? "block" : "none" }}>
+              <HeadersPage />
+            </Box>
+          </>
+        ) : (
+          <Navigate to="/articles" replace />
+        )}
       </AppShell.Main>
     </AppShell>
   );
