@@ -102,18 +102,27 @@ const FontFamily = Extension.create({
   }
 });
 
-function renderCellAlignmentStyle(attributes: { textAlign?: string | null; verticalAlign?: string | null }) {
+function mergeCellAlignmentStyle(
+  baseStyle: string,
+  attributes: { textAlign?: string | null; verticalAlign?: string | null }
+): string {
+  const stripped = baseStyle
+    .replace(/(?:^|;)\s*text-align\s*:\s*[^;]+;?/gi, "")
+    .replace(/(?:^|;)\s*vertical-align\s*:\s*[^;]+;?/gi, "")
+    .trim();
+
   const rules: string[] = [];
+  if (stripped) {
+    rules.push(stripped.endsWith(";") ? stripped : `${stripped};`);
+  }
   if (attributes.textAlign) {
     rules.push(`text-align:${attributes.textAlign};`);
   }
   if (attributes.verticalAlign) {
     rules.push(`vertical-align:${attributes.verticalAlign};`);
   }
-  if (rules.length === 0) {
-    return {};
-  }
-  return { style: rules.join("") };
+
+  return rules.join("");
 }
 
 function normalizeHeaderTableCellHorizontalAlignment(inputHTML: string): string {
@@ -289,8 +298,22 @@ const HeaderTableHeader = TableHeader.extend({
       }
     };
   },
-  renderHTML({ HTMLAttributes }) {
-    return ["th", { ...HTMLAttributes, ...renderCellAlignmentStyle(HTMLAttributes) }, 0];
+  renderHTML({ node, HTMLAttributes }) {
+    const baseStyle = typeof HTMLAttributes.style === "string" ? HTMLAttributes.style : "";
+    const textAlign = typeof node.attrs.textAlign === "string" ? node.attrs.textAlign : null;
+    const verticalAlign = typeof node.attrs.verticalAlign === "string" ? node.attrs.verticalAlign : null;
+    const mergedStyle = mergeCellAlignmentStyle(baseStyle, { textAlign, verticalAlign });
+
+    return [
+      "th",
+      {
+        ...HTMLAttributes,
+        ...(textAlign ? { align: textAlign } : {}),
+        ...(verticalAlign ? { valign: verticalAlign } : {}),
+        ...(mergedStyle ? { style: mergedStyle } : {})
+      },
+      0
+    ];
   }
 });
 
@@ -310,8 +333,22 @@ const HeaderTableCell = TableCell.extend({
       }
     };
   },
-  renderHTML({ HTMLAttributes }) {
-    return ["td", { ...HTMLAttributes, ...renderCellAlignmentStyle(HTMLAttributes) }, 0];
+  renderHTML({ node, HTMLAttributes }) {
+    const baseStyle = typeof HTMLAttributes.style === "string" ? HTMLAttributes.style : "";
+    const textAlign = typeof node.attrs.textAlign === "string" ? node.attrs.textAlign : null;
+    const verticalAlign = typeof node.attrs.verticalAlign === "string" ? node.attrs.verticalAlign : null;
+    const mergedStyle = mergeCellAlignmentStyle(baseStyle, { textAlign, verticalAlign });
+
+    return [
+      "td",
+      {
+        ...HTMLAttributes,
+        ...(textAlign ? { align: textAlign } : {}),
+        ...(verticalAlign ? { valign: verticalAlign } : {}),
+        ...(mergedStyle ? { style: mergedStyle } : {})
+      },
+      0
+    ];
   }
 });
 
