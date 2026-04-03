@@ -100,6 +100,9 @@ function cutByChars(input: string, maxChars: number): string {
 
 export default function NewslettersPage() {
   const containerRef = useRef<HTMLDivElement | null>(null);
+  const autosaveTimerRef = useRef<number | null>(null);
+  const autosaveClearSavedRef = useRef<number | null>(null);
+  const lastSavedDraftRef = useRef<string>("");
   const wasNewslettersRouteActiveRef = useRef(false);
   const [leftPaneWidth, setLeftPaneWidth] = useState(getStoredNewslettersPaneWidth);
   const navigate = useNavigate();
@@ -122,6 +125,7 @@ export default function NewslettersPage() {
   const [error, setError] = useState<string | null>(null);
   const [deleteNewsletterId, setDeleteNewsletterId] = useState<string | null>(null);
   const [hasLoadedNewslettersData, setHasLoadedNewslettersData] = useState(false);
+  const [autosaveStatus, setAutosaveStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
 
   const availableArticleOptions = useMemo(
     () => articles.map((article) => ({ value: article.id, label: article.title })),
@@ -214,6 +218,8 @@ export default function NewslettersPage() {
     setDraggedArticleId(null);
     setRecipientRaw("first@example.com,second@example.com");
     setScheduledAtInput(null);
+    lastSavedDraftRef.current = "";
+    setAutosaveStatus("idle");
   };
 
   const onSelectNewsletter = (newsletter: Newsletter) => {
@@ -229,6 +235,15 @@ export default function NewslettersPage() {
     } else {
       setScheduledAtInput(null);
     }
+    lastSavedDraftRef.current = JSON.stringify({
+      title: newsletter.title.trim(),
+      headerId: newsletter.headerId ?? "",
+      introMarkdown: newsletter.introMarkdown.trim(),
+      includeIndex: Boolean(newsletter.includeIndex),
+      articleIds: newsletter.articleIds,
+      recipientIds: newsletter.recipientIds
+    });
+    setAutosaveStatus("idle");
   };
 
   useEffect(() => {
@@ -255,6 +270,24 @@ export default function NewslettersPage() {
   const parsedRecipients = useMemo(() => parseRecipients(), [recipientRaw]);
   const hasTooManyRecipients = parsedRecipients.length > MAX_RECIPIENTS;
 
+  const buildNewsletterDraftPayload = () => ({
+    title: title.trim(),
+    headerId: headerId ?? "",
+    introMarkdown: introMarkdown.trim(),
+    includeIndex,
+    articleIds,
+    recipientIds: parseRecipients()
+  });
+
+  const scheduleAutosaveSavedReset = () => {
+    if (autosaveClearSavedRef.current !== null) {
+      window.clearTimeout(autosaveClearSavedRef.current);
+    }
+    autosaveClearSavedRef.current = window.setTimeout(() => {
+      setAutosaveStatus("idle");
+    }, 1200);
+  };
+
   const onSave = async () => {
     if (!title.trim()) {
       setError("Title is required");
@@ -269,37 +302,90 @@ export default function NewslettersPage() {
     setError(null);
 
     try {
+      const payload = buildNewsletterDraftPayload();
+
       if (selectedNewsletterId) {
-        const updated = await updateNewsletter(selectedNewsletterId, {
-          title: title.trim(),
-          headerId: headerId ?? "",
-          introMarkdown: introMarkdown.trim(),
-          includeIndex,
-          articleIds,
-          recipientIds: parseRecipients()
-        });
+        const updated = await updateNewsletter(selectedNewsletterId, payload);
         setNewsletters((current) =>
           current.map((newsletter) => (newsletter.id === selectedNewsletterId ? updated : newsletter))
         );
+        lastSavedDraftRef.current = JSON.stringify(payload);
+        setAutosaveStatus("saved");
+        scheduleAutosaveSavedReset();
       } else {
         const created = await createNewsletter({
           creatorId: DEMO_CREATOR_ID,
-          title: title.trim(),
-          headerId: headerId ?? "",
-          introMarkdown: introMarkdown.trim(),
-          includeIndex,
-          articleIds,
-          recipientIds: parseRecipients()
+          ...payload
         });
         setNewsletters((current) => [created, ...current]);
         setSelectedNewsletterID(created.id);
+        lastSavedDraftRef.current = JSON.stringify(payload);
+        setAutosaveStatus("saved");
+        scheduleAutosaveSavedReset();
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to save newsletter");
+      setAutosaveStatus("error");
     } finally {
       setIsSubmitting(false);
     }
   };
+
+  useEffect(() => {
+    if (!selectedNewsletterId || isSubmitting) {
+      return;
+    }
+
+    if (hasTooManyRecipients) {
+      return;
+    }
+
+    const payload = buildNewsletterDraftPayload();
+    const serializedPayload = JSON.stringify(payload);
+
+    if (serializedPayload === lastSavedDraftRef.current) {
+      return;
+    }
+
+    if (!payload.title) {
+      return;
+    }
+
+    if (autosaveTimerRef.current !== null) {
+      window.clearTimeout(autosaveTimerRef.current);
+    }
+
+    autosaveTimerRef.current = window.setTimeout(async () => {
+      setAutosaveStatus("saving");
+      try {
+        const updated = await updateNewsletter(selectedNewsletterId, payload);
+        setNewsletters((current) =>
+          current.map((newsletter) => (newsletter.id === selectedNewsletterId ? updated : newsletter))
+        );
+        lastSavedDraftRef.current = serializedPayload;
+        setAutosaveStatus("saved");
+        scheduleAutosaveSavedReset();
+      } catch (err) {
+        setAutosaveStatus("error");
+        setError(err instanceof Error ? err.message : "Failed to autosave newsletter");
+      }
+    }, 900);
+
+    return () => {
+      if (autosaveTimerRef.current !== null) {
+        window.clearTimeout(autosaveTimerRef.current);
+      }
+    };
+  }, [selectedNewsletterId, title, headerId, introMarkdown, includeIndex, articleIds, recipientRaw, hasTooManyRecipients, isSubmitting]);
+
+  useEffect(() => () => {
+    if (autosaveTimerRef.current !== null) {
+      window.clearTimeout(autosaveTimerRef.current);
+    }
+    if (autosaveClearSavedRef.current !== null) {
+      window.clearTimeout(autosaveClearSavedRef.current);
+    }
+  }, []);
 
   const onSchedule = async () => {
     if (!selectedNewsletterId) {
@@ -736,6 +822,17 @@ export default function NewslettersPage() {
                 </Button>
               ) : null}
             </Group>
+            <Text size="xs" c={autosaveStatus === "error" ? "red" : "dimmed"}>
+              {selectedNewsletterId
+                ? autosaveStatus === "saving"
+                  ? "Autosaving..."
+                  : autosaveStatus === "saved"
+                    ? "All changes saved"
+                    : autosaveStatus === "error"
+                      ? "Autosave failed"
+                      : ""
+                : ""}
+            </Text>
           </Group>
 
           {selectedNewsletter?.deliveryError ? (
