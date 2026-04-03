@@ -945,7 +945,6 @@ func enforceImageNaturalWidth(input string) string {
 }
 
 func enforceTableCellAlignment(input string) string {
-	cellBlockRe := regexp.MustCompile(`(?is)<(td|th)\b([^>]*)>(.*?)</\1>`)
 	styleRe := regexp.MustCompile(`(?i)\bstyle\s*=\s*"([^"]*)"`)
 	alignStyleRe := regexp.MustCompile(`(?i)(?:^|;)\s*text-align\s*:\s*(left|center|right|justify)\s*(?:;|$)`)
 	valignStyleRe := regexp.MustCompile(`(?i)(?:^|;)\s*vertical-align\s*:\s*(top|middle|bottom)\s*(?:;|$)`)
@@ -974,67 +973,74 @@ func enforceTableCellAlignment(input string) string {
 		return strings.Replace(tag, ">", ` style="`+prop+`:`+value+`;">`, 1)
 	}
 
-	return cellBlockRe.ReplaceAllStringFunc(input, func(block string) string {
-		matches := cellBlockRe.FindStringSubmatch(block)
-		if len(matches) != 4 {
-			return block
-		}
+	processCellBlocks := func(src string, tagName string) string {
+		cellBlockRe := regexp.MustCompile(`(?is)<` + tagName + `\b([^>]*)>(.*?)</` + tagName + `>`)
 
-		tagName := strings.ToLower(matches[1])
-		attrs := matches[2]
-		inner := matches[3]
-		openTag := "<" + tagName + attrs + ">"
+		return cellBlockRe.ReplaceAllStringFunc(src, func(block string) string {
+			matches := cellBlockRe.FindStringSubmatch(block)
+			if len(matches) != 3 {
+				return block
+			}
 
-		align := ""
-		if m := alignAttrRe.FindStringSubmatch(openTag); len(m) == 2 {
-			align = strings.ToLower(strings.TrimSpace(m[1]))
-		}
-		if align == "" {
-			if m := styleRe.FindStringSubmatch(openTag); len(m) == 2 {
-				if a := alignStyleRe.FindStringSubmatch(m[1]); len(a) == 2 {
-					align = strings.ToLower(a[1])
+			attrs := matches[1]
+			inner := matches[2]
+			openTag := "<" + tagName + attrs + ">"
+
+			align := ""
+			if m := alignAttrRe.FindStringSubmatch(openTag); len(m) == 2 {
+				align = strings.ToLower(strings.TrimSpace(m[1]))
+			}
+			if align == "" {
+				if m := styleRe.FindStringSubmatch(openTag); len(m) == 2 {
+					if a := alignStyleRe.FindStringSubmatch(m[1]); len(a) == 2 {
+						align = strings.ToLower(a[1])
+					}
 				}
 			}
-		}
-		if align == "" {
-			if m := innerAlignRe.FindStringSubmatch(inner); len(m) == 2 {
-				align = strings.ToLower(m[1])
-			}
-		}
-
-		valign := ""
-		if m := valignAttrRe.FindStringSubmatch(openTag); len(m) == 2 {
-			valign = strings.ToLower(strings.TrimSpace(m[1]))
-		}
-		if valign == "" {
-			if m := styleRe.FindStringSubmatch(openTag); len(m) == 2 {
-				if v := valignStyleRe.FindStringSubmatch(m[1]); len(v) == 2 {
-					valign = strings.ToLower(v[1])
+			if align == "" {
+				if m := innerAlignRe.FindStringSubmatch(inner); len(m) == 2 {
+					align = strings.ToLower(m[1])
 				}
 			}
-		}
-		if valign == "" {
-			if m := innerValignRe.FindStringSubmatch(inner); len(m) == 2 {
-				valign = strings.ToLower(m[1])
-			}
-		}
 
-		updatedOpen := openTag
-		if align != "" {
-			if !alignAttrRe.MatchString(updatedOpen) {
-				updatedOpen = strings.Replace(updatedOpen, ">", ` align="`+align+`">`, 1)
+			valign := ""
+			if m := valignAttrRe.FindStringSubmatch(openTag); len(m) == 2 {
+				valign = strings.ToLower(strings.TrimSpace(m[1]))
 			}
-			updatedOpen = ensureStyleProp(updatedOpen, "text-align", align)
-		}
-		if valign != "" {
-			if !valignAttrRe.MatchString(updatedOpen) {
-				updatedOpen = strings.Replace(updatedOpen, ">", ` valign="`+valign+`">`, 1)
+			if valign == "" {
+				if m := styleRe.FindStringSubmatch(openTag); len(m) == 2 {
+					if v := valignStyleRe.FindStringSubmatch(m[1]); len(v) == 2 {
+						valign = strings.ToLower(v[1])
+					}
+				}
 			}
-			updatedOpen = ensureStyleProp(updatedOpen, "vertical-align", valign)
-		}
+			if valign == "" {
+				if m := innerValignRe.FindStringSubmatch(inner); len(m) == 2 {
+					valign = strings.ToLower(m[1])
+				}
+			}
 
-		return updatedOpen + inner + "</" + tagName + ">"
-	})
+			updatedOpen := openTag
+			if align != "" {
+				if !alignAttrRe.MatchString(updatedOpen) {
+					updatedOpen = strings.Replace(updatedOpen, ">", ` align="`+align+`">`, 1)
+				}
+				updatedOpen = ensureStyleProp(updatedOpen, "text-align", align)
+			}
+			if valign != "" {
+				if !valignAttrRe.MatchString(updatedOpen) {
+					updatedOpen = strings.Replace(updatedOpen, ">", ` valign="`+valign+`">`, 1)
+				}
+				updatedOpen = ensureStyleProp(updatedOpen, "vertical-align", valign)
+			}
+
+			return updatedOpen + inner + "</" + tagName + ">"
+		})
+	}
+
+	output := processCellBlocks(input, "td")
+	output = processCellBlocks(output, "th")
+	return output
 }
 
 func enforceTableFullWidth(input string) string {
