@@ -501,7 +501,7 @@ export default function NewslettersPage() {
         }}
       />
 
-      <div style={{ padding: 12, overflow: "auto" }}>
+      <div style={{ padding: "12px clamp(8px, 2.5vw, 12px)", overflow: "auto" }}>
         {!hasLoadedNewslettersData ? (
           <Center h="100%">
             <Stack align="center" gap="xs">

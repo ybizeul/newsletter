@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Button, Group, Loader, Paper, Stack, Text, Title } from "@mantine/core";
+import { Box, Button, Group, Loader, Paper, SegmentedControl, Stack, Text, Title } from "@mantine/core";
 import { Link, useParams } from "react-router-dom";
 import { getNewsletterPreview } from "../lib/api";
 import type { NewsletterPreview } from "../types/domain";
@@ -11,6 +11,7 @@ export default function NewsletterPreviewPage() {
   const [error, setError] = useState<string | null>(null);
   const [isCopying, setIsCopying] = useState(false);
   const [copyMessage, setCopyMessage] = useState<string | null>(null);
+  const [previewViewport, setPreviewViewport] = useState<"full" | "mobile">("full");
 
   const copyNewsletterContent = async () => {
     if (!data) {
@@ -73,8 +74,10 @@ export default function NewsletterPreviewPage() {
     void loadPreview();
   }, [id]);
 
+  const isMobilePreview = previewViewport === "mobile";
+
   return (
-    <Stack gap="md" p="md">
+    <Stack gap="md" p={isMobilePreview ? { base: 4, sm: 4 } : { base: "xs", sm: "md" }}>
       <Group justify="space-between">
         <Title order={2}>Newsletter Preview</Title>
         <Group gap="xs">
@@ -85,6 +88,21 @@ export default function NewsletterPreviewPage() {
             Back
           </Button>
         </Group>
+      </Group>
+
+      <Group justify="center">
+        <SegmentedControl
+          value={previewViewport}
+          onChange={(value) => {
+            if (value === "full" || value === "mobile") {
+              setPreviewViewport(value);
+            }
+          }}
+          data={[
+            { label: "Full page", value: "full" },
+            { label: "Mobile", value: "mobile" }
+          ]}
+        />
       </Group>
 
       {isLoading ? <Loader /> : null}
@@ -104,11 +122,55 @@ export default function NewsletterPreviewPage() {
           </Paper>
 
           <Paper withBorder radius={0} p={0}>
-            <div style={{ padding: "12px 16px", borderBottom: "1px solid #e9ecef" }}>
+            <div
+              style={{
+                padding: isMobilePreview ? "10px 4px" : "12px clamp(10px, 3vw, 16px)",
+                borderBottom: "1px solid #e9ecef"
+              }}
+            >
               <Title order={4}>HTML Preview</Title>
             </div>
-            <div style={{ padding: 16 }}>
-              <div dangerouslySetInnerHTML={{ __html: data.html }} />
+            <div style={{ padding: isMobilePreview ? "4px" : "clamp(10px, 3vw, 16px)" }}>
+              <Box
+                style={
+                  isMobilePreview
+                    ? {
+                        width: "min(390px, 100%)",
+                        margin: "0 auto",
+                        border: "1px solid #dee2e6",
+                        borderRadius: 18,
+                        overflow: "hidden",
+                        background: "#f1f3f5",
+                        boxShadow: "0 10px 24px rgba(0, 0, 0, 0.08)"
+                      }
+                    : undefined
+                }
+              >
+                <div
+                  style={
+                    isMobilePreview
+                      ? {
+                          minHeight: 640,
+                          padding: 4,
+                          background: "#f1f3f5"
+                        }
+                      : undefined
+                  }
+                >
+                  <div
+                    style={
+                      isMobilePreview
+                        ? {
+                            minHeight: "100%",
+                            background: "#ffffff"
+                          }
+                        : undefined
+                    }
+                  >
+                    <div dangerouslySetInnerHTML={{ __html: data.html }} />
+                  </div>
+                </div>
+              </Box>
             </div>
           </Paper>
         </>

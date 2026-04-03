@@ -843,7 +843,7 @@ func (h *Handler) renderNewsletter(ctx context.Context, newsletter model.Newslet
 
 	var body strings.Builder
 	body.WriteString("<!doctype html><html><body style=\"font-family:Arial,Helvetica,sans-serif;line-height:1.5;color:#111\">\n")
-	body.WriteString("<div style=\"max-width:680px;margin:0 auto;padding:24px\">\n")
+	body.WriteString("<div style=\"max-width:680px;margin:0 auto;padding:24px 8px\">\n")
 	if headerHTML != "" {
 		body.WriteString("<section style=\"margin-bottom:20px\">" + headerHTML + "</section>\n")
 	}
