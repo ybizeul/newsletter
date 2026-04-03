@@ -1,4 +1,4 @@
-import type { Article, Header, ListResponse, Newsletter, NewsletterPreview } from "../types/domain";
+import type { Article, ArticleSummary, Header, ListResponse, Newsletter, NewsletterPreview, NewsletterSummary } from "../types/domain";
 
 const API_ROOT = "/api";
 
@@ -87,6 +87,15 @@ export async function listArticles(): Promise<Article[]> {
   return data.items;
 }
 
+export async function listArticleSummaries(): Promise<ArticleSummary[]> {
+  const data = await request<ListResponse<ArticleSummary>>("/articles/?view=summary");
+  return data.items;
+}
+
+export async function getArticle(id: string): Promise<Article> {
+  return request<Article>(`/articles/${id}`);
+}
+
 export async function createArticle(payload: CreateArticlePayload): Promise<Article> {
   return request<Article>("/articles/", {
     method: "POST",
@@ -110,6 +119,15 @@ export async function deleteArticle(id: string): Promise<void> {
 export async function listNewsletters(): Promise<Newsletter[]> {
   const data = await request<ListResponse<Newsletter>>("/newsletters/");
   return data.items;
+}
+
+export async function listNewsletterSummaries(): Promise<NewsletterSummary[]> {
+  const data = await request<ListResponse<NewsletterSummary>>("/newsletters/?view=summary");
+  return data.items;
+}
+
+export async function getNewsletter(id: string): Promise<Newsletter> {
+  return request<Newsletter>(`/newsletters/${id}`);
 }
 
 export async function listHeaders(): Promise<Header[]> {

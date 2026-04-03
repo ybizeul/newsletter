@@ -25,15 +25,16 @@ import {
 import {
   createNewsletter,
   deleteNewsletter,
+  getNewsletter,
   getRuntimeConfig,
-  listArticles,
+  listArticleSummaries,
   listHeaders,
-  listNewsletters,
+  listNewsletterSummaries,
   scheduleNewsletter,
   sendNewsletterNow,
   updateNewsletter
 } from "../lib/api";
-import type { Article, Header, Newsletter } from "../types/domain";
+import type { ArticleSummary, Header, Newsletter, NewsletterSummary } from "../types/domain";
 import { useLocation, useNavigate } from "react-router-dom";
 import { DateTimePicker } from "@mantine/dates";
 import MDEditor from "@uiw/react-md-editor";
@@ -98,6 +99,24 @@ function cutByChars(input: string, maxChars: number): string {
   return `${clean.slice(0, maxChars).trimEnd()}...`;
 }
 
+function toNewsletterSummary(newsletter: Newsletter): NewsletterSummary {
+  return {
+    id: newsletter.id,
+    title: newsletter.title,
+    headerId: newsletter.headerId,
+    includeIndex: newsletter.includeIndex,
+    articleIds: newsletter.articleIds,
+    recipientIds: newsletter.recipientIds,
+    status: newsletter.status,
+    deliveryError: newsletter.deliveryError,
+    scheduledAt: newsletter.scheduledAt,
+    sentAt: newsletter.sentAt,
+    createdAt: newsletter.createdAt,
+    updatedAt: newsletter.updatedAt,
+    preview: cutByChars(markdownPreview(newsletter.introMarkdown), 180)
+  };
+}
+
 export default function NewslettersPage() {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const autosaveTimerRef = useRef<number | null>(null);
@@ -107,9 +126,9 @@ export default function NewslettersPage() {
   const [leftPaneWidth, setLeftPaneWidth] = useState(getStoredNewslettersPaneWidth);
   const navigate = useNavigate();
   const location = useLocation();
-  const [articles, setArticles] = useState<Article[]>([]);
+  const [articles, setArticles] = useState<ArticleSummary[]>([]);
   const [headers, setHeaders] = useState<Header[]>([]);
-  const [newsletters, setNewsletters] = useState<Newsletter[]>([]);
+  const [newsletters, setNewsletters] = useState<NewsletterSummary[]>([]);
   const [selectedNewsletterId, setSelectedNewsletterID] = useState<string | null>(null);
   const [title, setTitle] = useState("");
   const [headerId, setHeaderId] = useState<string | null>(null);
@@ -161,9 +180,9 @@ export default function NewslettersPage() {
     setError(null);
     try {
       const [articleItems, headerItems, newsletterItems, runtimeConfig] = await Promise.all([
-        listArticles(),
+        listArticleSummaries(),
         listHeaders(),
-        listNewsletters(),
+        listNewsletterSummaries(),
         getRuntimeConfig()
       ]);
       setArticles(articleItems);
@@ -200,7 +219,7 @@ export default function NewslettersPage() {
 
     void (async () => {
       try {
-        const latestArticles = await listArticles();
+        const latestArticles = await listArticleSummaries();
         setArticles(latestArticles);
       } catch (err) {
         setError(err instanceof Error ? err.message : "Failed to refresh articles");
@@ -222,28 +241,34 @@ export default function NewslettersPage() {
     setAutosaveStatus("idle");
   };
 
-  const onSelectNewsletter = (newsletter: Newsletter) => {
-    setSelectedNewsletterID(newsletter.id);
-    setTitle(newsletter.title);
-    setHeaderId(newsletter.headerId ?? null);
-    setIntroMarkdown(newsletter.introMarkdown);
-    setIncludeIndex(Boolean(newsletter.includeIndex));
-    setArticleIDs(newsletter.articleIds);
-    setRecipientRaw(newsletter.recipientIds.join(","));
-    if (newsletter.scheduledAt) {
-      setScheduledAtInput(newsletter.scheduledAt);
-    } else {
-      setScheduledAtInput(null);
+  const onSelectNewsletter = async (newsletter: NewsletterSummary) => {
+    setError(null);
+    try {
+      const fullNewsletter = await getNewsletter(newsletter.id);
+      setSelectedNewsletterID(fullNewsletter.id);
+      setTitle(fullNewsletter.title);
+      setHeaderId(fullNewsletter.headerId ?? null);
+      setIntroMarkdown(fullNewsletter.introMarkdown);
+      setIncludeIndex(Boolean(fullNewsletter.includeIndex));
+      setArticleIDs(fullNewsletter.articleIds);
+      setRecipientRaw(fullNewsletter.recipientIds.join(","));
+      if (fullNewsletter.scheduledAt) {
+        setScheduledAtInput(fullNewsletter.scheduledAt);
+      } else {
+        setScheduledAtInput(null);
+      }
+      lastSavedDraftRef.current = JSON.stringify({
+        title: fullNewsletter.title.trim(),
+        headerId: fullNewsletter.headerId ?? "",
+        introMarkdown: fullNewsletter.introMarkdown.trim(),
+        includeIndex: Boolean(fullNewsletter.includeIndex),
+        articleIds: fullNewsletter.articleIds,
+        recipientIds: fullNewsletter.recipientIds
+      });
+      setAutosaveStatus("idle");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to load newsletter details");
     }
-    lastSavedDraftRef.current = JSON.stringify({
-      title: newsletter.title.trim(),
-      headerId: newsletter.headerId ?? "",
-      introMarkdown: newsletter.introMarkdown.trim(),
-      includeIndex: Boolean(newsletter.includeIndex),
-      articleIds: newsletter.articleIds,
-      recipientIds: newsletter.recipientIds
-    });
-    setAutosaveStatus("idle");
   };
 
   useEffect(() => {
@@ -252,7 +277,7 @@ export default function NewslettersPage() {
     }
 
     if (!selectedNewsletterId) {
-      onSelectNewsletter(newsletters[0]);
+      void onSelectNewsletter(newsletters[0]);
       return;
     }
 
@@ -307,7 +332,7 @@ export default function NewslettersPage() {
       if (selectedNewsletterId) {
         const updated = await updateNewsletter(selectedNewsletterId, payload);
         setNewsletters((current) =>
-          current.map((newsletter) => (newsletter.id === selectedNewsletterId ? updated : newsletter))
+          current.map((newsletter) => (newsletter.id === selectedNewsletterId ? toNewsletterSummary(updated) : newsletter))
         );
         lastSavedDraftRef.current = JSON.stringify(payload);
         setAutosaveStatus("saved");
@@ -317,7 +342,7 @@ export default function NewslettersPage() {
           creatorId: DEMO_CREATOR_ID,
           ...payload
         });
-        setNewsletters((current) => [created, ...current]);
+        setNewsletters((current) => [toNewsletterSummary(created), ...current]);
         setSelectedNewsletterID(created.id);
         lastSavedDraftRef.current = JSON.stringify(payload);
         setAutosaveStatus("saved");
@@ -360,7 +385,7 @@ export default function NewslettersPage() {
       try {
         const updated = await updateNewsletter(selectedNewsletterId, payload);
         setNewsletters((current) =>
-          current.map((newsletter) => (newsletter.id === selectedNewsletterId ? updated : newsletter))
+          current.map((newsletter) => (newsletter.id === selectedNewsletterId ? toNewsletterSummary(updated) : newsletter))
         );
         lastSavedDraftRef.current = serializedPayload;
         setAutosaveStatus("saved");
@@ -521,13 +546,12 @@ export default function NewslettersPage() {
           <Stack gap={0}>
             {newsletters.map((newsletter) => (
               (() => {
-                const preview = markdownPreview(newsletter.introMarkdown);
                 const titleText = cutByChars(newsletter.title, 72);
-                const previewText = cutByChars(preview, 180);
+                const previewText = newsletter.preview;
                 return (
               <div
                 key={newsletter.id}
-                onClick={() => onSelectNewsletter(newsletter)}
+                onClick={() => void onSelectNewsletter(newsletter)}
                 style={{
                   padding: 12,
                   borderBottom: "1px solid #f1f3f5",

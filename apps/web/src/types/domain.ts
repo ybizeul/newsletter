@@ -18,6 +18,20 @@ export interface Article {
   updatedAt: string;
 }
 
+export interface ArticleSummary {
+  id: string;
+  title: string;
+  tags?: string[];
+  topicIcon?: string;
+  illustration?: string;
+  sentCount?: number;
+  lastUsed?: string;
+  status: ArticleStatus;
+  createdAt: string;
+  updatedAt: string;
+  preview: string;
+}
+
 export type NewsletterStatus = "draft" | "scheduled" | "sending" | "sent" | "failed";
 
 export interface Newsletter {
@@ -35,6 +49,22 @@ export interface Newsletter {
   sentAt?: string;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface NewsletterSummary {
+  id: string;
+  title: string;
+  headerId?: string;
+  includeIndex: boolean;
+  articleIds: string[];
+  recipientIds: string[];
+  status: NewsletterStatus;
+  deliveryError?: string;
+  scheduledAt?: string;
+  sentAt?: string;
+  createdAt: string;
+  updatedAt: string;
+  preview: string;
 }
 
 export interface Header {

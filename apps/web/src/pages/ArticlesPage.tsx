@@ -29,9 +29,9 @@ import { renderToStaticMarkup } from "react-dom/server";
 import "@uiw/react-md-editor/markdown-editor.css";
 import "@uiw/react-markdown-preview/markdown.css";
 import "../styles/markdown-editor.css";
-import { createArticle, deleteArticle, listArticles, updateArticle } from "../lib/api";
+import { createArticle, deleteArticle, getArticle, listArticleSummaries, updateArticle } from "../lib/api";
 import type { TablerIconMap } from "../lib/tablerIconsBrowser";
-import type { Article } from "../types/domain";
+import type { Article, ArticleSummary } from "../types/domain";
 
 const DEMO_AUTHOR_ID = "demo-user";
 
@@ -189,13 +189,29 @@ function cutByChars(input: string, maxChars: number): string {
   return `${clean.slice(0, maxChars).trimEnd()}...`;
 }
 
+function toArticleSummary(article: Article): ArticleSummary {
+  return {
+    id: article.id,
+    title: article.title,
+    tags: article.tags,
+    topicIcon: article.topicIcon,
+    illustration: article.illustration,
+    sentCount: article.sentCount,
+    lastUsed: article.lastUsed,
+    status: article.status,
+    createdAt: article.createdAt,
+    updatedAt: article.updatedAt,
+    preview: cutByChars(markdownPreview(article.markdown), 180)
+  };
+}
+
 export default function ArticlesPage() {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const autosaveTimerRef = useRef<number | null>(null);
   const autosaveClearSavedRef = useRef<number | null>(null);
   const lastSavedDraftRef = useRef<string>("");
   const [leftPaneWidth, setLeftPaneWidth] = useState(getStoredArticlesPaneWidth);
-  const [articles, setArticles] = useState<Article[]>([]);
+  const [articles, setArticles] = useState<ArticleSummary[]>([]);
   const [selectedArticleId, setSelectedArticleID] = useState<string | null>(null);
   const [title, setTitle] = useState("");
   const [markdown, setMarkdown] = useState("");
@@ -229,7 +245,7 @@ export default function ArticlesPage() {
     setIsLoading(true);
     setError(null);
     try {
-      const items = await listArticles();
+      const items = await listArticleSummaries();
       setArticles(items);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load articles");
@@ -302,26 +318,32 @@ export default function ArticlesPage() {
     return src;
   };
 
-  const onEdit = (article: Article) => {
-    setEditingID(article.id);
-    setSelectedArticleID(article.id);
-    setTitle(article.title);
-    setTags(article.tags ?? []);
-    const normalized = normalizeMarkdownForEditor(article.markdown);
-    setMarkdown(normalized.normalized);
-    setPastedImageMap(normalized.imageMap);
-    setTopicIcon(article.topicIcon ?? "");
-    setTopicIconBgColor(extractTopicIconBackgroundColor(article.illustration));
-    setTopicIconStrokeColor(extractTopicIconStrokeColor(article.illustration));
-    setTopicIconIllustration(article.illustration ?? "");
-    lastSavedDraftRef.current = JSON.stringify({
-      title: article.title,
-      markdown: article.markdown,
-      tags: article.tags ?? [],
-      topicIcon: article.topicIcon ?? "",
-      illustration: article.illustration ?? ""
-    });
-    setAutosaveStatus("idle");
+  const onEdit = async (article: ArticleSummary) => {
+    setError(null);
+    try {
+      const fullArticle = await getArticle(article.id);
+      setEditingID(fullArticle.id);
+      setSelectedArticleID(fullArticle.id);
+      setTitle(fullArticle.title);
+      setTags(fullArticle.tags ?? []);
+      const normalized = normalizeMarkdownForEditor(fullArticle.markdown);
+      setMarkdown(normalized.normalized);
+      setPastedImageMap(normalized.imageMap);
+      setTopicIcon(fullArticle.topicIcon ?? "");
+      setTopicIconBgColor(extractTopicIconBackgroundColor(fullArticle.illustration));
+      setTopicIconStrokeColor(extractTopicIconStrokeColor(fullArticle.illustration));
+      setTopicIconIllustration(fullArticle.illustration ?? "");
+      lastSavedDraftRef.current = JSON.stringify({
+        title: fullArticle.title,
+        markdown: fullArticle.markdown,
+        tags: fullArticle.tags ?? [],
+        topicIcon: fullArticle.topicIcon ?? "",
+        illustration: fullArticle.illustration ?? ""
+      });
+      setAutosaveStatus("idle");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to load article details");
+    }
   };
 
   const resolvedTopicIconName = useMemo(() => resolveTablerIconName(tablerIconMap, topicIcon), [tablerIconMap, topicIcon]);
@@ -353,7 +375,7 @@ export default function ArticlesPage() {
     }
 
     if (selectedArticleId === null && editingId === null) {
-      onEdit(articles[0]);
+      void onEdit(articles[0]);
       return;
     }
 
@@ -386,7 +408,7 @@ export default function ArticlesPage() {
         const updated = await updateArticle(editingId, payload);
 
         setArticles((current) =>
-          current.map((article) => (article.id === editingId ? updated : article))
+          current.map((article) => (article.id === editingId ? toArticleSummary(updated) : article))
         );
         setSelectedArticleID(updated.id);
         lastSavedDraftRef.current = JSON.stringify(payload);
@@ -397,7 +419,7 @@ export default function ArticlesPage() {
           ...payload
         });
 
-        setArticles((current) => [created, ...current]);
+        setArticles((current) => [toArticleSummary(created), ...current]);
         setSelectedArticleID(created.id);
         setEditingID(created.id);
         lastSavedDraftRef.current = JSON.stringify(payload);
@@ -435,7 +457,7 @@ export default function ArticlesPage() {
       try {
         const updated = await updateArticle(editingId, payload);
         setArticles((current) =>
-          current.map((article) => (article.id === editingId ? updated : article))
+          current.map((article) => (article.id === editingId ? toArticleSummary(updated) : article))
         );
         lastSavedDraftRef.current = serializedPayload;
         setAutosaveStatus("saved");
@@ -484,7 +506,7 @@ export default function ArticlesPage() {
         const next = current.filter((article) => article.id !== deleteArticleId);
         if (selectedArticleId === deleteArticleId) {
           if (next.length > 0) {
-            onEdit(next[0]);
+            void onEdit(next[0]);
           } else {
             resetForm();
           }
@@ -595,7 +617,7 @@ export default function ArticlesPage() {
         haystackParts.push(article.title);
       }
       if (articleSearchCriteria.content) {
-        haystackParts.push(article.markdown);
+        haystackParts.push(article.preview);
       }
       if (articleSearchCriteria.tag) {
         haystackParts.push((article.tags ?? []).join(" "));
@@ -806,13 +828,12 @@ export default function ArticlesPage() {
           <Stack gap={0}>
             {sortedArticles.map((article) => (
               (() => {
-                const preview = markdownPreview(article.markdown);
                 const titleText = cutByChars(article.title, 72);
-                const previewText = cutByChars(preview, 180);
+                const previewText = article.preview;
                 return (
               <div
                 key={article.id}
-                onClick={() => onEdit(article)}
+                onClick={() => void onEdit(article)}
                 style={{
                   padding: 12,
                   borderBottom: "1px solid #f1f3f5",

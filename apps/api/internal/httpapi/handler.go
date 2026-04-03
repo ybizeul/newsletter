@@ -26,6 +26,7 @@ import (
 	gmhtml "github.com/yuin/goldmark/renderer/html"
 	"go.mongodb.org/mongo-driver/v2/bson"
 	"go.mongodb.org/mongo-driver/v2/mongo"
+	"go.mongodb.org/mongo-driver/v2/mongo/options"
 )
 
 type Handler struct {
@@ -55,6 +56,32 @@ type createArticleRequest struct {
 	Tags         []string `json:"tags"`
 	TopicIcon    string   `json:"topicIcon"`
 	Illustration string   `json:"illustration"`
+}
+
+type articleSummary struct {
+	ID        string              `json:"id"`
+	Title     string              `json:"title"`
+	Tags      []string            `json:"tags,omitempty"`
+	TopicIcon string              `json:"topicIcon,omitempty"`
+	SentCount int64               `json:"sentCount"`
+	LastUsed  *time.Time          `json:"lastUsed,omitempty"`
+	Status    model.ArticleStatus `json:"status"`
+	CreatedAt time.Time           `json:"createdAt"`
+	UpdatedAt time.Time           `json:"updatedAt"`
+	Preview   string              `json:"preview"`
+}
+
+type articleSummarySource struct {
+	ID        string              `bson:"_id"`
+	Title     string              `bson:"title"`
+	Markdown  string              `bson:"markdown"`
+	Tags      []string            `bson:"tags,omitempty"`
+	TopicIcon string              `bson:"topicIcon,omitempty"`
+	SentCount int64               `bson:"sentCount"`
+	LastUsed  *time.Time          `bson:"last_used,omitempty"`
+	Status    model.ArticleStatus `bson:"status"`
+	CreatedAt time.Time           `bson:"createdAt"`
+	UpdatedAt time.Time           `bson:"updatedAt"`
 }
 
 func (h *Handler) CreateArticle(w http.ResponseWriter, r *http.Request) {
@@ -94,7 +121,55 @@ func (h *Handler) CreateArticle(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) ListArticles(w http.ResponseWriter, r *http.Request) {
-	cursor, err := h.articles.Find(r.Context(), bson.M{})
+	findOptions := options.Find().SetSort(bson.D{{Key: "createdAt", Value: -1}})
+
+	if strings.EqualFold(strings.TrimSpace(r.URL.Query().Get("view")), "summary") {
+		findOptions.SetProjection(bson.M{
+			"title":     1,
+			"markdown":  1,
+			"tags":      1,
+			"topicIcon": 1,
+			"sentCount": 1,
+			"last_used": 1,
+			"status":    1,
+			"createdAt": 1,
+			"updatedAt": 1,
+		})
+
+		cursor, err := h.articles.Find(r.Context(), bson.M{}, findOptions)
+		if err != nil {
+			h.writeError(w, http.StatusInternalServerError, "failed to list articles")
+			return
+		}
+		defer cursor.Close(r.Context())
+
+		var rawItems []articleSummarySource
+		if err := cursor.All(r.Context(), &rawItems); err != nil {
+			h.writeError(w, http.StatusInternalServerError, "failed to decode articles")
+			return
+		}
+
+		items := make([]articleSummary, 0, len(rawItems))
+		for _, raw := range rawItems {
+			items = append(items, articleSummary{
+				ID:        raw.ID,
+				Title:     raw.Title,
+				Tags:      raw.Tags,
+				TopicIcon: raw.TopicIcon,
+				SentCount: raw.SentCount,
+				LastUsed:  raw.LastUsed,
+				Status:    raw.Status,
+				CreatedAt: raw.CreatedAt,
+				UpdatedAt: raw.UpdatedAt,
+				Preview:   markdownPreviewText(raw.Markdown, 3, 180),
+			})
+		}
+
+		h.writeJSON(w, http.StatusOK, map[string]any{"items": items})
+		return
+	}
+
+	cursor, err := h.articles.Find(r.Context(), bson.M{}, findOptions)
 	if err != nil {
 		h.writeError(w, http.StatusInternalServerError, "failed to list articles")
 		return
@@ -110,11 +185,21 @@ func (h *Handler) ListArticles(w http.ResponseWriter, r *http.Request) {
 		articles = []model.Article{}
 	}
 
-	sort.Slice(articles, func(i, j int) bool {
-		return articles[i].CreatedAt.After(articles[j].CreatedAt)
-	})
-
 	h.writeJSON(w, http.StatusOK, map[string]any{"items": articles})
+}
+
+func (h *Handler) GetArticle(w http.ResponseWriter, r *http.Request, id string) {
+	var article model.Article
+	if err := h.articles.FindOne(r.Context(), bson.M{"_id": id}).Decode(&article); err != nil {
+		if err == mongo.ErrNoDocuments {
+			h.writeError(w, http.StatusNotFound, "article not found")
+			return
+		}
+		h.writeError(w, http.StatusInternalServerError, "failed to fetch article")
+		return
+	}
+
+	h.writeJSON(w, http.StatusOK, article)
 }
 
 type updateArticleRequest struct {
@@ -217,6 +302,41 @@ func normalizeRecipientIDs(recipientIDs []string) ([]string, error) {
 	}
 
 	return normalized, nil
+}
+
+func markdownPreviewText(input string, maxLines int, maxChars int) string {
+	plain := input
+	plain = regexp.MustCompile("```[\\s\\S]*?```").ReplaceAllString(plain, " ")
+	plain = regexp.MustCompile("`[^`]*`").ReplaceAllString(plain, " ")
+	plain = regexp.MustCompile(`!\[[^\]]*\]\([^)]*\)`).ReplaceAllString(plain, " ")
+	plain = regexp.MustCompile(`\[([^\]]+)\]\([^)]*\)`).ReplaceAllString(plain, "$1")
+	plain = regexp.MustCompile(`<[^>]+>`).ReplaceAllString(plain, " ")
+	plain = regexp.MustCompile(`(?m)^[\t ]{0,3}#{1,6}[\t ]+`).ReplaceAllString(plain, "")
+	plain = regexp.MustCompile(`(?m)^[\t ]{0,3}>[\t ]?`).ReplaceAllString(plain, "")
+	plain = regexp.MustCompile(`(?m)^[\t ]*[-*+][\t ]+`).ReplaceAllString(plain, "")
+	plain = regexp.MustCompile(`(?m)^[\t ]*\d+\.[\t ]+`).ReplaceAllString(plain, "")
+	plain = regexp.MustCompile(`[\*_~]`).ReplaceAllString(plain, "")
+	plain = strings.ReplaceAll(plain, "\r", "")
+
+	lines := strings.Split(plain, "\n")
+	normalized := make([]string, 0, maxLines)
+	for _, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		if trimmed == "" {
+			continue
+		}
+		trimmed = strings.Join(strings.Fields(trimmed), " ")
+		normalized = append(normalized, trimmed)
+		if len(normalized) >= maxLines {
+			break
+		}
+	}
+
+	joined := strings.Join(normalized, " ")
+	if len(joined) <= maxChars {
+		return joined
+	}
+	return strings.TrimSpace(joined[:maxChars]) + "..."
 }
 
 func (h *Handler) DeleteArticle(w http.ResponseWriter, r *http.Request, id string) {
@@ -415,7 +535,93 @@ func (h *Handler) CreateNewsletter(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) ListNewsletters(w http.ResponseWriter, r *http.Request) {
-	cursor, err := h.newsletters.Find(r.Context(), bson.M{})
+	findOptions := options.Find().SetSort(bson.D{{Key: "createdAt", Value: -1}})
+
+	if strings.EqualFold(strings.TrimSpace(r.URL.Query().Get("view")), "summary") {
+		findOptions.SetProjection(bson.M{
+			"title":         1,
+			"headerId":      1,
+			"introMarkdown": 1,
+			"includeIndex":  1,
+			"articleIds":    1,
+			"recipientIds":  1,
+			"status":        1,
+			"deliveryError": 1,
+			"scheduledAt":   1,
+			"sentAt":        1,
+			"createdAt":     1,
+			"updatedAt":     1,
+		})
+
+		type newsletterSummarySource struct {
+			ID            string                 `bson:"_id"`
+			Title         string                 `bson:"title"`
+			HeaderID      string                 `bson:"headerId,omitempty"`
+			IntroMarkdown string                 `bson:"introMarkdown"`
+			IncludeIndex  bool                   `bson:"includeIndex"`
+			ArticleIDs    []string               `bson:"articleIds"`
+			RecipientIDs  []string               `bson:"recipientIds"`
+			Status        model.NewsletterStatus `bson:"status"`
+			DeliveryError string                 `bson:"deliveryError,omitempty"`
+			ScheduledAt   *time.Time             `bson:"scheduledAt,omitempty"`
+			SentAt        *time.Time             `bson:"sentAt,omitempty"`
+			CreatedAt     time.Time              `bson:"createdAt"`
+			UpdatedAt     time.Time              `bson:"updatedAt"`
+		}
+
+		type newsletterSummary struct {
+			ID            string                 `json:"id"`
+			Title         string                 `json:"title"`
+			HeaderID      string                 `json:"headerId,omitempty"`
+			IncludeIndex  bool                   `json:"includeIndex"`
+			ArticleIDs    []string               `json:"articleIds"`
+			RecipientIDs  []string               `json:"recipientIds"`
+			Status        model.NewsletterStatus `json:"status"`
+			DeliveryError string                 `json:"deliveryError,omitempty"`
+			ScheduledAt   *time.Time             `json:"scheduledAt,omitempty"`
+			SentAt        *time.Time             `json:"sentAt,omitempty"`
+			CreatedAt     time.Time              `json:"createdAt"`
+			UpdatedAt     time.Time              `json:"updatedAt"`
+			Preview       string                 `json:"preview"`
+		}
+
+		cursor, err := h.newsletters.Find(r.Context(), bson.M{}, findOptions)
+		if err != nil {
+			h.writeError(w, http.StatusInternalServerError, "failed to list newsletters")
+			return
+		}
+		defer cursor.Close(r.Context())
+
+		var rawItems []newsletterSummarySource
+		if err := cursor.All(r.Context(), &rawItems); err != nil {
+			h.writeError(w, http.StatusInternalServerError, "failed to decode newsletters")
+			return
+		}
+
+		items := make([]newsletterSummary, 0, len(rawItems))
+		for _, raw := range rawItems {
+			items = append(items, newsletterSummary{
+				ID:            raw.ID,
+				Title:         raw.Title,
+				HeaderID:      raw.HeaderID,
+				IncludeIndex:  raw.IncludeIndex,
+				ArticleIDs:    raw.ArticleIDs,
+				RecipientIDs:  raw.RecipientIDs,
+				Status:        raw.Status,
+				DeliveryError: raw.DeliveryError,
+				ScheduledAt:   raw.ScheduledAt,
+				SentAt:        raw.SentAt,
+				CreatedAt:     raw.CreatedAt,
+				UpdatedAt:     raw.UpdatedAt,
+				Preview:       markdownPreviewText(raw.IntroMarkdown, 3, 180),
+			})
+		}
+
+		h.writeJSON(w, http.StatusOK, map[string]any{"items": items})
+		return
+	}
+
+	cursor, err := h.newsletters.Find(r.Context(), bson.M{}, findOptions)
 	if err != nil {
 		h.writeError(w, http.StatusInternalServerError, "failed to list newsletters")
 		return
@@ -431,11 +637,21 @@ func (h *Handler) ListNewsletters(w http.ResponseWriter, r *http.Request) {
 		newsletters = []model.Newsletter{}
 	}
 
-	sort.Slice(newsletters, func(i, j int) bool {
-		return newsletters[i].CreatedAt.After(newsletters[j].CreatedAt)
-	})
-
 	h.writeJSON(w, http.StatusOK, map[string]any{"items": newsletters})
+}
+
+func (h *Handler) GetNewsletter(w http.ResponseWriter, r *http.Request, id string) {
+	var newsletter model.Newsletter
+	if err := h.newsletters.FindOne(r.Context(), bson.M{"_id": id}).Decode(&newsletter); err != nil {
+		if err == mongo.ErrNoDocuments {
+			h.writeError(w, http.StatusNotFound, "newsletter not found")
+			return
+		}
+		h.writeError(w, http.StatusInternalServerError, "failed to fetch newsletter")
+		return
+	}
+
+	h.writeJSON(w, http.StatusOK, newsletter)
 }
 
 func (h *Handler) UpdateNewsletter(w http.ResponseWriter, r *http.Request, id string) {

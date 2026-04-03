@@ -55,6 +55,9 @@ func main() {
 		api.Route("/articles", func(article chi.Router) {
 			article.Post("/", h.CreateArticle)
 			article.Get("/", h.ListArticles)
+			article.Get("/{id}", func(w http.ResponseWriter, r *http.Request) {
+				h.GetArticle(w, r, chi.URLParam(r, "id"))
+			})
 			article.Put("/{id}", func(w http.ResponseWriter, r *http.Request) {
 				h.UpdateArticle(w, r, chi.URLParam(r, "id"))
 			})
@@ -77,6 +80,9 @@ func main() {
 		api.Route("/newsletters", func(newsletter chi.Router) {
 			newsletter.Post("/", h.CreateNewsletter)
 			newsletter.Get("/", h.ListNewsletters)
+			newsletter.Get("/{id}", func(w http.ResponseWriter, r *http.Request) {
+				h.GetNewsletter(w, r, chi.URLParam(r, "id"))
+			})
 			newsletter.Put("/{id}", func(w http.ResponseWriter, r *http.Request) {
 				h.UpdateNewsletter(w, r, chi.URLParam(r, "id"))
 			})
