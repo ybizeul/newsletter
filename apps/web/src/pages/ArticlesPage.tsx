@@ -186,6 +186,9 @@ function cutByChars(input: string, maxChars: number): string {
 
 export default function ArticlesPage() {
   const containerRef = useRef<HTMLDivElement | null>(null);
+  const autosaveTimerRef = useRef<number | null>(null);
+  const autosaveClearSavedRef = useRef<number | null>(null);
+  const lastSavedDraftRef = useRef<string>("");
   const [leftPaneWidth, setLeftPaneWidth] = useState(getStoredArticlesPaneWidth);
   const [articles, setArticles] = useState<Article[]>([]);
   const [selectedArticleId, setSelectedArticleID] = useState<string | null>(null);
@@ -214,6 +217,7 @@ export default function ArticlesPage() {
   const [error, setError] = useState<string | null>(null);
   const [deleteArticleId, setDeleteArticleId] = useState<string | null>(null);
   const [hasLoadedArticles, setHasLoadedArticles] = useState(false);
+  const [autosaveStatus, setAutosaveStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
 
   const loadArticles = async () => {
     setIsLoading(true);
@@ -243,6 +247,8 @@ export default function ArticlesPage() {
     setPastedImageMap({});
     setEditingID(null);
     setSelectedArticleID(null);
+    lastSavedDraftRef.current = "";
+    setAutosaveStatus("idle");
   };
 
   const resolvePastedImageTokens = (input: string): string =>
@@ -284,6 +290,14 @@ export default function ArticlesPage() {
     setTopicIcon(article.topicIcon ?? "");
     setTopicIconBgColor(extractTopicIconBackgroundColor(article.illustration));
     setTopicIconStrokeColor(extractTopicIconStrokeColor(article.illustration));
+    lastSavedDraftRef.current = JSON.stringify({
+      title: article.title,
+      markdown: article.markdown,
+      tags: article.tags ?? [],
+      topicIcon: article.topicIcon ?? "",
+      illustration: article.illustration ?? ""
+    });
+    setAutosaveStatus("idle");
   };
 
   const resolvedTopicIconName = useMemo(() => resolveTablerIconName(topicIcon), [topicIcon]);
@@ -308,6 +322,14 @@ export default function ArticlesPage() {
     }
   }, [articles]);
 
+  const buildArticleDraftPayload = () => ({
+    title: title.trim(),
+    markdown: resolvePastedImageTokens(markdown.trim()),
+    tags,
+    topicIcon: topicIcon.trim(),
+    illustration: generatedTopicIconIllustration
+  });
+
   const onSubmit = async () => {
     if (!title.trim()) {
       setError("Title is required");
@@ -318,39 +340,93 @@ export default function ArticlesPage() {
     setError(null);
 
     try {
+      const payload = buildArticleDraftPayload();
+
       if (editingId) {
-        const updated = await updateArticle(editingId, {
-          title: title.trim(),
-          markdown: resolvePastedImageTokens(markdown.trim()),
-          tags,
-          topicIcon: topicIcon.trim(),
-          illustration: generatedTopicIconIllustration
-        });
+        const updated = await updateArticle(editingId, payload);
 
         setArticles((current) =>
           current.map((article) => (article.id === editingId ? updated : article))
         );
         setSelectedArticleID(updated.id);
+        lastSavedDraftRef.current = JSON.stringify(payload);
+        setAutosaveStatus("saved");
       } else {
         const created = await createArticle({
           authorId: DEMO_AUTHOR_ID,
-          title: title.trim(),
-          markdown: resolvePastedImageTokens(markdown.trim()),
-          tags,
-          topicIcon: topicIcon.trim(),
-          illustration: generatedTopicIconIllustration
+          ...payload
         });
 
         setArticles((current) => [created, ...current]);
         setSelectedArticleID(created.id);
         setEditingID(created.id);
+        lastSavedDraftRef.current = JSON.stringify(payload);
+        setAutosaveStatus("saved");
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to save article");
+      setAutosaveStatus("error");
     } finally {
       setIsSubmitting(false);
     }
   };
+
+  useEffect(() => {
+    if (!editingId) {
+      return;
+    }
+
+    const payload = buildArticleDraftPayload();
+    const serializedPayload = JSON.stringify(payload);
+    if (serializedPayload === lastSavedDraftRef.current) {
+      return;
+    }
+
+    if (!payload.title) {
+      return;
+    }
+
+    if (autosaveTimerRef.current !== null) {
+      window.clearTimeout(autosaveTimerRef.current);
+    }
+
+    autosaveTimerRef.current = window.setTimeout(async () => {
+      setAutosaveStatus("saving");
+      try {
+        const updated = await updateArticle(editingId, payload);
+        setArticles((current) =>
+          current.map((article) => (article.id === editingId ? updated : article))
+        );
+        lastSavedDraftRef.current = serializedPayload;
+        setAutosaveStatus("saved");
+
+        if (autosaveClearSavedRef.current !== null) {
+          window.clearTimeout(autosaveClearSavedRef.current);
+        }
+        autosaveClearSavedRef.current = window.setTimeout(() => {
+          setAutosaveStatus("idle");
+        }, 1200);
+      } catch (err) {
+        setAutosaveStatus("error");
+        setError(err instanceof Error ? err.message : "Failed to autosave article");
+      }
+    }, 900);
+
+    return () => {
+      if (autosaveTimerRef.current !== null) {
+        window.clearTimeout(autosaveTimerRef.current);
+      }
+    };
+  }, [editingId, title, markdown, tags, topicIcon, generatedTopicIconIllustration, pastedImageMap]);
+
+  useEffect(() => () => {
+    if (autosaveTimerRef.current !== null) {
+      window.clearTimeout(autosaveTimerRef.current);
+    }
+    if (autosaveClearSavedRef.current !== null) {
+      window.clearTimeout(autosaveClearSavedRef.current);
+    }
+  }, []);
 
   const requestDeleteArticle = (articleId: string) => {
     setDeleteArticleId(articleId);
@@ -961,7 +1037,18 @@ export default function ArticlesPage() {
             </div>
           </Input.Wrapper>
 
-          <Group justify="flex-end">
+          <Group justify="space-between">
+            <Text size="xs" c={autosaveStatus === "error" ? "red" : "dimmed"}>
+              {editingId
+                ? autosaveStatus === "saving"
+                  ? "Autosaving..."
+                  : autosaveStatus === "saved"
+                    ? "All changes saved"
+                    : autosaveStatus === "error"
+                      ? "Autosave failed"
+                      : ""
+                : ""}
+            </Text>
             <Button leftSection={<IconPencil size={16} />} onClick={() => void onSubmit()} loading={isSubmitting}>
               {editingId ? "Save Changes" : "Create Article"}
             </Button>
