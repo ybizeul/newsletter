@@ -34,7 +34,7 @@ import {
   updateNewsletter
 } from "../lib/api";
 import type { Article, Header, Newsletter } from "../types/domain";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { DateTimePicker } from "@mantine/dates";
 import MDEditor from "@uiw/react-md-editor";
 import "@uiw/react-md-editor/markdown-editor.css";
@@ -100,8 +100,10 @@ function cutByChars(input: string, maxChars: number): string {
 
 export default function NewslettersPage() {
   const containerRef = useRef<HTMLDivElement | null>(null);
+  const wasNewslettersRouteActiveRef = useRef(false);
   const [leftPaneWidth, setLeftPaneWidth] = useState(getStoredNewslettersPaneWidth);
   const navigate = useNavigate();
+  const location = useLocation();
   const [articles, setArticles] = useState<Article[]>([]);
   const [headers, setHeaders] = useState<Header[]>([]);
   const [newsletters, setNewsletters] = useState<Newsletter[]>([]);
@@ -175,6 +177,32 @@ export default function NewslettersPage() {
   useEffect(() => {
     void loadData();
   }, []);
+
+  useEffect(() => {
+    const isNewslettersRoute =
+      location.pathname.startsWith("/newsletters") &&
+      !/\/newsletters\/[^/]+\/preview$/.test(location.pathname);
+
+    if (!isNewslettersRoute) {
+      wasNewslettersRouteActiveRef.current = false;
+      return;
+    }
+
+    if (wasNewslettersRouteActiveRef.current) {
+      return;
+    }
+
+    wasNewslettersRouteActiveRef.current = true;
+
+    void (async () => {
+      try {
+        const latestArticles = await listArticles();
+        setArticles(latestArticles);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Failed to refresh articles");
+      }
+    })();
+  }, [location.pathname]);
 
   const resetForm = () => {
     setSelectedNewsletterID(null);
