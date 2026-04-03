@@ -6,8 +6,7 @@ import {
   Button,
   Center,
   Combobox,
-  ColorPicker,
-  ColorSwatch,
+  ColorInput,
   Group,
   Input,
   Loader,
@@ -16,7 +15,6 @@ import {
   Paper,
   Pill,
   PillsInput,
-  Popover,
   ScrollArea,
   SimpleGrid,
   Stack,
@@ -198,8 +196,6 @@ export default function ArticlesPage() {
   const [topicIcon, setTopicIcon] = useState("");
   const [topicIconBgColor, setTopicIconBgColor] = useState(DEFAULT_TOPIC_ICON_BG);
   const [topicIconStrokeColor, setTopicIconStrokeColor] = useState(DEFAULT_TOPIC_ICON_STROKE);
-  const [isBgPickerOpen, setIsBgPickerOpen] = useState(false);
-  const [isStrokePickerOpen, setIsStrokePickerOpen] = useState(false);
   const [isIconBrowserOpen, setIsIconBrowserOpen] = useState(false);
   const [articleSearchQuery, setArticleSearchQuery] = useState("");
   const [articleSearchCriteria, setArticleSearchCriteria] = useState({
@@ -1119,44 +1115,23 @@ export default function ArticlesPage() {
                 )}
               </UnstyledButton>
 
-              <Group gap="md" align="center" justify="center">
-                <Popover opened={isBgPickerOpen} onChange={setIsBgPickerOpen} position="bottom" shadow="md">
-                  <Popover.Target>
-                    <UnstyledButton onClick={() => setIsBgPickerOpen((v) => !v)}>
-                      <Group gap={8}>
-                        <ColorSwatch color={topicIconBgColor} size={22} />
-                        <Text size="sm">Background</Text>
-                      </Group>
-                    </UnstyledButton>
-                  </Popover.Target>
-                  <Popover.Dropdown>
-                    <ColorPicker
-                      format="hex"
-                      value={topicIconBgColor}
-                      onChange={setTopicIconBgColor}
-                      swatches={["#228be6", "#15aabf", "#40c057", "#fab005", "#fd7e14", "#fa5252", "#ae3ec9", "#495057"]}
-                    />
-                  </Popover.Dropdown>
-                </Popover>
-
-                <Popover opened={isStrokePickerOpen} onChange={setIsStrokePickerOpen} position="bottom" shadow="md">
-                  <Popover.Target>
-                    <UnstyledButton onClick={() => setIsStrokePickerOpen((v) => !v)}>
-                      <Group gap={8}>
-                        <ColorSwatch color={topicIconStrokeColor} size={22} />
-                        <Text size="sm">Stroke</Text>
-                      </Group>
-                    </UnstyledButton>
-                  </Popover.Target>
-                  <Popover.Dropdown>
-                    <ColorPicker
-                      format="hex"
-                      value={topicIconStrokeColor}
-                      onChange={setTopicIconStrokeColor}
-                      swatches={["#ffffff", "#f8f9fa", "#dee2e6", "#212529", "#000000"]}
-                    />
-                  </Popover.Dropdown>
-                </Popover>
+              <Group gap="md" align="end" justify="center" wrap="wrap" style={{ width: "100%" }}>
+                <ColorInput
+                  label="Background"
+                  format="hex"
+                  value={topicIconBgColor}
+                  onChange={setTopicIconBgColor}
+                  swatches={["#228be6", "#15aabf", "#40c057", "#fab005", "#fd7e14", "#fa5252", "#ae3ec9", "#495057"]}
+                  style={{ minWidth: 220 }}
+                />
+                <ColorInput
+                  label="Stroke"
+                  format="hex"
+                  value={topicIconStrokeColor}
+                  onChange={setTopicIconStrokeColor}
+                  swatches={["#ffffff", "#f8f9fa", "#dee2e6", "#212529", "#000000"]}
+                  style={{ minWidth: 220 }}
+                />
               </Group>
             </Stack>
 
