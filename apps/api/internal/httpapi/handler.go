@@ -37,6 +37,8 @@ type Handler struct {
 
 var errNewsletterAlreadySending = errors.New("newsletter is already sending")
 
+const maxNewsletterRecipients = 3
+
 func NewHandler(db *mongo.Database, cfg config.Config) *Handler {
 	return &Handler{
 		articles:    db.Collection("articles"),
@@ -187,6 +189,34 @@ func normalizeArticleTags(tags []string) []string {
 	}
 
 	return normalized
+}
+
+func normalizeRecipientIDs(recipientIDs []string) ([]string, error) {
+	if len(recipientIDs) == 0 {
+		return []string{}, nil
+	}
+
+	normalized := make([]string, 0, len(recipientIDs))
+	seen := make(map[string]struct{}, len(recipientIDs))
+	for _, raw := range recipientIDs {
+		recipient := strings.TrimSpace(raw)
+		if recipient == "" {
+			continue
+		}
+
+		key := strings.ToLower(recipient)
+		if _, ok := seen[key]; ok {
+			continue
+		}
+		seen[key] = struct{}{}
+		normalized = append(normalized, recipient)
+	}
+
+	if len(normalized) > maxNewsletterRecipients {
+		return nil, fmt.Errorf("a maximum of %d recipients is allowed", maxNewsletterRecipients)
+	}
+
+	return normalized, nil
 }
 
 func (h *Handler) DeleteArticle(w http.ResponseWriter, r *http.Request, id string) {
@@ -355,6 +385,12 @@ func (h *Handler) CreateNewsletter(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	recipientIDs, err := normalizeRecipientIDs(req.RecipientIDs)
+	if err != nil {
+		h.writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
 	now := time.Now().UTC()
 	newsletter := model.Newsletter{
 		ID:            bson.NewObjectID().Hex(),
@@ -364,7 +400,7 @@ func (h *Handler) CreateNewsletter(w http.ResponseWriter, r *http.Request) {
 		IntroMarkdown: req.IntroMarkdown,
 		IncludeIndex:  req.IncludeIndex,
 		ArticleIDs:    req.ArticleIDs,
-		RecipientIDs:  req.RecipientIDs,
+		RecipientIDs:  recipientIDs,
 		Status:        model.NewsletterStatusDraft,
 		CreatedAt:     now,
 		UpdatedAt:     now,
@@ -414,6 +450,12 @@ func (h *Handler) UpdateNewsletter(w http.ResponseWriter, r *http.Request, id st
 		return
 	}
 
+	recipientIDs, err := normalizeRecipientIDs(req.RecipientIDs)
+	if err != nil {
+		h.writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
 	update := bson.M{
 		"$set": bson.M{
 			"title":         strings.TrimSpace(req.Title),
@@ -421,7 +463,7 @@ func (h *Handler) UpdateNewsletter(w http.ResponseWriter, r *http.Request, id st
 			"introMarkdown": req.IntroMarkdown,
 			"includeIndex":  req.IncludeIndex,
 			"articleIds":    req.ArticleIDs,
-			"recipientIds":  req.RecipientIDs,
+			"recipientIds":  recipientIDs,
 			"updatedAt":     time.Now().UTC(),
 		},
 	}

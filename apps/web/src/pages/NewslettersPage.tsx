@@ -43,6 +43,7 @@ import "../styles/markdown-editor.css";
 
 const DEMO_CREATOR_ID = "demo-user";
 const NEWSLETTERS_PANE_WIDTH_STORAGE_KEY = "newsletter.newsletters.pane.width";
+const MAX_RECIPIENTS = 3;
 
 function getStoredNewslettersPaneWidth(): number {
   const raw = window.localStorage.getItem(NEWSLETTERS_PANE_WIDTH_STORAGE_KEY);
@@ -223,9 +224,16 @@ export default function NewslettersPage() {
       .map((item) => item.trim())
       .filter((item) => item.length > 0);
 
+  const parsedRecipients = useMemo(() => parseRecipients(), [recipientRaw]);
+  const hasTooManyRecipients = parsedRecipients.length > MAX_RECIPIENTS;
+
   const onSave = async () => {
     if (!title.trim()) {
       setError("Title is required");
+      return;
+    }
+    if (hasTooManyRecipients) {
+      setError(`A maximum of ${MAX_RECIPIENTS} recipients is allowed`);
       return;
     }
 
@@ -658,10 +666,11 @@ export default function NewslettersPage() {
           {smtpConfigured ? (
             <TextInput
               label="Recipients (emails, comma-separated)"
-              description="Comma-separated recipient addresses used for send and schedule actions."
+              description={`Comma-separated recipient addresses used for send and schedule actions (${parsedRecipients.length}/${MAX_RECIPIENTS}).`}
               placeholder="first@example.com,second@example.com"
               value={recipientRaw}
               onChange={(event) => setRecipientRaw(event.currentTarget.value)}
+              error={hasTooManyRecipients ? `A maximum of ${MAX_RECIPIENTS} recipients is allowed` : undefined}
             />
           ) : null}
 
