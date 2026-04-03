@@ -10,6 +10,8 @@ export interface Article {
   tags?: string[];
   topicIcon?: string;
   illustration?: string;
+  sentCount?: number;
+  lastUsed?: string;
   status: ArticleStatus;
   version: number;
   createdAt: string;

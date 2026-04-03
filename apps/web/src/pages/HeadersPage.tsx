@@ -23,7 +23,6 @@ import {
   IconRefresh,
   IconTable,
   IconTablePlus,
-  IconTrash,
   IconUnderline
 } from "@tabler/icons-react";
 import { EditorContent, useEditor } from "@tiptap/react";
@@ -202,6 +201,38 @@ function formatHeaderCreatedAt(value: string): string {
     month: "short",
     day: "numeric"
   });
+}
+
+function markdownPreview(input: string, maxLines = 3): string {
+  const plain = input
+    .replace(/```[\s\S]*?```/g, " ")
+    .replace(/`[^`]*`/g, " ")
+    .replace(/!\[[^\]]*\]\([^)]*\)/g, " ")
+    .replace(/\[([^\]]+)\]\([^)]*\)/g, "$1")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/^[\t ]{0,3}#{1,6}[\t ]+/gm, "")
+    .replace(/^[\t ]{0,3}>[\t ]?/gm, "")
+    .replace(/^[\t ]*[-*+][\t ]+/gm, "")
+    .replace(/^[\t ]*\d+\.[\t ]+/gm, "")
+    .replace(/[\*_~]/g, "")
+    .replace(/\r/g, "");
+
+  const lines = plain
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .slice(0, maxLines)
+    .map((line) => line.replace(/\s+/g, " "));
+
+  return lines.join(" ");
+}
+
+function cutByChars(input: string, maxChars: number): string {
+  const clean = input.trim();
+  if (clean.length <= maxChars) {
+    return clean;
+  }
+  return `${clean.slice(0, maxChars).trimEnd()}...`;
 }
 
 function looksLikeHTML(input: string): boolean {
@@ -791,6 +822,11 @@ export default function HeadersPage() {
         <ScrollArea h="calc(100% - 52px)" offsetScrollbars>
           <Stack gap={0}>
             {headers.map((header) => (
+              (() => {
+                const preview = markdownPreview(header.markdown);
+                const titleText = cutByChars(header.title, 72);
+                const previewText = cutByChars(preview, 180);
+                return (
               <div
                 key={header.id}
                 onClick={() => void onSelectHeader(header)}
@@ -801,27 +837,34 @@ export default function HeadersPage() {
                   backgroundColor: selectedHeaderId === header.id ? "#f1fbff" : "transparent"
                 }}
               >
-                <Group justify="space-between" align="flex-start">
-                  <Stack gap={4} style={{ flex: 1 }}>
-                    <Text fw={600} lineClamp={1}>
-                      {header.title}
+                <Stack gap={6} style={{ flex: 1 }}>
+                  <Group justify="space-between" align="flex-start" wrap="nowrap" gap="xs">
+                    <Text
+                      fw={700}
+                      size="sm"
+                      style={{
+                        flex: 1,
+                        minWidth: 0,
+                        whiteSpace: "nowrap",
+                        overflow: "hidden",
+                        textOverflow: "ellipsis"
+                      }}
+                    >
+                      {titleText}
                     </Text>
-                    <Text size="xs" c="dimmed">
+                    <Text size="xs" c="dimmed" style={{ flexShrink: 0 }}>
                       {formatHeaderCreatedAt(header.createdAt)}
                     </Text>
-                  </Stack>
-                  <ActionIcon
-                    color="red"
-                    variant="subtle"
-                    onClick={(event) => {
-                      event.stopPropagation();
-                      requestDeleteHeader(header.id);
-                    }}
-                  >
-                    <IconTrash size={16} />
-                  </ActionIcon>
-                </Group>
+                  </Group>
+                  {previewText ? (
+                    <Text size="xs" c="dimmed" lineClamp={3}>
+                      {previewText}
+                    </Text>
+                  ) : null}
+                </Stack>
               </div>
+                );
+              })()
             ))}
             {headers.length === 0 ? (
               <Text c="dimmed" size="sm" p="md">

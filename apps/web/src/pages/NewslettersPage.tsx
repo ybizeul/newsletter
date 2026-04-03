@@ -3,9 +3,11 @@ import {
   ActionIcon,
   Box,
   Button,
+  Center,
   Checkbox,
   Group,
   Input,
+  Loader,
   Modal,
   ScrollArea,
   Select,
@@ -18,7 +20,6 @@ import {
   IconGripVertical,
   IconRefresh,
   IconSend,
-  IconTrash,
   IconX
 } from "@tabler/icons-react";
 import {
@@ -64,6 +65,38 @@ function formatNewsletterCreatedAt(value: string): string {
   });
 }
 
+function markdownPreview(input: string, maxLines = 3): string {
+  const plain = input
+    .replace(/```[\s\S]*?```/g, " ")
+    .replace(/`[^`]*`/g, " ")
+    .replace(/!\[[^\]]*\]\([^)]*\)/g, " ")
+    .replace(/\[([^\]]+)\]\([^)]*\)/g, "$1")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/^[\t ]{0,3}#{1,6}[\t ]+/gm, "")
+    .replace(/^[\t ]{0,3}>[\t ]?/gm, "")
+    .replace(/^[\t ]*[-*+][\t ]+/gm, "")
+    .replace(/^[\t ]*\d+\.[\t ]+/gm, "")
+    .replace(/[\*_~]/g, "")
+    .replace(/\r/g, "");
+
+  const lines = plain
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .slice(0, maxLines)
+    .map((line) => line.replace(/\s+/g, " "));
+
+  return lines.join(" ");
+}
+
+function cutByChars(input: string, maxChars: number): string {
+  const clean = input.trim();
+  if (clean.length <= maxChars) {
+    return clean;
+  }
+  return `${clean.slice(0, maxChars).trimEnd()}...`;
+}
+
 export default function NewslettersPage() {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const [leftPaneWidth, setLeftPaneWidth] = useState(getStoredNewslettersPaneWidth);
@@ -86,6 +119,7 @@ export default function NewslettersPage() {
   const [error, setError] = useState<string | null>(null);
   const [deleteNewsletterId, setDeleteNewsletterId] = useState<string | null>(null);
   const [removeArticleId, setRemoveArticleId] = useState<string | null>(null);
+  const [hasLoadedNewslettersData, setHasLoadedNewslettersData] = useState(false);
 
   const availableArticleOptions = useMemo(
     () => articles.map((article) => ({ value: article.id, label: article.title })),
@@ -134,6 +168,7 @@ export default function NewslettersPage() {
       setError(err instanceof Error ? err.message : "Failed to load newsletters");
     } finally {
       setIsLoading(false);
+      setHasLoadedNewslettersData(true);
     }
   };
 
@@ -372,6 +407,11 @@ export default function NewslettersPage() {
         <ScrollArea h="calc(100% - 52px)" offsetScrollbars>
           <Stack gap={0}>
             {newsletters.map((newsletter) => (
+              (() => {
+                const preview = markdownPreview(newsletter.introMarkdown);
+                const titleText = cutByChars(newsletter.title, 72);
+                const previewText = cutByChars(preview, 180);
+                return (
               <div
                 key={newsletter.id}
                 onClick={() => onSelectNewsletter(newsletter)}
@@ -382,27 +422,34 @@ export default function NewslettersPage() {
                   backgroundColor: selectedNewsletterId === newsletter.id ? "#f1fbff" : "transparent"
                 }}
               >
-                <Group justify="space-between" align="flex-start">
-                  <Stack gap={4} style={{ flex: 1 }}>
-                    <Text fw={600} lineClamp={1}>
-                      {newsletter.title}
+                <Stack gap={6} style={{ flex: 1 }}>
+                  <Group justify="space-between" align="flex-start" wrap="nowrap" gap="xs">
+                    <Text
+                      fw={700}
+                      size="sm"
+                      style={{
+                        flex: 1,
+                        minWidth: 0,
+                        whiteSpace: "nowrap",
+                        overflow: "hidden",
+                        textOverflow: "ellipsis"
+                      }}
+                    >
+                      {titleText}
                     </Text>
-                    <Text size="xs" c="dimmed">
+                    <Text size="xs" c="dimmed" style={{ flexShrink: 0 }}>
                       {formatNewsletterCreatedAt(newsletter.createdAt)}
                     </Text>
-                  </Stack>
-                  <ActionIcon
-                    color="red"
-                    variant="subtle"
-                    onClick={(event) => {
-                      event.stopPropagation();
-                      requestDeleteNewsletter(newsletter.id);
-                    }}
-                  >
-                    <IconTrash size={16} />
-                  </ActionIcon>
-                </Group>
+                  </Group>
+                  {previewText ? (
+                    <Text size="xs" c="dimmed" lineClamp={3}>
+                      {previewText}
+                    </Text>
+                  ) : null}
+                </Stack>
               </div>
+                );
+              })()
             ))}
             {newsletters.length === 0 ? (
               <Text c="dimmed" size="sm" p="md">
@@ -428,6 +475,14 @@ export default function NewslettersPage() {
       />
 
       <div style={{ padding: 12, overflow: "auto" }}>
+        {!hasLoadedNewslettersData ? (
+          <Center h="100%">
+            <Stack align="center" gap="xs">
+              <Loader size="sm" />
+              <Text size="sm" c="dimmed">Loading newsletters...</Text>
+            </Stack>
+          </Center>
+        ) : (
         <Stack>
           <Group justify="space-between">
             <Text fw={700}>{selectedNewsletterId ? "Edit Newsletter" : "New Newsletter"}</Text>
@@ -663,6 +718,7 @@ export default function NewslettersPage() {
 
           {error ? <Text c="red">{error}</Text> : null}
         </Stack>
+        )}
       </div>
 
       <Modal

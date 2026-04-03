@@ -76,6 +76,7 @@ func (h *Handler) CreateArticle(w http.ResponseWriter, r *http.Request) {
 		Tags:         normalizeArticleTags(req.Tags),
 		TopicIcon:    req.TopicIcon,
 		Illustration: req.Illustration,
+		SentCount:    0,
 		Status:       model.ArticleStatusDraft,
 		Version:      1,
 		CreatedAt:    now,
@@ -689,6 +690,9 @@ func (h *Handler) processScheduledNewsletter(ctx context.Context, newsletter mod
 	}
 
 	now := time.Now().UTC()
+	if err := h.updateArticleUsageStats(ctx, loadedNewsletter.ArticleIDs, now); err != nil {
+		log.Printf("failed to update article usage stats newsletter_id=%s error=%v", loadedNewsletter.ID, err)
+	}
 	_, err = h.newsletters.UpdateByID(ctx, loadedNewsletter.ID, bson.M{
 		"$set": bson.M{
 			"status":    model.NewsletterStatusSent,
@@ -736,6 +740,39 @@ func (h *Handler) loadNewsletterWithArticles(ctx context.Context, id string) (*m
 	return &newsletter, ordered, nil
 }
 
+func (h *Handler) updateArticleUsageStats(ctx context.Context, articleIDs []string, usedAt time.Time) error {
+	if len(articleIDs) == 0 {
+		return nil
+	}
+
+	uniqueIDs := make([]string, 0, len(articleIDs))
+	seen := make(map[string]struct{}, len(articleIDs))
+	for _, rawID := range articleIDs {
+		articleID := strings.TrimSpace(rawID)
+		if articleID == "" {
+			continue
+		}
+		if _, ok := seen[articleID]; ok {
+			continue
+		}
+		seen[articleID] = struct{}{}
+		uniqueIDs = append(uniqueIDs, articleID)
+	}
+
+	if len(uniqueIDs) == 0 {
+		return nil
+	}
+
+	_, err := h.articles.UpdateMany(ctx, bson.M{"_id": bson.M{"$in": uniqueIDs}}, bson.M{
+		"$inc": bson.M{"sentCount": 1},
+		"$set": bson.M{
+			"last_used": usedAt,
+			"updatedAt": usedAt,
+		},
+	})
+	return err
+}
+
 func (h *Handler) renderNewsletter(ctx context.Context, newsletter model.Newsletter, articles []model.Article) (string, string, error) {
 	headerHTML := ""
 	headerText := ""
@@ -747,8 +784,10 @@ func (h *Handler) renderNewsletter(ctx context.Context, newsletter model.Newslet
 			if renderErr != nil {
 				return "", "", renderErr
 			}
+			titleForHTML := html.EscapeString(newsletter.Title)
 			headerHTML = enforceTableCellAlignment(enforceImageNaturalWidth(renderedHeader))
-			headerText = strings.TrimSpace(header.Markdown)
+			headerHTML = strings.ReplaceAll(headerHTML, "#TITLE", titleForHTML)
+			headerText = strings.ReplaceAll(strings.TrimSpace(header.Markdown), "#TITLE", newsletter.Title)
 		} else if err != mongo.ErrNoDocuments {
 			return "", "", err
 		}

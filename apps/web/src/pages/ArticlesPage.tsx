@@ -4,11 +4,13 @@ import {
   Badge,
   Box,
   Button,
+  Center,
   Combobox,
   ColorPicker,
   ColorSwatch,
   Group,
   Input,
+  Loader,
   Menu,
   Modal,
   Paper,
@@ -23,7 +25,7 @@ import {
   UnstyledButton,
   useCombobox
 } from "@mantine/core";
-import { IconCheck, IconChevronDown, IconFilePlus, IconPencil, IconRefresh, IconSearch, IconTrash } from "@tabler/icons-react";
+import { IconCheck, IconChevronDown, IconFilePlus, IconPencil, IconRefresh, IconSearch } from "@tabler/icons-react";
 import * as TablerIcons from "@tabler/icons-react";
 import MDEditor from "@uiw/react-md-editor";
 import { renderToStaticMarkup } from "react-dom/server";
@@ -150,6 +152,38 @@ function colorForTag(tag: string): (typeof TAG_COLORS)[number] {
   return TAG_COLORS[Math.abs(hash) % TAG_COLORS.length];
 }
 
+function markdownPreview(input: string, maxLines = 3): string {
+  const plain = input
+    .replace(/```[\s\S]*?```/g, " ")
+    .replace(/`[^`]*`/g, " ")
+    .replace(/!\[[^\]]*\]\([^)]*\)/g, " ")
+    .replace(/\[([^\]]+)\]\([^)]*\)/g, "$1")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/^[\t ]{0,3}#{1,6}[\t ]+/gm, "")
+    .replace(/^[\t ]{0,3}>[\t ]?/gm, "")
+    .replace(/^[\t ]*[-*+][\t ]+/gm, "")
+    .replace(/^[\t ]*\d+\.[\t ]+/gm, "")
+    .replace(/[\*_~]/g, "")
+    .replace(/\r/g, "");
+
+  const lines = plain
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .slice(0, maxLines)
+    .map((line) => line.replace(/\s+/g, " "));
+
+  return lines.join(" ");
+}
+
+function cutByChars(input: string, maxChars: number): string {
+  const clean = input.trim();
+  if (clean.length <= maxChars) {
+    return clean;
+  }
+  return `${clean.slice(0, maxChars).trimEnd()}...`;
+}
+
 export default function ArticlesPage() {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const [leftPaneWidth, setLeftPaneWidth] = useState(getStoredArticlesPaneWidth);
@@ -170,6 +204,7 @@ export default function ArticlesPage() {
     content: true,
     tag: false
   });
+  const [articleSortMode, setArticleSortMode] = useState<"recent" | "last-used" | "most-sent">("recent");
   const [iconSearch, setIconSearch] = useState("");
   const [tagSearch, setTagSearch] = useState("");
   const [pastedImageMap, setPastedImageMap] = useState<Record<string, string>>({});
@@ -178,6 +213,7 @@ export default function ArticlesPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [deleteArticleId, setDeleteArticleId] = useState<string | null>(null);
+  const [hasLoadedArticles, setHasLoadedArticles] = useState(false);
 
   const loadArticles = async () => {
     setIsLoading(true);
@@ -189,6 +225,7 @@ export default function ArticlesPage() {
       setError(err instanceof Error ? err.message : "Failed to load articles");
     } finally {
       setIsLoading(false);
+      setHasLoadedArticles(true);
     }
   };
 
@@ -449,6 +486,31 @@ export default function ArticlesPage() {
     });
   }, [articleSearchQuery, articleSearchCriteria, articles]);
 
+  const sortedArticles = useMemo(() => {
+    const items = [...filteredArticles];
+    items.sort((a, b) => {
+      if (articleSortMode === "most-sent") {
+        const sentDelta = (b.sentCount ?? 0) - (a.sentCount ?? 0);
+        if (sentDelta !== 0) {
+          return sentDelta;
+        }
+      }
+
+      if (articleSortMode === "last-used" || articleSortMode === "most-sent") {
+        const aLast = a.lastUsed ? new Date(a.lastUsed).getTime() : 0;
+        const bLast = b.lastUsed ? new Date(b.lastUsed).getTime() : 0;
+        if (bLast !== aLast) {
+          return bLast - aLast;
+        }
+      }
+
+      const aCreated = new Date(a.createdAt).getTime();
+      const bCreated = new Date(b.createdAt).getTime();
+      return bCreated - aCreated;
+    });
+    return items;
+  }, [filteredArticles, articleSortMode]);
+
   const existingTags = useMemo(() => {
     const unique = new Set<string>();
     for (const article of articles) {
@@ -489,6 +551,22 @@ export default function ArticlesPage() {
       .filter((tag) => !tags.some((selected) => selected.toLowerCase() === tag.toLowerCase()))
       .filter((tag) => (query ? tag.toLowerCase().includes(query) : true));
   }, [existingTags, tagSearch, tags]);
+
+  const toggleSearchFilter = (key: "title" | "content" | "tag") => {
+    setArticleSearchCriteria((current) => {
+      const nextValue = !current[key];
+      if (!nextValue) {
+        const selectedCount = [current.title, current.content, current.tag].filter(Boolean).length;
+        if (selectedCount <= 1) {
+          return current;
+        }
+      }
+      return {
+        ...current,
+        [key]: nextValue
+      };
+    });
+  };
 
   const startPaneResize = (event: ReactMouseEvent<HTMLDivElement>) => {
     event.preventDefault();
@@ -543,57 +621,62 @@ export default function ArticlesPage() {
           <TextInput
             radius="xl"
             leftSection={<IconSearch size={14} />}
+            rightSectionWidth={44}
             rightSection={
               <Menu position="bottom-end" withArrow>
                 <Menu.Target>
-                  <ActionIcon variant="subtle" size="sm" aria-label="Search scope">
+                  <ActionIcon variant="subtle" size="sm" aria-label="Filter and sort articles" mr={8}>
                     <IconChevronDown size={14} />
                   </ActionIcon>
                 </Menu.Target>
                 <Menu.Dropdown>
+                  <Menu.Label>Filter</Menu.Label>
                   <Menu.Item
                     closeMenuOnClick={false}
-                    onClick={() =>
-                      setArticleSearchCriteria((current) => ({
-                        ...current,
-                        title: !current.title
-                      }))
-                    }
-                    leftSection={articleSearchCriteria.title ? <IconCheck size={14} /> : undefined}
-                    fw={articleSearchCriteria.title ? 700 : undefined}
+                    onClick={() => toggleSearchFilter("title")}
+                    leftSection={<IconCheck size={14} style={{ opacity: articleSearchCriteria.title ? 1 : 0 }} />}
                   >
-                    title
+                    Title
                   </Menu.Item>
                   <Menu.Item
                     closeMenuOnClick={false}
-                    onClick={() =>
-                      setArticleSearchCriteria((current) => ({
-                        ...current,
-                        content: !current.content
-                      }))
-                    }
-                    leftSection={articleSearchCriteria.content ? <IconCheck size={14} /> : undefined}
-                    fw={articleSearchCriteria.content ? 700 : undefined}
+                    onClick={() => toggleSearchFilter("content")}
+                    leftSection={<IconCheck size={14} style={{ opacity: articleSearchCriteria.content ? 1 : 0 }} />}
                   >
-                    content
+                    Content
                   </Menu.Item>
                   <Menu.Item
                     closeMenuOnClick={false}
-                    onClick={() =>
-                      setArticleSearchCriteria((current) => ({
-                        ...current,
-                        tag: !current.tag
-                      }))
-                    }
-                    leftSection={articleSearchCriteria.tag ? <IconCheck size={14} /> : undefined}
-                    fw={articleSearchCriteria.tag ? 700 : undefined}
+                    onClick={() => toggleSearchFilter("tag")}
+                    leftSection={<IconCheck size={14} style={{ opacity: articleSearchCriteria.tag ? 1 : 0 }} />}
                   >
-                    tag
+                    Tag
+                  </Menu.Item>
+
+                  <Menu.Divider />
+                  <Menu.Label>Sort</Menu.Label>
+                  <Menu.Item
+                    leftSection={<IconCheck size={14} style={{ opacity: articleSortMode === "recent" ? 1 : 0 }} />}
+                    onClick={() => setArticleSortMode("recent")}
+                  >
+                    Most recent
+                  </Menu.Item>
+                  <Menu.Item
+                    leftSection={<IconCheck size={14} style={{ opacity: articleSortMode === "last-used" ? 1 : 0 }} />}
+                    onClick={() => setArticleSortMode("last-used")}
+                  >
+                    Last used
+                  </Menu.Item>
+                  <Menu.Item
+                    leftSection={<IconCheck size={14} style={{ opacity: articleSortMode === "most-sent" ? 1 : 0 }} />}
+                    onClick={() => setArticleSortMode("most-sent")}
+                  >
+                    Most sent
                   </Menu.Item>
                 </Menu.Dropdown>
               </Menu>
             }
-            placeholder="Search in title and content"
+            placeholder="Search"
             value={articleSearchQuery}
             onChange={(event) => setArticleSearchQuery(event.currentTarget.value)}
           />
@@ -601,7 +684,12 @@ export default function ArticlesPage() {
 
         <ScrollArea h="calc(100% - 110px)" offsetScrollbars>
           <Stack gap={0}>
-            {filteredArticles.map((article) => (
+            {sortedArticles.map((article) => (
+              (() => {
+                const preview = markdownPreview(article.markdown);
+                const titleText = cutByChars(article.title, 72);
+                const previewText = cutByChars(preview, 180);
+                return (
               <div
                 key={article.id}
                 onClick={() => onEdit(article)}
@@ -612,42 +700,49 @@ export default function ArticlesPage() {
                   backgroundColor: selectedArticleId === article.id ? "#f1fbff" : "transparent"
                 }}
               >
-                <Group justify="space-between" align="flex-start">
-                  <Stack gap={4} style={{ flex: 1 }}>
-                    <Text fw={600} lineClamp={1}>
-                      {article.title}
+                <Stack gap={6} style={{ flex: 1 }}>
+                  <Group justify="space-between" align="flex-start" wrap="nowrap" gap="xs">
+                    <Text
+                      fw={700}
+                      size="sm"
+                      style={{
+                        flex: 1,
+                        minWidth: 0,
+                        whiteSpace: "nowrap",
+                        overflow: "hidden",
+                        textOverflow: "ellipsis"
+                      }}
+                    >
+                      {titleText}
                     </Text>
-                    {article.tags && article.tags.length > 0 ? (
-                      <Group gap={4} wrap="wrap">
-                        {article.tags.map((tag) => (
-                          <Badge key={`${article.id}-${tag}`} size="xs" variant="light" color={colorForTag(tag)}>
-                            {tag}
-                          </Badge>
-                        ))}
-                      </Group>
-                    ) : null}
-                    <Text size="xs" c="dimmed">
+                    <Text size="xs" c="dimmed" style={{ flexShrink: 0 }}>
                       {formatArticleCreatedAt(article.createdAt)}
                     </Text>
-                  </Stack>
-                  <ActionIcon
-                    color="red"
-                    variant="subtle"
-                    onClick={(event) => {
-                      event.stopPropagation();
-                      requestDeleteArticle(article.id);
-                    }}
-                  >
-                    <IconTrash size={16} />
-                  </ActionIcon>
-                </Group>
+                  </Group>
+                  {previewText ? (
+                    <Text size="xs" c="dimmed" lineClamp={3}>
+                      {previewText}
+                    </Text>
+                  ) : null}
+                  {article.tags && article.tags.length > 0 ? (
+                    <Group gap={4} wrap="wrap">
+                      {article.tags.map((tag) => (
+                        <Badge key={`${article.id}-${tag}`} size="xs" variant="light" color={colorForTag(tag)}>
+                          {tag}
+                        </Badge>
+                      ))}
+                    </Group>
+                  ) : null}
+                </Stack>
               </div>
+                );
+              })()
             ))}
             {articles.length === 0 ? (
               <Text c="dimmed" size="sm" p="md">
                 No articles yet.
               </Text>
-            ) : filteredArticles.length === 0 ? (
+            ) : sortedArticles.length === 0 ? (
               <Text c="dimmed" size="sm" p="md">
                 No articles match your search.
               </Text>
@@ -671,6 +766,14 @@ export default function ArticlesPage() {
       />
 
       <div style={{ padding: 12, overflow: "auto" }}>
+        {!hasLoadedArticles ? (
+          <Center h="100%">
+            <Stack align="center" gap="xs">
+              <Loader size="sm" />
+              <Text size="sm" c="dimmed">Loading articles...</Text>
+            </Stack>
+          </Center>
+        ) : (
         <Stack>
           <Group justify="space-between">
             <Text fw={700}>{editingId ? "Edit Article" : "New Article"}</Text>
@@ -866,6 +969,7 @@ export default function ArticlesPage() {
 
           {error ? <Text c="red">{error}</Text> : null}
         </Stack>
+        )}
       </div>
 
       <Modal

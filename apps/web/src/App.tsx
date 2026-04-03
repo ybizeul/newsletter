@@ -63,9 +63,6 @@ function App() {
               Newsletter Workspace
             </Text>
           </Group>
-          <Text size="sm" c="dimmed" truncate>
-            MVP Foundation
-          </Text>
         </Group>
       </AppShell.Header>
 
