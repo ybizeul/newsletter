@@ -49,7 +49,7 @@ function App() {
   const isNewslettersRoute = location.pathname.startsWith("/newsletters") && !/\/newsletters\/[^/]+\/preview$/.test(location.pathname);
   const isHeadersRoute = location.pathname.startsWith("/headers");
   const isPreviewRoute = /\/newsletters\/[^/]+\/preview$/.test(location.pathname);
-  const isMainRoute = isArticlesRoute || isNewslettersRoute || isHeadersRoute;
+  const isKnownRoute = isArticlesRoute || isNewslettersRoute || isHeadersRoute || isPreviewRoute;
 
   return (
     <AppShell
@@ -109,12 +109,7 @@ function App() {
       />
 
       <AppShell.Main>
-        {isPreviewRoute ? (
-          <Routes>
-            <Route path="/newsletters/:id/preview" element={<NewsletterPreviewPage />} />
-            <Route path="*" element={<Navigate to="/articles" replace />} />
-          </Routes>
-        ) : isMainRoute ? (
+        {isKnownRoute ? (
           <>
             <Box style={{ display: isArticlesRoute ? "block" : "none" }}>
               <ArticlesPage />
@@ -125,6 +120,12 @@ function App() {
             <Box style={{ display: isHeadersRoute ? "block" : "none" }}>
               <HeadersPage />
             </Box>
+
+            {isPreviewRoute ? (
+              <Routes>
+                <Route path="/newsletters/:id/preview" element={<NewsletterPreviewPage />} />
+              </Routes>
+            ) : null}
           </>
         ) : (
           <Navigate to="/articles" replace />
