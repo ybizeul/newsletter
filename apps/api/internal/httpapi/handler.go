@@ -785,7 +785,7 @@ func (h *Handler) renderNewsletter(ctx context.Context, newsletter model.Newslet
 				return "", "", renderErr
 			}
 			titleForHTML := html.EscapeString(newsletter.Title)
-			headerHTML = enforceTableCellAlignment(enforceImageNaturalWidth(renderedHeader))
+			headerHTML = enforceTableFullWidth(enforceTableCellAlignment(enforceImageNaturalWidth(renderedHeader)))
 			headerHTML = strings.ReplaceAll(headerHTML, "#TITLE", titleForHTML)
 			headerText = strings.ReplaceAll(strings.TrimSpace(header.Markdown), "#TITLE", newsletter.Title)
 		} else if err != mongo.ErrNoDocuments {
@@ -933,6 +933,41 @@ func enforceTableCellAlignment(input string) string {
 		}
 		if valign != "" && !valignAttrRe.MatchString(updated) {
 			updated = strings.Replace(updated, ">", ` valign="`+valign+`">`, 1)
+		}
+
+		return updated
+	})
+}
+
+func enforceTableFullWidth(input string) string {
+	tableRe := regexp.MustCompile(`(?i)<table\b[^>]*>`)
+	styleRe := regexp.MustCompile(`(?i)\bstyle\s*=\s*"([^"]*)"`)
+	widthAttrRe := regexp.MustCompile(`(?i)\swidth\s*=\s*"[^"]*"`)
+
+	return tableRe.ReplaceAllStringFunc(input, func(tag string) string {
+		updated := tag
+
+		if matches := styleRe.FindStringSubmatch(updated); len(matches) == 2 {
+			styleValue := matches[1]
+			styleValue = regexp.MustCompile(`(?i)(?:^|;)\s*width\s*:\s*[^;]+;?`).ReplaceAllString(styleValue, "")
+			styleValue = regexp.MustCompile(`(?i)(?:^|;)\s*max-width\s*:\s*[^;]+;?`).ReplaceAllString(styleValue, "")
+			styleValue = regexp.MustCompile(`(?i)(?:^|;)\s*min-width\s*:\s*[^;]+;?`).ReplaceAllString(styleValue, "")
+			styleValue = regexp.MustCompile(`(?i)(?:^|;)\s*table-layout\s*:\s*[^;]+;?`).ReplaceAllString(styleValue, "")
+			styleValue = regexp.MustCompile(`(?i)(?:^|;)\s*border-collapse\s*:\s*[^;]+;?`).ReplaceAllString(styleValue, "")
+			styleValue = strings.TrimSpace(styleValue)
+			if styleValue != "" && !strings.HasSuffix(styleValue, ";") {
+				styleValue += ";"
+			}
+			styleValue = "width:100%;max-width:100%;table-layout:fixed;border-collapse:collapse;" + styleValue
+			updated = styleRe.ReplaceAllString(updated, `style="`+styleValue+`"`)
+		} else {
+			updated = strings.Replace(updated, "<table", `<table style="width:100%;max-width:100%;table-layout:fixed;border-collapse:collapse;"`, 1)
+		}
+
+		if widthAttrRe.MatchString(updated) {
+			updated = widthAttrRe.ReplaceAllString(updated, ` width="100%"`)
+		} else {
+			updated = strings.Replace(updated, ">", ` width="100%">`, 1)
 		}
 
 		return updated

@@ -118,7 +118,6 @@ export default function NewslettersPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [deleteNewsletterId, setDeleteNewsletterId] = useState<string | null>(null);
-  const [removeArticleId, setRemoveArticleId] = useState<string | null>(null);
   const [hasLoadedNewslettersData, setHasLoadedNewslettersData] = useState(false);
 
   const availableArticleOptions = useMemo(
@@ -322,16 +321,8 @@ export default function NewslettersPage() {
     }
   };
 
-  const requestRemoveArticleFromNewsletter = (articleId: string) => {
-    setRemoveArticleId(articleId);
-  };
-
-  const confirmRemoveArticleFromNewsletter = () => {
-    if (!removeArticleId) {
-      return;
-    }
-    setArticleIDs((current) => current.filter((id) => id !== removeArticleId));
-    setRemoveArticleId(null);
+  const removeArticleFromNewsletter = (articleId: string) => {
+    setArticleIDs((current) => current.filter((id) => id !== articleId));
   };
 
   const moveArticle = (sourceId: string, targetId: string) => {
@@ -647,7 +638,7 @@ export default function NewslettersPage() {
                     <ActionIcon
                       color="red"
                       variant="subtle"
-                      onClick={() => requestRemoveArticleFromNewsletter(article.id)}
+                      onClick={() => removeArticleFromNewsletter(article.id)}
                       title="Remove"
                     >
                       <IconX size={16} />
@@ -735,27 +726,6 @@ export default function NewslettersPage() {
             </Button>
             <Button color="red" onClick={() => void confirmDeleteNewsletter()}>
               Delete newsletter
-            </Button>
-          </Group>
-        </Stack>
-      </Modal>
-
-      <Modal
-        opened={Boolean(removeArticleId)}
-        onClose={() => setRemoveArticleId(null)}
-        title="Remove article"
-        centered
-      >
-        <Stack>
-          <Text size="sm">
-            Remove this article from the newsletter sequence?
-          </Text>
-          <Group justify="flex-end">
-            <Button variant="default" onClick={() => setRemoveArticleId(null)}>
-              Cancel
-            </Button>
-            <Button color="red" onClick={confirmRemoveArticleFromNewsletter}>
-              Remove article
             </Button>
           </Group>
         </Stack>
