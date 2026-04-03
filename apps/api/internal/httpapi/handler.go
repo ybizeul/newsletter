@@ -59,29 +59,31 @@ type createArticleRequest struct {
 }
 
 type articleSummary struct {
-	ID        string              `json:"id"`
-	Title     string              `json:"title"`
-	Tags      []string            `json:"tags,omitempty"`
-	TopicIcon string              `json:"topicIcon,omitempty"`
-	SentCount int64               `json:"sentCount"`
-	LastUsed  *time.Time          `json:"lastUsed,omitempty"`
-	Status    model.ArticleStatus `json:"status"`
-	CreatedAt time.Time           `json:"createdAt"`
-	UpdatedAt time.Time           `json:"updatedAt"`
-	Preview   string              `json:"preview"`
+	ID           string              `json:"id"`
+	Title        string              `json:"title"`
+	Tags         []string            `json:"tags,omitempty"`
+	TopicIcon    string              `json:"topicIcon,omitempty"`
+	Illustration string              `json:"illustration,omitempty"`
+	SentCount    int64               `json:"sentCount"`
+	LastUsed     *time.Time          `json:"lastUsed,omitempty"`
+	Status       model.ArticleStatus `json:"status"`
+	CreatedAt    time.Time           `json:"createdAt"`
+	UpdatedAt    time.Time           `json:"updatedAt"`
+	Preview      string              `json:"preview"`
 }
 
 type articleSummarySource struct {
-	ID        string              `bson:"_id"`
-	Title     string              `bson:"title"`
-	Markdown  string              `bson:"markdown"`
-	Tags      []string            `bson:"tags,omitempty"`
-	TopicIcon string              `bson:"topicIcon,omitempty"`
-	SentCount int64               `bson:"sentCount"`
-	LastUsed  *time.Time          `bson:"last_used,omitempty"`
-	Status    model.ArticleStatus `bson:"status"`
-	CreatedAt time.Time           `bson:"createdAt"`
-	UpdatedAt time.Time           `bson:"updatedAt"`
+	ID           string              `bson:"_id"`
+	Title        string              `bson:"title"`
+	Markdown     string              `bson:"markdown"`
+	Tags         []string            `bson:"tags,omitempty"`
+	TopicIcon    string              `bson:"topicIcon,omitempty"`
+	Illustration string              `bson:"illustration,omitempty"`
+	SentCount    int64               `bson:"sentCount"`
+	LastUsed     *time.Time          `bson:"last_used,omitempty"`
+	Status       model.ArticleStatus `bson:"status"`
+	CreatedAt    time.Time           `bson:"createdAt"`
+	UpdatedAt    time.Time           `bson:"updatedAt"`
 }
 
 func (h *Handler) CreateArticle(w http.ResponseWriter, r *http.Request) {
@@ -125,15 +127,16 @@ func (h *Handler) ListArticles(w http.ResponseWriter, r *http.Request) {
 
 	if strings.EqualFold(strings.TrimSpace(r.URL.Query().Get("view")), "summary") {
 		findOptions.SetProjection(bson.M{
-			"title":     1,
-			"markdown":  1,
-			"tags":      1,
-			"topicIcon": 1,
-			"sentCount": 1,
-			"last_used": 1,
-			"status":    1,
-			"createdAt": 1,
-			"updatedAt": 1,
+			"title":        1,
+			"markdown":     1,
+			"tags":         1,
+			"topicIcon":    1,
+			"illustration": 1,
+			"sentCount":    1,
+			"last_used":    1,
+			"status":       1,
+			"createdAt":    1,
+			"updatedAt":    1,
 		})
 
 		cursor, err := h.articles.Find(r.Context(), bson.M{}, findOptions)
@@ -152,16 +155,17 @@ func (h *Handler) ListArticles(w http.ResponseWriter, r *http.Request) {
 		items := make([]articleSummary, 0, len(rawItems))
 		for _, raw := range rawItems {
 			items = append(items, articleSummary{
-				ID:        raw.ID,
-				Title:     raw.Title,
-				Tags:      raw.Tags,
-				TopicIcon: raw.TopicIcon,
-				SentCount: raw.SentCount,
-				LastUsed:  raw.LastUsed,
-				Status:    raw.Status,
-				CreatedAt: raw.CreatedAt,
-				UpdatedAt: raw.UpdatedAt,
-				Preview:   markdownPreviewText(raw.Markdown, 3, 180),
+				ID:           raw.ID,
+				Title:        raw.Title,
+				Tags:         raw.Tags,
+				TopicIcon:    raw.TopicIcon,
+				Illustration: raw.Illustration,
+				SentCount:    raw.SentCount,
+				LastUsed:     raw.LastUsed,
+				Status:       raw.Status,
+				CreatedAt:    raw.CreatedAt,
+				UpdatedAt:    raw.UpdatedAt,
+				Preview:      markdownPreviewText(raw.Markdown, 3, 180),
 			})
 		}
 
