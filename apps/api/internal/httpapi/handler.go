@@ -952,6 +952,198 @@ func enforceTableCellAlignment(input string) string {
 	valignAttrRe := regexp.MustCompile(`(?i)\svalign\s*=\s*"([^"]*)"`)
 	innerAlignRe := regexp.MustCompile(`(?is)<[^>]+\bstyle\s*=\s*"[^"]*text-align\s*:\s*(left|center|right|justify)[^"]*"`)
 	innerValignRe := regexp.MustCompile(`(?is)<[^>]+\bstyle\s*=\s*"[^"]*vertical-align\s*:\s*(top|middle|bottom)[^"]*"`)
+	innerAlignSingleQuoteRe := regexp.MustCompile(`(?is)<[^>]+\bstyle\s*=\s*'[^']*text-align\s*:\s*(left|center|right|justify)[^']*'`)
+	innerValignSingleQuoteRe := regexp.MustCompile(`(?is)<[^>]+\bstyle\s*=\s*'[^']*vertical-align\s*:\s*(top|middle|bottom)[^']*'`)
+	innerAlignAttrRe := regexp.MustCompile(`(?is)<[^>]+\balign\s*=\s*"\s*(left|center|right|justify)\s*"`)
+	innerValignAttrRe := regexp.MustCompile(`(?is)<[^>]+\bvalign\s*=\s*"\s*(top|middle|bottom)\s*"`)
+	innerAlignAttrSingleQuoteRe := regexp.MustCompile(`(?is)<[^>]+\balign\s*=\s*'\s*(left|center|right|justify)\s*'`)
+	innerValignAttrSingleQuoteRe := regexp.MustCompile(`(?is)<[^>]+\bvalign\s*=\s*'\s*(top|middle|bottom)\s*'`)
+	innerClassAttrRe := regexp.MustCompile(`(?is)<[^>]+\bclass\s*=\s*(?:"([^"]*)"|'([^']*)')`)
+	innerImageTagRe := regexp.MustCompile(`(?is)<img\b[^>]*>`)
+
+	lastMatchValue := func(re *regexp.Regexp, src string) string {
+		matches := re.FindAllStringSubmatch(src, -1)
+		if len(matches) == 0 {
+			return ""
+		}
+		last := matches[len(matches)-1]
+		if len(last) < 2 {
+			return ""
+		}
+		return strings.ToLower(strings.TrimSpace(last[1]))
+	}
+
+	inferAlignFromImageStyle := func(styleValue string) string {
+		lower := strings.ToLower(styleValue)
+		declarations := make(map[string]string)
+		for _, chunk := range strings.Split(lower, ";") {
+			part := strings.TrimSpace(chunk)
+			if part == "" {
+				continue
+			}
+			pair := strings.SplitN(part, ":", 2)
+			if len(pair) != 2 {
+				continue
+			}
+			key := strings.TrimSpace(pair[0])
+			value := strings.TrimSpace(pair[1])
+			if key == "" || value == "" {
+				continue
+			}
+			declarations[key] = value
+		}
+
+		marginLeft := declarations["margin-left"]
+		marginRight := declarations["margin-right"]
+		marginInlineStart := declarations["margin-inline-start"]
+		marginInlineEnd := declarations["margin-inline-end"]
+		floatValue := strings.TrimSpace(declarations["float"])
+
+		switch floatValue {
+		case "right":
+			return "right"
+		case "left":
+			return "left"
+		}
+
+		hasMarginLeftAuto := marginLeft == "auto"
+		hasMarginRightAuto := marginRight == "auto"
+		hasMarginInlineStartAuto := marginInlineStart == "auto"
+		hasMarginInlineEndAuto := marginInlineEnd == "auto"
+
+		switch {
+		case hasMarginInlineStartAuto && hasMarginInlineEndAuto:
+			return "center"
+		case hasMarginInlineStartAuto:
+			return "right"
+		case hasMarginInlineEndAuto:
+			return "left"
+		case hasMarginLeftAuto && hasMarginRightAuto:
+			return "center"
+		case hasMarginLeftAuto:
+			return "right"
+		case hasMarginRightAuto:
+			return "left"
+		}
+
+		marginValue, hasMargin := declarations["margin"]
+		if !hasMargin {
+			return ""
+		}
+
+		parts := strings.Fields(strings.TrimSpace(marginValue))
+		if len(parts) == 0 {
+			return ""
+		}
+
+		isAuto := func(value string) bool {
+			return strings.TrimSpace(value) == "auto"
+		}
+
+		switch len(parts) {
+		case 2:
+			if isAuto(parts[1]) {
+				return "center"
+			}
+		case 3:
+			if isAuto(parts[1]) {
+				return "center"
+			}
+		case 4:
+			right := parts[1]
+			left := parts[3]
+			if isAuto(left) && !isAuto(right) {
+				return "right"
+			}
+			if isAuto(right) && !isAuto(left) {
+				return "left"
+			}
+			if isAuto(right) && isAuto(left) {
+				return "center"
+			}
+		}
+
+		return ""
+	}
+
+	inferAlignFromInnerClasses := func(inner string) string {
+		matches := innerClassAttrRe.FindAllStringSubmatch(inner, -1)
+		if len(matches) == 0 {
+			return ""
+		}
+
+		hasToken := func(classValue string, token string) bool {
+			pattern := regexp.MustCompile(`(^|\s)` + regexp.QuoteMeta(token) + `(\s|$)`)
+			return pattern.MatchString(classValue)
+		}
+
+		for i := len(matches) - 1; i >= 0; i -= 1 {
+			if len(matches[i]) < 3 {
+				continue
+			}
+			classValue := strings.ToLower(strings.TrimSpace(matches[i][1]))
+			if classValue == "" {
+				classValue = strings.ToLower(strings.TrimSpace(matches[i][2]))
+			}
+			if classValue == "" {
+				continue
+			}
+
+			rightTokens := []string{"ql-align-right", "align-right", "text-right", "is-right-aligned", "has-text-align-right"}
+			for _, token := range rightTokens {
+				if hasToken(classValue, token) {
+					return "right"
+				}
+			}
+
+			centerTokens := []string{"ql-align-center", "align-center", "text-center", "is-centered", "has-text-align-center"}
+			for _, token := range centerTokens {
+				if hasToken(classValue, token) {
+					return "center"
+				}
+			}
+
+			leftTokens := []string{"ql-align-left", "align-left", "text-left", "is-left-aligned", "has-text-align-left"}
+			for _, token := range leftTokens {
+				if hasToken(classValue, token) {
+					return "left"
+				}
+			}
+		}
+
+		return ""
+	}
+
+	inferAlignFromInnerImages := func(inner string) string {
+		imageTags := innerImageTagRe.FindAllString(inner, -1)
+		if len(imageTags) == 0 {
+			return ""
+		}
+
+		getAttrValue := func(tag string, attr string) string {
+			doubleQuoted := regexp.MustCompile(`(?i)\b` + regexp.QuoteMeta(attr) + `\s*=\s*"([^"]*)"`)
+			singleQuoted := regexp.MustCompile(`(?i)\b` + regexp.QuoteMeta(attr) + `\s*=\s*'([^']*)'`)
+			if m := doubleQuoted.FindStringSubmatch(tag); len(m) == 2 {
+				return m[1]
+			}
+			if m := singleQuoted.FindStringSubmatch(tag); len(m) == 2 {
+				return m[1]
+			}
+			return ""
+		}
+
+		for i := len(imageTags) - 1; i >= 0; i -= 1 {
+			styleValue := getAttrValue(imageTags[i], "style")
+			if styleValue == "" {
+				continue
+			}
+			if align := inferAlignFromImageStyle(styleValue); align != "" {
+				return align
+			}
+		}
+
+		return ""
+	}
 
 	ensureStyleProp := func(tag string, prop string, value string) string {
 		if value == "" {
@@ -998,9 +1190,22 @@ func enforceTableCellAlignment(input string) string {
 				}
 			}
 			if align == "" {
-				if m := innerAlignRe.FindStringSubmatch(inner); len(m) == 2 {
-					align = strings.ToLower(m[1])
-				}
+				align = lastMatchValue(innerAlignRe, inner)
+			}
+			if align == "" {
+				align = lastMatchValue(innerAlignSingleQuoteRe, inner)
+			}
+			if align == "" {
+				align = lastMatchValue(innerAlignAttrRe, inner)
+			}
+			if align == "" {
+				align = lastMatchValue(innerAlignAttrSingleQuoteRe, inner)
+			}
+			if align == "" {
+				align = inferAlignFromInnerImages(inner)
+			}
+			if align == "" {
+				align = inferAlignFromInnerClasses(inner)
 			}
 
 			valign := ""
@@ -1015,9 +1220,16 @@ func enforceTableCellAlignment(input string) string {
 				}
 			}
 			if valign == "" {
-				if m := innerValignRe.FindStringSubmatch(inner); len(m) == 2 {
-					valign = strings.ToLower(m[1])
-				}
+				valign = lastMatchValue(innerValignRe, inner)
+			}
+			if valign == "" {
+				valign = lastMatchValue(innerValignSingleQuoteRe, inner)
+			}
+			if valign == "" {
+				valign = lastMatchValue(innerValignAttrRe, inner)
+			}
+			if valign == "" {
+				valign = lastMatchValue(innerValignAttrSingleQuoteRe, inner)
 			}
 
 			updatedOpen := openTag
@@ -1237,64 +1449,21 @@ func (h *Handler) sendSMTP(recipient, subject, htmlBody, textBody string) error 
 		return nil
 	}
 
-	processedHTML, attachments, err := extractInlineDataImages(htmlBody)
-	if err != nil {
-		return err
-	}
-
 	message := strings.Builder{}
 	message.WriteString("From: " + h.cfg.SMTPFrom + "\r\n")
 	message.WriteString("To: " + recipient + "\r\n")
 	message.WriteString("Subject: " + subject + "\r\n")
 	message.WriteString("MIME-Version: 1.0\r\n")
 
-	if len(attachments) == 0 {
-		altBoundary := fmt.Sprintf("alt-boundary-%d", time.Now().UnixNano())
-		message.WriteString("Content-Type: multipart/alternative; boundary=" + altBoundary + "\r\n\r\n")
-		message.WriteString("--" + altBoundary + "\r\n")
-		message.WriteString("Content-Type: text/plain; charset=UTF-8\r\n\r\n")
-		message.WriteString(textBody + "\r\n\r\n")
-		message.WriteString("--" + altBoundary + "\r\n")
-		message.WriteString("Content-Type: text/html; charset=UTF-8\r\n\r\n")
-		message.WriteString(processedHTML + "\r\n\r\n")
-		message.WriteString("--" + altBoundary + "--\r\n")
-	} else {
-		relatedBoundary := fmt.Sprintf("related-boundary-%d", time.Now().UnixNano())
-		altBoundary := fmt.Sprintf("alt-boundary-%d", time.Now().UnixNano())
-
-		message.WriteString("Content-Type: multipart/related; boundary=" + relatedBoundary + "\r\n\r\n")
-		message.WriteString("--" + relatedBoundary + "\r\n")
-		message.WriteString("Content-Type: multipart/alternative; boundary=" + altBoundary + "\r\n\r\n")
-
-		message.WriteString("--" + altBoundary + "\r\n")
-		message.WriteString("Content-Type: text/plain; charset=UTF-8\r\n\r\n")
-		message.WriteString(textBody + "\r\n\r\n")
-
-		message.WriteString("--" + altBoundary + "\r\n")
-		message.WriteString("Content-Type: text/html; charset=UTF-8\r\n\r\n")
-		message.WriteString(processedHTML + "\r\n\r\n")
-		message.WriteString("--" + altBoundary + "--\r\n")
-
-		for _, attachment := range attachments {
-			encoded := base64.StdEncoding.EncodeToString(attachment.Data)
-			message.WriteString("--" + relatedBoundary + "\r\n")
-			message.WriteString("Content-Type: " + attachment.MimeType + "\r\n")
-			message.WriteString("Content-Transfer-Encoding: base64\r\n")
-			message.WriteString("Content-ID: <" + attachment.CID + ">\r\n")
-			message.WriteString("Content-Disposition: inline\r\n\r\n")
-
-			for i := 0; i < len(encoded); i += 76 {
-				end := i + 76
-				if end > len(encoded) {
-					end = len(encoded)
-				}
-				message.WriteString(encoded[i:end] + "\r\n")
-			}
-			message.WriteString("\r\n")
-		}
-
-		message.WriteString("--" + relatedBoundary + "--\r\n")
-	}
+	altBoundary := fmt.Sprintf("alt-boundary-%d", time.Now().UnixNano())
+	message.WriteString("Content-Type: multipart/alternative; boundary=" + altBoundary + "\r\n\r\n")
+	message.WriteString("--" + altBoundary + "\r\n")
+	message.WriteString("Content-Type: text/plain; charset=UTF-8\r\n\r\n")
+	message.WriteString(textBody + "\r\n\r\n")
+	message.WriteString("--" + altBoundary + "\r\n")
+	message.WriteString("Content-Type: text/html; charset=UTF-8\r\n\r\n")
+	message.WriteString(htmlBody + "\r\n\r\n")
+	message.WriteString("--" + altBoundary + "--\r\n")
 
 	auth := smtp.PlainAuth("", h.cfg.SMTPUser, h.cfg.SMTPPass, h.cfg.SMTPHost)
 	addr := h.cfg.SMTPHost + ":" + h.cfg.SMTPPort

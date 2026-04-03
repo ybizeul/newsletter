@@ -102,6 +102,133 @@ const FontFamily = Extension.create({
   }
 });
 
+function renderCellAlignmentStyle(attributes: { textAlign?: string | null; verticalAlign?: string | null }) {
+  const rules: string[] = [];
+  if (attributes.textAlign) {
+    rules.push(`text-align:${attributes.textAlign};`);
+  }
+  if (attributes.verticalAlign) {
+    rules.push(`vertical-align:${attributes.verticalAlign};`);
+  }
+  if (rules.length === 0) {
+    return {};
+  }
+  return { style: rules.join("") };
+}
+
+function normalizeHeaderTableCellHorizontalAlignment(inputHTML: string): string {
+  if (!inputHTML.trim()) {
+    return inputHTML;
+  }
+
+  const parser = new DOMParser();
+  const doc = parser.parseFromString(`<div id="__root">${inputHTML}</div>`, "text/html");
+  const root = doc.getElementById("__root");
+  if (!root) {
+    return inputHTML;
+  }
+
+  const inferFromImage = (img: HTMLImageElement): "left" | "center" | "right" | null => {
+    const floatValue = img.style.float?.trim().toLowerCase();
+    if (floatValue === "right") {
+      return "right";
+    }
+    if (floatValue === "left") {
+      return "left";
+    }
+
+    const marginLeft = img.style.marginLeft?.trim().toLowerCase();
+    const marginRight = img.style.marginRight?.trim().toLowerCase();
+    const marginInlineStart = img.style.marginInlineStart?.trim().toLowerCase();
+    const marginInlineEnd = img.style.marginInlineEnd?.trim().toLowerCase();
+
+    if (marginInlineStart === "auto" && marginInlineEnd === "auto") {
+      return "center";
+    }
+    if (marginInlineStart === "auto") {
+      return "right";
+    }
+    if (marginInlineEnd === "auto") {
+      return "left";
+    }
+
+    if (marginLeft === "auto" && marginRight === "auto") {
+      return "center";
+    }
+    if (marginLeft === "auto") {
+      return "right";
+    }
+    if (marginRight === "auto") {
+      return "left";
+    }
+
+    const marginParts = img.style.margin
+      .trim()
+      .toLowerCase()
+      .split(/\s+/)
+      .filter(Boolean);
+
+    if (marginParts.length === 2 || marginParts.length === 3) {
+      if (marginParts[1] === "auto") {
+        return "center";
+      }
+    }
+    if (marginParts.length >= 4) {
+      const right = marginParts[1];
+      const left = marginParts[3];
+      if (left === "auto" && right !== "auto") {
+        return "right";
+      }
+      if (right === "auto" && left !== "auto") {
+        return "left";
+      }
+      if (left === "auto" && right === "auto") {
+        return "center";
+      }
+    }
+
+    return null;
+  };
+
+  const inferForCell = (cell: HTMLTableCellElement): "left" | "center" | "right" | null => {
+    const current = (cell.style.textAlign || cell.getAttribute("align") || "").trim().toLowerCase();
+    if (current === "left" || current === "center" || current === "right") {
+      return current;
+    }
+
+    const innerWithAlign = Array.from(cell.querySelectorAll<HTMLElement>("[style], [align]"));
+    for (let i = innerWithAlign.length - 1; i >= 0; i -= 1) {
+      const node = innerWithAlign[i];
+      const alignValue = (node.style.textAlign || node.getAttribute("align") || "").trim().toLowerCase();
+      if (alignValue === "left" || alignValue === "center" || alignValue === "right") {
+        return alignValue;
+      }
+    }
+
+    const images = Array.from(cell.querySelectorAll<HTMLImageElement>("img"));
+    for (let i = images.length - 1; i >= 0; i -= 1) {
+      const inferred = inferFromImage(images[i]);
+      if (inferred) {
+        return inferred;
+      }
+    }
+
+    return null;
+  };
+
+  const cells = Array.from(root.querySelectorAll<HTMLTableCellElement>("th, td"));
+  cells.forEach((cell) => {
+    const inferred = inferForCell(cell);
+    if (!inferred) {
+      return;
+    }
+    cell.style.textAlign = inferred;
+    cell.setAttribute("align", inferred);
+  });
+
+  return root.innerHTML;
+}
+
 const FONT_FAMILY_OPTIONS: Array<{ label: string; value: string }> = [
   { label: "Arial", value: "Arial, Helvetica, sans-serif" },
   { label: "Verdana", value: "Verdana, Geneva, sans-serif" },
@@ -150,17 +277,20 @@ const HeaderTableHeader = TableHeader.extend({
   addAttributes() {
     return {
       ...this.parent?.(),
+      textAlign: {
+        default: null,
+        parseHTML: (element) => element.style.textAlign || element.getAttribute("align") || null,
+        renderHTML: () => ({})
+      },
       verticalAlign: {
         default: null,
-        parseHTML: (element) => element.style.verticalAlign || null,
-        renderHTML: (attributes) => {
-          if (!attributes.verticalAlign) {
-            return {};
-          }
-          return { style: `vertical-align:${attributes.verticalAlign};` };
-        }
+        parseHTML: (element) => element.style.verticalAlign || element.getAttribute("valign") || null,
+        renderHTML: () => ({})
       }
     };
+  },
+  renderHTML({ HTMLAttributes }) {
+    return ["th", { ...HTMLAttributes, ...renderCellAlignmentStyle(HTMLAttributes) }, 0];
   }
 });
 
@@ -168,17 +298,20 @@ const HeaderTableCell = TableCell.extend({
   addAttributes() {
     return {
       ...this.parent?.(),
+      textAlign: {
+        default: null,
+        parseHTML: (element) => element.style.textAlign || element.getAttribute("align") || null,
+        renderHTML: () => ({})
+      },
       verticalAlign: {
         default: null,
-        parseHTML: (element) => element.style.verticalAlign || null,
-        renderHTML: (attributes) => {
-          if (!attributes.verticalAlign) {
-            return {};
-          }
-          return { style: `vertical-align:${attributes.verticalAlign};` };
-        }
+        parseHTML: (element) => element.style.verticalAlign || element.getAttribute("valign") || null,
+        renderHTML: () => ({})
       }
     };
+  },
+  renderHTML({ HTMLAttributes }) {
+    return ["td", { ...HTMLAttributes, ...renderCellAlignmentStyle(HTMLAttributes) }, 0];
   }
 });
 
@@ -548,7 +681,8 @@ export default function HeadersPage() {
     }
 
     normalizeEditorTableBorders();
-    const markdown = editor?.getHTML() ?? "";
+    const rawHTML = editor?.getHTML() ?? "";
+    const markdown = normalizeHeaderTableCellHorizontalAlignment(rawHTML);
     setError(null);
     setIsSubmitting(true);
 
@@ -765,6 +899,13 @@ export default function HeadersPage() {
 
   const setCellVerticalAlign = (align: "top" | "middle" | "bottom") => {
     const ok = editor?.chain().focus().setCellAttribute("verticalAlign", align).run();
+    if (!ok) {
+      setError("Place the cursor inside a table cell first");
+    }
+  };
+
+  const setCellHorizontalAlign = (align: "left" | "center" | "right") => {
+    const ok = editor?.chain().focus().setCellAttribute("textAlign", align).run();
     if (!ok) {
       setError("Place the cursor inside a table cell first");
     }
@@ -990,6 +1131,10 @@ export default function HeadersPage() {
                     <Menu.Item onClick={() => setCellVerticalAlign("top")}>Cell align top</Menu.Item>
                     <Menu.Item onClick={() => setCellVerticalAlign("middle")}>Cell align middle</Menu.Item>
                     <Menu.Item onClick={() => setCellVerticalAlign("bottom")}>Cell align bottom</Menu.Item>
+                    <Menu.Divider />
+                    <Menu.Item onClick={() => setCellHorizontalAlign("left")}>Cell text left</Menu.Item>
+                    <Menu.Item onClick={() => setCellHorizontalAlign("center")}>Cell text center</Menu.Item>
+                    <Menu.Item onClick={() => setCellHorizontalAlign("right")}>Cell text right</Menu.Item>
                     <Menu.Divider />
                     <Menu.Item onClick={() => setTableBordersHidden(true)}>Hide borders</Menu.Item>
                     <Menu.Item onClick={() => setTableBordersHidden(false)}>Show borders</Menu.Item>
