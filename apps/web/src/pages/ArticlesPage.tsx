@@ -24,17 +24,16 @@ import {
   useCombobox
 } from "@mantine/core";
 import { IconCheck, IconChevronDown, IconFilePlus, IconPencil, IconRefresh, IconSearch } from "@tabler/icons-react";
-import * as TablerIcons from "@tabler/icons-react";
 import MDEditor from "@uiw/react-md-editor";
 import { renderToStaticMarkup } from "react-dom/server";
 import "@uiw/react-md-editor/markdown-editor.css";
 import "@uiw/react-markdown-preview/markdown.css";
 import "../styles/markdown-editor.css";
 import { createArticle, deleteArticle, listArticles, updateArticle } from "../lib/api";
+import type { TablerIconMap } from "../lib/tablerIconsBrowser";
 import type { Article } from "../types/domain";
 
 const DEMO_AUTHOR_ID = "demo-user";
-const TABLER_ICON_MAP = TablerIcons as unknown as Record<string, React.ComponentType<{ size?: number }>>;
 
 const DEFAULT_TOPIC_ICON_BG = "#228be6";
 const DEFAULT_TOPIC_ICON_STROKE = "#ffffff";
@@ -78,8 +77,12 @@ function extractTopicIconStrokeColor(illustration?: string): string {
   }
 }
 
-function buildTopicIconIllustration(iconName: string, circleColor: string, strokeColor: string): string {
-  const IconComponent = TABLER_ICON_MAP[iconName];
+function buildTopicIconIllustration(iconMap: TablerIconMap | null, iconName: string, circleColor: string, strokeColor: string): string {
+  if (!iconMap) {
+    return "";
+  }
+
+  const IconComponent = iconMap[iconName];
   if (!IconComponent) {
     return "";
   }
@@ -94,13 +97,17 @@ function buildTopicIconIllustration(iconName: string, circleColor: string, strok
   return `data:image/svg+xml,${encodeURIComponent(finalSvg)}`;
 }
 
-function resolveTablerIconName(input: string): string {
+function resolveTablerIconName(iconMap: TablerIconMap | null, input: string): string {
+  if (!iconMap) {
+    return "";
+  }
+
   const raw = input.trim();
   if (!raw) {
     return "";
   }
 
-  if (TABLER_ICON_MAP[raw]) {
+  if (iconMap[raw]) {
     return raw;
   }
 
@@ -109,7 +116,7 @@ function resolveTablerIconName(input: string): string {
     return "";
   }
 
-  const candidates = Object.keys(TABLER_ICON_MAP).filter((name) => name.startsWith("Icon"));
+  const candidates = Object.keys(iconMap).filter((name) => name.startsWith("Icon"));
 
   const exact = candidates.find((name) => name.toLowerCase() === normalized);
   if (exact) {
@@ -196,7 +203,10 @@ export default function ArticlesPage() {
   const [topicIcon, setTopicIcon] = useState("");
   const [topicIconBgColor, setTopicIconBgColor] = useState(DEFAULT_TOPIC_ICON_BG);
   const [topicIconStrokeColor, setTopicIconStrokeColor] = useState(DEFAULT_TOPIC_ICON_STROKE);
+  const [topicIconIllustration, setTopicIconIllustration] = useState("");
   const [isIconBrowserOpen, setIsIconBrowserOpen] = useState(false);
+  const [tablerIconMap, setTablerIconMap] = useState<TablerIconMap | null>(null);
+  const [isIconLibraryLoading, setIsIconLibraryLoading] = useState(false);
   const [articleSearchQuery, setArticleSearchQuery] = useState("");
   const [articleSearchCriteria, setArticleSearchCriteria] = useState({
     title: true,
@@ -233,6 +243,22 @@ export default function ArticlesPage() {
     void loadArticles();
   }, []);
 
+  const loadTablerIcons = async () => {
+    if (tablerIconMap || isIconLibraryLoading) {
+      return;
+    }
+
+    setIsIconLibraryLoading(true);
+    try {
+      const module = await import("../lib/tablerIconsBrowser");
+      setTablerIconMap(module.TABLER_ICON_MAP);
+    } catch {
+      setError("Failed to load icon library");
+    } finally {
+      setIsIconLibraryLoading(false);
+    }
+  };
+
   const resetForm = () => {
     setTitle("");
     setMarkdown("");
@@ -240,6 +266,7 @@ export default function ArticlesPage() {
     setTopicIcon("");
     setTopicIconBgColor(DEFAULT_TOPIC_ICON_BG);
     setTopicIconStrokeColor(DEFAULT_TOPIC_ICON_STROKE);
+    setTopicIconIllustration("");
     setPastedImageMap({});
     setEditingID(null);
     setSelectedArticleID(null);
@@ -286,6 +313,7 @@ export default function ArticlesPage() {
     setTopicIcon(article.topicIcon ?? "");
     setTopicIconBgColor(extractTopicIconBackgroundColor(article.illustration));
     setTopicIconStrokeColor(extractTopicIconStrokeColor(article.illustration));
+    setTopicIconIllustration(article.illustration ?? "");
     lastSavedDraftRef.current = JSON.stringify({
       title: article.title,
       markdown: article.markdown,
@@ -296,12 +324,28 @@ export default function ArticlesPage() {
     setAutosaveStatus("idle");
   };
 
-  const resolvedTopicIconName = useMemo(() => resolveTablerIconName(topicIcon), [topicIcon]);
+  const resolvedTopicIconName = useMemo(() => resolveTablerIconName(tablerIconMap, topicIcon), [tablerIconMap, topicIcon]);
 
   const generatedTopicIconIllustration = useMemo(
-    () => buildTopicIconIllustration(resolvedTopicIconName, topicIconBgColor, topicIconStrokeColor),
-    [resolvedTopicIconName, topicIconBgColor, topicIconStrokeColor]
+    () => buildTopicIconIllustration(tablerIconMap, resolvedTopicIconName, topicIconBgColor, topicIconStrokeColor),
+    [tablerIconMap, resolvedTopicIconName, topicIconBgColor, topicIconStrokeColor]
   );
+
+  useEffect(() => {
+    if (!topicIcon.trim()) {
+      setTopicIconIllustration("");
+      return;
+    }
+
+    if (!tablerIconMap) {
+      void loadTablerIcons();
+      return;
+    }
+
+    if (generatedTopicIconIllustration) {
+      setTopicIconIllustration(generatedTopicIconIllustration);
+    }
+  }, [topicIcon, tablerIconMap, generatedTopicIconIllustration]);
 
   useEffect(() => {
     if (articles.length === 0) {
@@ -323,7 +367,7 @@ export default function ArticlesPage() {
     markdown: resolvePastedImageTokens(markdown.trim()),
     tags,
     topicIcon: topicIcon.trim(),
-    illustration: generatedTopicIconIllustration
+    illustration: topicIconIllustration
   });
 
   const onSubmit = async () => {
@@ -413,7 +457,7 @@ export default function ArticlesPage() {
         window.clearTimeout(autosaveTimerRef.current);
       }
     };
-  }, [editingId, title, markdown, tags, topicIcon, generatedTopicIconIllustration, pastedImageMap]);
+  }, [editingId, title, markdown, tags, topicIcon, topicIconIllustration, pastedImageMap]);
 
   useEffect(() => () => {
     if (autosaveTimerRef.current !== null) {
@@ -520,13 +564,17 @@ export default function ArticlesPage() {
   };
 
   const filteredIconNames = useMemo(() => {
+    if (!tablerIconMap) {
+      return [];
+    }
+
     const query = iconSearch.trim().toLowerCase();
-    return Object.keys(TablerIcons)
+    return Object.keys(tablerIconMap)
       .filter((name) => name.startsWith("Icon") && name !== "Icon")
       .filter((name) => (query ? name.toLowerCase().includes(query) : true))
       .sort((a, b) => a.localeCompare(b))
       .slice(0, 300);
-  }, [iconSearch]);
+  }, [iconSearch, tablerIconMap]);
 
   const filteredArticles = useMemo(() => {
     const query = articleSearchQuery.trim().toLowerCase();
@@ -863,7 +911,10 @@ export default function ArticlesPage() {
 
           <Group align="flex-end" wrap="nowrap">
             <UnstyledButton
-              onClick={() => setIsIconBrowserOpen(true)}
+                onClick={() => {
+                  setIsIconBrowserOpen(true);
+                  void loadTablerIcons();
+                }}
               aria-label="Select topic icon"
               style={{
                 width: 40,
@@ -873,17 +924,17 @@ export default function ArticlesPage() {
                 display: "inline-flex",
                 alignItems: "center",
                 justifyContent: "center",
-                background: generatedTopicIconIllustration ? "#fff" : "#f8f9fa",
+                  background: topicIconIllustration ? "#fff" : "#f8f9fa",
                 cursor: "pointer",
                 padding: 0,
                 overflow: "hidden",
                 flexShrink: 0
               }}
             >
-              {generatedTopicIconIllustration ? (
+              {topicIconIllustration ? (
                 <Box
                   component="img"
-                  src={generatedTopicIconIllustration}
+                  src={topicIconIllustration}
                   alt="Topic icon preview"
                   w={40}
                   h={40}
@@ -1093,16 +1144,16 @@ export default function ArticlesPage() {
                   display: "inline-flex",
                   alignItems: "center",
                   justifyContent: "center",
-                  background: generatedTopicIconIllustration ? "#fff" : "#f8f9fa",
+                  background: topicIconIllustration ? "#fff" : "#f8f9fa",
                   padding: 0,
                   overflow: "hidden",
                   cursor: "pointer"
                 }}
               >
-                {generatedTopicIconIllustration ? (
+                {topicIconIllustration ? (
                   <Box
                     component="img"
-                    src={generatedTopicIconIllustration}
+                    src={topicIconIllustration}
                     alt="Current icon preview"
                     w={96}
                     h={96}
@@ -1157,8 +1208,13 @@ export default function ArticlesPage() {
 
           <ScrollArea h={420}>
             <SimpleGrid cols={{ base: 2, sm: 3, md: 4 }} spacing="xs">
+              {isIconLibraryLoading ? (
+                <Center py="lg" style={{ gridColumn: "1 / -1" }}>
+                  <Loader size="sm" />
+                </Center>
+              ) : null}
               {filteredIconNames.map((iconName) => {
-                const IconComponent = TABLER_ICON_MAP[iconName];
+                const IconComponent = tablerIconMap?.[iconName];
 
                 if (!IconComponent) {
                   return null;

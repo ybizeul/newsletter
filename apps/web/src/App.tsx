@@ -1,12 +1,13 @@
-import { type MouseEvent as ReactMouseEvent, useState } from "react";
-import { AppShell, Box, Burger, Group, NavLink, Text } from "@mantine/core";
+import { lazy, Suspense, type MouseEvent as ReactMouseEvent, useState } from "react";
+import { AppShell, Box, Burger, Center, Group, Loader, NavLink, Text } from "@mantine/core";
 import { useDisclosure } from "@mantine/hooks";
 import { IconAlignBoxCenterTop, IconArticle, IconMail } from "@tabler/icons-react";
 import { Navigate, Route, Routes, useLocation, useNavigate } from "react-router-dom";
-import ArticlesPage from "./pages/ArticlesPage";
-import HeadersPage from "./pages/HeadersPage";
-import NewslettersPage from "./pages/NewslettersPage";
-import NewsletterPreviewPage from "./pages/NewsletterPreviewPage";
+
+const ArticlesPage = lazy(() => import("./pages/ArticlesPage"));
+const HeadersPage = lazy(() => import("./pages/HeadersPage"));
+const NewslettersPage = lazy(() => import("./pages/NewslettersPage"));
+const NewsletterPreviewPage = lazy(() => import("./pages/NewsletterPreviewPage"));
 
 const NAVBAR_WIDTH_STORAGE_KEY = "newsletter.navbar.width";
 
@@ -44,12 +45,6 @@ function App() {
     window.addEventListener("mousemove", onMouseMove);
     window.addEventListener("mouseup", onMouseUp);
   };
-
-  const isArticlesRoute = location.pathname.startsWith("/articles");
-  const isNewslettersRoute = location.pathname.startsWith("/newsletters") && !/\/newsletters\/[^/]+\/preview$/.test(location.pathname);
-  const isHeadersRoute = location.pathname.startsWith("/headers");
-  const isPreviewRoute = /\/newsletters\/[^/]+\/preview$/.test(location.pathname);
-  const isKnownRoute = isArticlesRoute || isNewslettersRoute || isHeadersRoute || isPreviewRoute;
 
   return (
     <AppShell
@@ -109,27 +104,21 @@ function App() {
       />
 
       <AppShell.Main>
-        {isKnownRoute ? (
-          <>
-            <Box style={{ display: isArticlesRoute ? "block" : "none" }}>
-              <ArticlesPage />
-            </Box>
-            <Box style={{ display: isNewslettersRoute ? "block" : "none" }}>
-              <NewslettersPage />
-            </Box>
-            <Box style={{ display: isHeadersRoute ? "block" : "none" }}>
-              <HeadersPage />
-            </Box>
-
-            {isPreviewRoute ? (
-              <Routes>
-                <Route path="/newsletters/:id/preview" element={<NewsletterPreviewPage />} />
-              </Routes>
-            ) : null}
-          </>
-        ) : (
-          <Navigate to="/articles" replace />
-        )}
+        <Suspense
+          fallback={(
+            <Center h="calc(100vh - 60px)">
+              <Loader size="sm" />
+            </Center>
+          )}
+        >
+          <Routes>
+            <Route path="/articles" element={<ArticlesPage />} />
+            <Route path="/newsletters" element={<NewslettersPage />} />
+            <Route path="/headers" element={<HeadersPage />} />
+            <Route path="/newsletters/:id/preview" element={<NewsletterPreviewPage />} />
+            <Route path="*" element={<Navigate to="/articles" replace />} />
+          </Routes>
+        </Suspense>
       </AppShell.Main>
     </AppShell>
   );
