@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Box, Button, Group, Loader, SegmentedControl, Stack, Text, Title } from "@mantine/core";
+import { Box, Button, Center, Group, Loader, SegmentedControl, Stack, Text, Title } from "@mantine/core";
 import { useMediaQuery } from "@mantine/hooks";
 import { Link, useParams } from "react-router-dom";
 import { getNewsletterPreview } from "../lib/api";
@@ -109,7 +109,11 @@ export default function NewsletterPreviewPage() {
         </Group>
       ) : null}
 
-      {isLoading ? <Loader /> : null}
+      {isLoading ? (
+        <Center h="calc(100vh - 220px)">
+          <Loader />
+        </Center>
+      ) : null}
       {error ? <Text c="red">{error}</Text> : null}
       {copyMessage ? <Text c="dimmed">{copyMessage}</Text> : null}
 
