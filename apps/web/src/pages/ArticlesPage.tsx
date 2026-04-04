@@ -1145,13 +1145,12 @@ export default function ArticlesPage() {
                     return (
                       <Pill
                         key={`edit-tag-${tag}`}
+                        size="xs"
                         withRemoveButton
                         onRemove={() => setTags((current) => current.filter((item) => item !== tag))}
                         style={{
                           backgroundColor: `var(--mantine-color-${color}-1)`,
                           color: `var(--mantine-color-${color}-8)`,
-                          border: `1px solid var(--mantine-color-${color}-3)`,
-                          fontFamily: "var(--mantine-font-family)",
                           fontWeight: 700,
                           textTransform: "uppercase"
                         }}
