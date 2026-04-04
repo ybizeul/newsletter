@@ -81,7 +81,7 @@ function App() {
       <Modal
         opened={isHelpOpen}
         onClose={() => setIsHelpOpen(false)}
-        title="How this product works"
+        title="How Newsletter builder works"
         size="lg"
         centered
       >
