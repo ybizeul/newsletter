@@ -618,19 +618,24 @@ export default function NewslettersPage() {
               >
                 <Stack gap={6} style={{ flex: 1 }}>
                   <Group justify="space-between" align="flex-start" wrap="nowrap" gap="xs">
-                    <Text
-                      fw={700}
-                      size="sm"
-                      style={{
-                        flex: 1,
-                        minWidth: 0,
-                        whiteSpace: "nowrap",
-                        overflow: "hidden",
-                        textOverflow: "ellipsis"
-                      }}
-                    >
-                      {titleText}
-                    </Text>
+                    <Group gap={6} wrap="nowrap" style={{ flex: 1, minWidth: 0 }}>
+                      <Text
+                        fw={700}
+                        size="sm"
+                        style={{
+                          flex: 1,
+                          minWidth: 0,
+                          whiteSpace: "nowrap",
+                          overflow: "hidden",
+                          textOverflow: "ellipsis"
+                        }}
+                      >
+                        {titleText}
+                      </Text>
+                      {newsletter.isFavorite ? (
+                        <IconStar size={12} fill="#fcc419" color="#f59f00" style={{ flexShrink: 0 }} />
+                      ) : null}
+                    </Group>
                     <Text size="xs" c="dimmed" style={{ flexShrink: 0 }}>
                       {formatNewsletterCreatedAt(newsletter.createdAt)}
                     </Text>
