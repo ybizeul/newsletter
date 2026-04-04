@@ -176,6 +176,13 @@ export async function scheduleNewsletter(id: string, scheduledAt: string): Promi
   });
 }
 
+export async function setNewsletterFavorite(id: string, isFavorite: boolean): Promise<Newsletter> {
+  return request<Newsletter>(`/newsletters/${id}/favorite`, {
+    method: "POST",
+    body: JSON.stringify({ isFavorite })
+  });
+}
+
 export async function sendNewsletterNow(id: string): Promise<void> {
   await request(`/newsletters/${id}/send-now`, {
     method: "POST"

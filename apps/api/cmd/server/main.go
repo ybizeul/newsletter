@@ -89,6 +89,9 @@ func main() {
 			newsletter.Get("/{id}/preview", func(w http.ResponseWriter, r *http.Request) {
 				h.GetNewsletterPreview(w, r, chi.URLParam(r, "id"))
 			})
+			newsletter.Post("/{id}/favorite", func(w http.ResponseWriter, r *http.Request) {
+				h.SetNewsletterFavorite(w, r, chi.URLParam(r, "id"))
+			})
 			newsletter.Post("/{id}/send-now", func(w http.ResponseWriter, r *http.Request) {
 				h.SendNewsletterNow(w, r, chi.URLParam(r, "id"))
 			})

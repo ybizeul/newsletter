@@ -525,6 +525,7 @@ func (h *Handler) CreateNewsletter(w http.ResponseWriter, r *http.Request) {
 		IncludeIndex:  req.IncludeIndex,
 		ArticleIDs:    req.ArticleIDs,
 		RecipientIDs:  recipientIDs,
+		IsFavorite:    false,
 		Status:        model.NewsletterStatusDraft,
 		CreatedAt:     now,
 		UpdatedAt:     now,
@@ -549,6 +550,7 @@ func (h *Handler) ListNewsletters(w http.ResponseWriter, r *http.Request) {
 			"includeIndex":  1,
 			"articleIds":    1,
 			"recipientIds":  1,
+			"isFavorite":    1,
 			"status":        1,
 			"deliveryError": 1,
 			"scheduledAt":   1,
@@ -565,6 +567,7 @@ func (h *Handler) ListNewsletters(w http.ResponseWriter, r *http.Request) {
 			IncludeIndex  bool                   `bson:"includeIndex"`
 			ArticleIDs    []string               `bson:"articleIds"`
 			RecipientIDs  []string               `bson:"recipientIds"`
+			IsFavorite    bool                   `bson:"isFavorite"`
 			Status        model.NewsletterStatus `bson:"status"`
 			DeliveryError string                 `bson:"deliveryError,omitempty"`
 			ScheduledAt   *time.Time             `bson:"scheduledAt,omitempty"`
@@ -580,6 +583,7 @@ func (h *Handler) ListNewsletters(w http.ResponseWriter, r *http.Request) {
 			IncludeIndex  bool                   `json:"includeIndex"`
 			ArticleIDs    []string               `json:"articleIds"`
 			RecipientIDs  []string               `json:"recipientIds"`
+			IsFavorite    bool                   `json:"isFavorite"`
 			Status        model.NewsletterStatus `json:"status"`
 			DeliveryError string                 `json:"deliveryError,omitempty"`
 			ScheduledAt   *time.Time             `json:"scheduledAt,omitempty"`
@@ -611,6 +615,7 @@ func (h *Handler) ListNewsletters(w http.ResponseWriter, r *http.Request) {
 				IncludeIndex:  raw.IncludeIndex,
 				ArticleIDs:    raw.ArticleIDs,
 				RecipientIDs:  raw.RecipientIDs,
+				IsFavorite:    raw.IsFavorite,
 				Status:        raw.Status,
 				DeliveryError: raw.DeliveryError,
 				ScheduledAt:   raw.ScheduledAt,
@@ -652,6 +657,55 @@ func (h *Handler) GetNewsletter(w http.ResponseWriter, r *http.Request, id strin
 			return
 		}
 		h.writeError(w, http.StatusInternalServerError, "failed to fetch newsletter")
+		return
+	}
+
+	h.writeJSON(w, http.StatusOK, newsletter)
+}
+
+type setFavoriteRequest struct {
+	IsFavorite bool `json:"isFavorite"`
+}
+
+func (h *Handler) SetNewsletterFavorite(w http.ResponseWriter, r *http.Request, id string) {
+	var req setFavoriteRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		h.writeError(w, http.StatusBadRequest, "invalid payload")
+		return
+	}
+
+	now := time.Now().UTC()
+
+	if req.IsFavorite {
+		if _, err := h.newsletters.UpdateMany(r.Context(), bson.M{"isFavorite": true}, bson.M{
+			"$set": bson.M{
+				"isFavorite": false,
+				"updatedAt":  now,
+			},
+		}); err != nil {
+			h.writeError(w, http.StatusInternalServerError, "failed to update favorite newsletters")
+			return
+		}
+	}
+
+	result, err := h.newsletters.UpdateByID(r.Context(), id, bson.M{
+		"$set": bson.M{
+			"isFavorite": req.IsFavorite,
+			"updatedAt":  now,
+		},
+	})
+	if err != nil {
+		h.writeError(w, http.StatusInternalServerError, "failed to set newsletter favorite")
+		return
+	}
+	if result.MatchedCount == 0 {
+		h.writeError(w, http.StatusNotFound, "newsletter not found")
+		return
+	}
+
+	var newsletter model.Newsletter
+	if err := h.newsletters.FindOne(r.Context(), bson.M{"_id": id}).Decode(&newsletter); err != nil {
+		h.writeError(w, http.StatusInternalServerError, "failed to fetch updated newsletter")
 		return
 	}
 

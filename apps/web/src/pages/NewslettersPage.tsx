@@ -20,6 +20,7 @@ import {
   IconGripVertical,
   IconRefresh,
   IconSend,
+  IconStar,
   IconX
 } from "@tabler/icons-react";
 import {
@@ -44,6 +45,7 @@ import "../styles/markdown-editor.css";
 
 const DEMO_CREATOR_ID = "demo-user";
 const NEWSLETTERS_PANE_WIDTH_STORAGE_KEY = "newsletter.newsletters.pane.width";
+const FAVORITE_NEWSLETTER_ID_STORAGE_KEY = "newsletter.favorite.id";
 const MAX_RECIPIENTS = 3;
 
 function getStoredNewslettersPaneWidth(): number {
@@ -53,6 +55,15 @@ function getStoredNewslettersPaneWidth(): number {
     return 340;
   }
   return Math.min(Math.max(parsed, 260), 900);
+}
+
+function getStoredFavoriteNewsletterId(): string | null {
+  const raw = window.localStorage.getItem(FAVORITE_NEWSLETTER_ID_STORAGE_KEY);
+  if (!raw) {
+    return null;
+  }
+  const trimmed = raw.trim();
+  return trimmed.length > 0 ? trimmed : null;
 }
 
 function formatNewsletterCreatedAt(value: string): string {
@@ -107,6 +118,7 @@ function toNewsletterSummary(newsletter: Newsletter): NewsletterSummary {
     includeIndex: newsletter.includeIndex,
     articleIds: newsletter.articleIds,
     recipientIds: newsletter.recipientIds,
+    isFavorite: newsletter.isFavorite,
     status: newsletter.status,
     deliveryError: newsletter.deliveryError,
     scheduledAt: newsletter.scheduledAt,
@@ -145,6 +157,12 @@ export default function NewslettersPage() {
   const [deleteNewsletterId, setDeleteNewsletterId] = useState<string | null>(null);
   const [hasLoadedNewslettersData, setHasLoadedNewslettersData] = useState(false);
   const [autosaveStatus, setAutosaveStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
+  const [favoriteNewsletterId, setFavoriteNewsletterId] = useState<string | null>(getStoredFavoriteNewsletterId);
+
+  const withFavoriteFlag = (newsletter: NewsletterSummary): NewsletterSummary => ({
+    ...newsletter,
+    isFavorite: newsletter.id === favoriteNewsletterId
+  });
 
   const availableArticleOptions = useMemo(
     () => articles.map((article) => ({ value: article.id, label: article.title })),
@@ -187,7 +205,7 @@ export default function NewslettersPage() {
       ]);
       setArticles(articleItems);
       setHeaders(headerItems);
-      setNewsletters(newsletterItems);
+      setNewsletters(newsletterItems.map(withFavoriteFlag));
       setSmtpConfigured(runtimeConfig.smtpConfigured);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load newsletters");
@@ -200,6 +218,15 @@ export default function NewslettersPage() {
   useEffect(() => {
     void loadData();
   }, []);
+
+  useEffect(() => {
+    setNewsletters((current) =>
+      current.map((newsletter) => ({
+        ...newsletter,
+        isFavorite: newsletter.id === favoriteNewsletterId
+      }))
+    );
+  }, [favoriteNewsletterId]);
 
   useEffect(() => {
     const isNewslettersRoute =
@@ -332,7 +359,7 @@ export default function NewslettersPage() {
       if (selectedNewsletterId) {
         const updated = await updateNewsletter(selectedNewsletterId, payload);
         setNewsletters((current) =>
-          current.map((newsletter) => (newsletter.id === selectedNewsletterId ? toNewsletterSummary(updated) : newsletter))
+          current.map((newsletter) => (newsletter.id === selectedNewsletterId ? withFavoriteFlag(toNewsletterSummary(updated)) : newsletter))
         );
         lastSavedDraftRef.current = JSON.stringify(payload);
         setAutosaveStatus("saved");
@@ -342,7 +369,7 @@ export default function NewslettersPage() {
           creatorId: DEMO_CREATOR_ID,
           ...payload
         });
-        setNewsletters((current) => [toNewsletterSummary(created), ...current]);
+        setNewsletters((current) => [withFavoriteFlag(toNewsletterSummary(created)), ...current]);
         setSelectedNewsletterID(created.id);
         lastSavedDraftRef.current = JSON.stringify(payload);
         setAutosaveStatus("saved");
@@ -385,7 +412,7 @@ export default function NewslettersPage() {
       try {
         const updated = await updateNewsletter(selectedNewsletterId, payload);
         setNewsletters((current) =>
-          current.map((newsletter) => (newsletter.id === selectedNewsletterId ? toNewsletterSummary(updated) : newsletter))
+          current.map((newsletter) => (newsletter.id === selectedNewsletterId ? withFavoriteFlag(toNewsletterSummary(updated)) : newsletter))
         );
         lastSavedDraftRef.current = serializedPayload;
         setAutosaveStatus("saved");
@@ -446,6 +473,32 @@ export default function NewslettersPage() {
     }
   };
 
+  const onToggleFavorite = async () => {
+    if (!selectedNewsletterId) {
+      return;
+    }
+
+    const selected = newsletters.find((newsletter) => newsletter.id === selectedNewsletterId);
+    if (!selected) {
+      return;
+    }
+
+    const nextFavoriteId = selected.isFavorite ? null : selectedNewsletterId;
+    setFavoriteNewsletterId(nextFavoriteId);
+    if (nextFavoriteId) {
+      window.localStorage.setItem(FAVORITE_NEWSLETTER_ID_STORAGE_KEY, nextFavoriteId);
+    } else {
+      window.localStorage.removeItem(FAVORITE_NEWSLETTER_ID_STORAGE_KEY);
+    }
+
+    setNewsletters((current) =>
+      current.map((newsletter) => ({
+        ...newsletter,
+        isFavorite: newsletter.id === nextFavoriteId
+      }))
+    );
+  };
+
   const requestDeleteNewsletter = (newsletterId: string) => {
     setDeleteNewsletterId(newsletterId);
   };
@@ -459,6 +512,10 @@ export default function NewslettersPage() {
     try {
       await deleteNewsletter(deleteNewsletterId);
       setNewsletters((current) => current.filter((newsletter) => newsletter.id !== deleteNewsletterId));
+      if (favoriteNewsletterId === deleteNewsletterId) {
+        setFavoriteNewsletterId(null);
+        window.localStorage.removeItem(FAVORITE_NEWSLETTER_ID_STORAGE_KEY);
+      }
       if (selectedNewsletterId === deleteNewsletterId) {
         resetForm();
       }
@@ -630,6 +687,20 @@ export default function NewslettersPage() {
             <Text fw={700}>{selectedNewsletterId ? "Edit Newsletter" : "New Newsletter"}</Text>
             {selectedNewsletterId ? (
               <Group gap="xs">
+                <ActionIcon
+                  variant={selectedNewsletter?.isFavorite ? "light" : "default"}
+                  color={selectedNewsletter?.isFavorite ? "yellow" : "gray"}
+                  size="md"
+                  aria-label={selectedNewsletter?.isFavorite ? "Unset favorite" : "Set favorite"}
+                  title={selectedNewsletter?.isFavorite ? "Unset favorite" : "Set favorite"}
+                  onClick={() => void onToggleFavorite()}
+                >
+                  <IconStar
+                    size={16}
+                    fill={selectedNewsletter?.isFavorite ? "#fcc419" : "#ffffff"}
+                    color={selectedNewsletter?.isFavorite ? "#f59f00" : "#adb5bd"}
+                  />
+                </ActionIcon>
                 <Button
                   variant="light"
                   color="blue"

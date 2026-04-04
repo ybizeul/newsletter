@@ -21,6 +21,7 @@ type Newsletter struct {
 	IncludeIndex  bool             `bson:"includeIndex" json:"includeIndex"`
 	ArticleIDs    []string         `bson:"articleIds" json:"articleIds"`
 	RecipientIDs  []string         `bson:"recipientIds" json:"recipientIds"`
+	IsFavorite    bool             `bson:"isFavorite" json:"isFavorite"`
 	Status        NewsletterStatus `bson:"status" json:"status"`
 	DeliveryError string           `bson:"deliveryError,omitempty" json:"deliveryError,omitempty"`
 	ScheduledAt   *time.Time       `bson:"scheduledAt,omitempty" json:"scheduledAt,omitempty"`

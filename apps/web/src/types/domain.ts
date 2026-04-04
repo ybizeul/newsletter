@@ -43,6 +43,7 @@ export interface Newsletter {
   includeIndex: boolean;
   articleIds: string[];
   recipientIds: string[];
+  isFavorite: boolean;
   status: NewsletterStatus;
   deliveryError?: string;
   scheduledAt?: string;
@@ -58,6 +59,7 @@ export interface NewsletterSummary {
   includeIndex: boolean;
   articleIds: string[];
   recipientIds: string[];
+  isFavorite: boolean;
   status: NewsletterStatus;
   deliveryError?: string;
   scheduledAt?: string;

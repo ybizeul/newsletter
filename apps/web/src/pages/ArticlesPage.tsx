@@ -23,13 +23,13 @@ import {
   UnstyledButton,
   useCombobox
 } from "@mantine/core";
-import { IconCheck, IconChevronDown, IconFilePlus, IconPencil, IconRefresh, IconSearch } from "@tabler/icons-react";
+import { IconCheck, IconChevronDown, IconFilePlus, IconPencil, IconRefresh, IconSearch, IconStar } from "@tabler/icons-react";
 import MDEditor from "@uiw/react-md-editor";
 import { renderToStaticMarkup } from "react-dom/server";
 import "@uiw/react-md-editor/markdown-editor.css";
 import "@uiw/react-markdown-preview/markdown.css";
 import "../styles/markdown-editor.css";
-import { createArticle, deleteArticle, getArticle, listArticleSummaries, updateArticle } from "../lib/api";
+import { createArticle, deleteArticle, getArticle, getNewsletter, listArticleSummaries, listNewsletterSummaries, updateArticle, updateNewsletter } from "../lib/api";
 import type { TablerIconMap } from "../lib/tablerIconsBrowser";
 import type { Article, ArticleSummary } from "../types/domain";
 
@@ -38,6 +38,7 @@ const DEMO_AUTHOR_ID = "demo-user";
 const DEFAULT_TOPIC_ICON_BG = "#228be6";
 const DEFAULT_TOPIC_ICON_STROKE = "#ffffff";
 const ARTICLES_PANE_WIDTH_STORAGE_KEY = "newsletter.articles.pane.width";
+const FAVORITE_NEWSLETTER_ID_STORAGE_KEY = "newsletter.favorite.id";
 const TAG_COLORS = ["blue", "teal", "cyan", "grape", "indigo", "violet", "lime", "orange", "pink"] as const;
 
 function getStoredArticlesPaneWidth(): number {
@@ -47,6 +48,15 @@ function getStoredArticlesPaneWidth(): number {
     return 340;
   }
   return Math.min(Math.max(parsed, 260), 900);
+}
+
+function getStoredFavoriteNewsletterId(): string | null {
+  const raw = window.localStorage.getItem(FAVORITE_NEWSLETTER_ID_STORAGE_KEY);
+  if (!raw) {
+    return null;
+  }
+  const trimmed = raw.trim();
+  return trimmed.length > 0 ? trimmed : null;
 }
 
 function extractTopicIconBackgroundColor(illustration?: string): string {
@@ -240,6 +250,11 @@ export default function ArticlesPage() {
   const [deleteArticleId, setDeleteArticleId] = useState<string | null>(null);
   const [hasLoadedArticles, setHasLoadedArticles] = useState(false);
   const [autosaveStatus, setAutosaveStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
+  const [favoriteNewsletterId, setFavoriteNewsletterId] = useState<string | null>(getStoredFavoriteNewsletterId);
+  const [favoriteNewsletterName, setFavoriteNewsletterName] = useState<string>("");
+  const [isAddingToFavorite, setIsAddingToFavorite] = useState(false);
+  const [isFavoriteMembershipLoading, setIsFavoriteMembershipLoading] = useState(false);
+  const [isEditingArticleInFavorite, setIsEditingArticleInFavorite] = useState(false);
 
   const loadArticles = async () => {
     setIsLoading(true);
@@ -258,6 +273,96 @@ export default function ArticlesPage() {
   useEffect(() => {
     void loadArticles();
   }, []);
+
+  useEffect(() => {
+    const loadFavoriteNewsletterName = async () => {
+      const currentFavoriteId = getStoredFavoriteNewsletterId();
+      setFavoriteNewsletterId(currentFavoriteId);
+
+      if (!currentFavoriteId) {
+        setFavoriteNewsletterName("");
+        return;
+      }
+
+      try {
+        const newsletters = await listNewsletterSummaries();
+        const favorite = newsletters.find((newsletter) => newsletter.id === currentFavoriteId);
+        if (!favorite) {
+          window.localStorage.removeItem(FAVORITE_NEWSLETTER_ID_STORAGE_KEY);
+          setFavoriteNewsletterId(null);
+          setFavoriteNewsletterName("");
+          return;
+        }
+        setFavoriteNewsletterName(favorite.title);
+      } catch {
+        setFavoriteNewsletterName("");
+      }
+    };
+
+    void loadFavoriteNewsletterName();
+  }, []);
+
+  useEffect(() => {
+    if (!editingId || !favoriteNewsletterId) {
+      setIsEditingArticleInFavorite(false);
+      return;
+    }
+
+    let cancelled = false;
+    setIsFavoriteMembershipLoading(true);
+
+    void (async () => {
+      try {
+        const newsletter = await getNewsletter(favoriteNewsletterId);
+        if (!cancelled) {
+          setIsEditingArticleInFavorite(newsletter.articleIds.includes(editingId));
+        }
+      } catch {
+        if (!cancelled) {
+          setIsEditingArticleInFavorite(false);
+        }
+      } finally {
+        if (!cancelled) {
+          setIsFavoriteMembershipLoading(false);
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [editingId, favoriteNewsletterId]);
+
+  const onToggleFavoriteNewsletterMembership = async () => {
+    if (!editingId || !favoriteNewsletterId) {
+      return;
+    }
+
+    setIsAddingToFavorite(true);
+    setError(null);
+
+    try {
+      const newsletter = await getNewsletter(favoriteNewsletterId);
+      const articleAlreadyIncluded = newsletter.articleIds.includes(editingId);
+      const nextArticleIds = articleAlreadyIncluded
+        ? newsletter.articleIds.filter((articleId) => articleId !== editingId)
+        : [...newsletter.articleIds, editingId];
+
+      await updateNewsletter(favoriteNewsletterId, {
+        title: newsletter.title,
+        headerId: newsletter.headerId ?? "",
+        introMarkdown: newsletter.introMarkdown,
+        includeIndex: newsletter.includeIndex,
+        articleIds: nextArticleIds,
+        recipientIds: newsletter.recipientIds
+      });
+      setIsEditingArticleInFavorite(!articleAlreadyIncluded);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to update favorite newsletter articles");
+    } finally {
+      setIsAddingToFavorite(false);
+    }
+  };
 
   const loadTablerIcons = async () => {
     if (tablerIconMap || isIconLibraryLoading) {
@@ -922,7 +1027,29 @@ export default function ArticlesPage() {
         ) : (
         <Stack>
           <Group justify="space-between">
-            <Text fw={700}>{editingId ? "Edit Article" : "New Article"}</Text>
+            <Group gap="xs" wrap="nowrap">
+              <Text fw={700}>{editingId ? "Edit Article" : "New Article"}</Text>
+              {editingId && favoriteNewsletterId ? (
+                <Button
+                  variant="default"
+                  size="xs"
+                  leftSection={
+                    <IconStar
+                      size={14}
+                      fill={isEditingArticleInFavorite ? "#fcc419" : "#ffffff"}
+                      color={isEditingArticleInFavorite ? "#f59f00" : "#adb5bd"}
+                    />
+                  }
+                  onClick={() => void onToggleFavoriteNewsletterMembership()}
+                  disabled={!favoriteNewsletterId || !favoriteNewsletterName || isAddingToFavorite || isFavoriteMembershipLoading}
+                  loading={isAddingToFavorite}
+                >
+                  {favoriteNewsletterName
+                    ? `${isEditingArticleInFavorite ? "Remove from" : "Add to"} ${favoriteNewsletterName}`
+                    : "Add to favorite newsletter"}
+                </Button>
+              ) : null}
+            </Group>
             {editingId ? (
               <Group gap="xs">
                 <Button variant="default" size="xs" onClick={resetForm}>
