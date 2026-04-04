@@ -21,7 +21,7 @@ function getStoredNavbarWidth(): number {
 }
 
 function App() {
-  const [opened, { toggle }] = useDisclosure();
+  const [opened, { toggle, close }] = useDisclosure();
   const [isHelpOpen, setIsHelpOpen] = useState(false);
   const [navbarWidth, setNavbarWidth] = useState(getStoredNavbarWidth);
   const location = useLocation();
@@ -51,7 +51,7 @@ function App() {
     <AppShell
       header={{ height: 60 }}
       navbar={{
-        width: navbarWidth,
+        width: { base: "100%", sm: navbarWidth },
         breakpoint: "sm",
         collapsed: { mobile: !opened }
       }}
@@ -159,19 +159,28 @@ function App() {
           label="Articles"
           active={location.pathname.startsWith("/articles")}
           leftSection={<IconArticle size={16} />}
-          onClick={() => navigate("/articles")}
+          onClick={() => {
+            navigate("/articles");
+            close();
+          }}
         />
         <NavLink
           label="Newsletters"
           active={location.pathname.startsWith("/newsletters")}
           leftSection={<IconMail size={16} />}
-          onClick={() => navigate("/newsletters")}
+          onClick={() => {
+            navigate("/newsletters");
+            close();
+          }}
         />
         <NavLink
           label="Headers"
           active={location.pathname.startsWith("/headers")}
           leftSection={<IconAlignBoxCenterTop size={16} />}
-          onClick={() => navigate("/headers")}
+          onClick={() => {
+            navigate("/headers");
+            close();
+          }}
         />
       </AppShell.Navbar>
 

@@ -15,6 +15,7 @@ import {
   Text,
   TextInput
 } from "@mantine/core";
+import { useMediaQuery } from "@mantine/hooks";
 import {
   IconGripVertical,
   IconSend,
@@ -134,6 +135,8 @@ export default function NewslettersPage() {
   const lastSavedDraftRef = useRef<string>("");
   const wasNewslettersRouteActiveRef = useRef(false);
   const [leftPaneWidth, setLeftPaneWidth] = useState(getStoredNewslettersPaneWidth);
+  const isMobile = useMediaQuery("(max-width: 48em)");
+  const [isMobileEditorOpen, setIsMobileEditorOpen] = useState(false);
   const navigate = useNavigate();
   const location = useLocation();
   const [articles, setArticles] = useState<ArticleSummary[]>([]);
@@ -291,6 +294,9 @@ export default function NewslettersPage() {
         recipientIds: fullNewsletter.recipientIds
       });
       setAutosaveStatus("idle");
+      if (isMobile) {
+        setIsMobileEditorOpen(true);
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load newsletter details");
     }
@@ -298,6 +304,10 @@ export default function NewslettersPage() {
 
   useEffect(() => {
     if (newsletters.length === 0) {
+      return;
+    }
+
+    if (isMobile && !selectedNewsletterId) {
       return;
     }
 
@@ -309,7 +319,13 @@ export default function NewslettersPage() {
     if (!newsletters.some((newsletter) => newsletter.id === selectedNewsletterId)) {
       resetForm();
     }
-  }, [newsletters]);
+  }, [newsletters, isMobile, selectedNewsletterId]);
+
+  useEffect(() => {
+    if (!isMobile) {
+      setIsMobileEditorOpen(false);
+    }
+  }, [isMobile]);
 
   const parseRecipients = () =>
     recipientRaw
@@ -521,6 +537,9 @@ export default function NewslettersPage() {
       }
       if (selectedNewsletterId === deleteNewsletterId) {
         resetForm();
+        if (isMobile) {
+          setIsMobileEditorOpen(false);
+        }
       }
       setDeleteNewsletterId(null);
     } catch (err) {
@@ -582,18 +601,28 @@ export default function NewslettersPage() {
       ref={containerRef}
       style={{
         display: "grid",
-        gridTemplateColumns: `${leftPaneWidth}px 1fr`,
+        gridTemplateColumns: isMobile ? "1fr" : `${leftPaneWidth}px 1fr`,
         gap: 0,
         height: "calc(100vh - 120px)",
         minHeight: 560,
         position: "relative"
       }}
     >
+      {!isMobile || !isMobileEditorOpen ? (
       <div style={{ overflow: "hidden" }}>
         <Group justify="space-between" p="sm" style={{ borderBottom: "1px solid #e9ecef" }}>
           <Text fw={600}>Newsletters ({newsletters.length})</Text>
           <Group gap="xs">
-            <Button variant="light" size="xs" onClick={resetForm}>
+            <Button
+              variant="light"
+              size="xs"
+              onClick={() => {
+                resetForm();
+                if (isMobile) {
+                  setIsMobileEditorOpen(true);
+                }
+              }}
+            >
               New
             </Button>
           </Group>
@@ -663,7 +692,9 @@ export default function NewslettersPage() {
           </Stack>
         </ScrollArea>
       </div>
+      ) : null}
 
+      {!isMobile ? (
       <div
         onMouseDown={startPaneResize}
         style={{
@@ -677,7 +708,9 @@ export default function NewslettersPage() {
           background: "linear-gradient(to right, transparent 3px, #e9ecef 3px, #e9ecef 4px, transparent 4px)"
         }}
       />
+      ) : null}
 
+      {!isMobile || isMobileEditorOpen ? (
       <div style={{ padding: "12px clamp(8px, 2.5vw, 12px)", overflow: "auto" }}>
         {!hasLoadedNewslettersData ? (
           <Center h="100%">
@@ -690,6 +723,11 @@ export default function NewslettersPage() {
         <Stack>
           <Group justify="space-between">
             <Group gap="xs" wrap="nowrap">
+              {isMobile ? (
+                <Button variant="subtle" size="xs" onClick={() => setIsMobileEditorOpen(false)}>
+                  Back
+                </Button>
+              ) : null}
               <Text fw={700}>{selectedNewsletterId ? "Edit Newsletter" : "New Newsletter"}</Text>
               {selectedNewsletterId && (autosaveStatus === "saving" || autosaveStatus === "error") ? (
                 <Text size="xs" c={autosaveStatus === "error" ? "red" : "dimmed"}>
@@ -757,7 +795,7 @@ export default function NewslettersPage() {
                 className="markdown-editor-monospace"
                 value={introMarkdown}
                 onChange={(value) => setIntroMarkdown(value ?? "")}
-                preview="live"
+                preview={isMobile ? "edit" : "live"}
                 height={350}
                 textareaProps={{
                   placeholder: "Welcome to this edition...",
@@ -946,6 +984,7 @@ export default function NewslettersPage() {
         </Stack>
         )}
       </div>
+      ) : null}
 
       <Modal
         opened={Boolean(deleteNewsletterId)}

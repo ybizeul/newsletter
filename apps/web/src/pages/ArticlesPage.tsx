@@ -23,6 +23,7 @@ import {
   UnstyledButton,
   useCombobox
 } from "@mantine/core";
+import { useMediaQuery } from "@mantine/hooks";
 import { IconCheck, IconChevronDown, IconMail, IconPencil, IconSearch } from "@tabler/icons-react";
 import MDEditor from "@uiw/react-md-editor";
 import { renderToStaticMarkup } from "react-dom/server";
@@ -221,6 +222,8 @@ export default function ArticlesPage() {
   const autosaveClearSavedRef = useRef<number | null>(null);
   const lastSavedDraftRef = useRef<string>("");
   const [leftPaneWidth, setLeftPaneWidth] = useState(getStoredArticlesPaneWidth);
+  const isMobile = useMediaQuery("(max-width: 48em)");
+  const [isMobileEditorOpen, setIsMobileEditorOpen] = useState(false);
   const [articles, setArticles] = useState<ArticleSummary[]>([]);
   const [selectedArticleId, setSelectedArticleID] = useState<string | null>(null);
   const [title, setTitle] = useState("");
@@ -455,6 +458,9 @@ export default function ArticlesPage() {
         illustration: fullArticle.illustration ?? ""
       });
       setAutosaveStatus("idle");
+      if (isMobile) {
+        setIsMobileEditorOpen(true);
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load article details");
     }
@@ -488,6 +494,10 @@ export default function ArticlesPage() {
       return;
     }
 
+    if (isMobile && selectedArticleId === null && editingId === null) {
+      return;
+    }
+
     if (selectedArticleId === null && editingId === null) {
       void onEdit(articles[0]);
       return;
@@ -496,7 +506,13 @@ export default function ArticlesPage() {
     if (selectedArticleId && !articles.some((article) => article.id === selectedArticleId)) {
       resetForm();
     }
-  }, [articles]);
+  }, [articles, isMobile, selectedArticleId, editingId]);
+
+  useEffect(() => {
+    if (!isMobile) {
+      setIsMobileEditorOpen(false);
+    }
+  }, [isMobile]);
 
   const buildArticleDraftPayload = () => ({
     title: title.trim(),
@@ -622,6 +638,9 @@ export default function ArticlesPage() {
             void onEdit(next[0]);
           } else {
             resetForm();
+            if (isMobile) {
+              setIsMobileEditorOpen(false);
+            }
           }
         }
         return next;
@@ -852,18 +871,28 @@ export default function ArticlesPage() {
       ref={containerRef}
       style={{
         display: "grid",
-        gridTemplateColumns: `${leftPaneWidth}px 1fr`,
+        gridTemplateColumns: isMobile ? "1fr" : `${leftPaneWidth}px 1fr`,
         gap: 0,
         height: "calc(100vh - 120px)",
         minHeight: 560,
         position: "relative"
       }}
     >
+      {!isMobile || !isMobileEditorOpen ? (
       <div style={{ overflow: "hidden" }}>
         <Group justify="space-between" p="sm" style={{ borderBottom: "1px solid #e9ecef" }}>
           <Text fw={600}>Articles ({articles.length})</Text>
           <Group gap="xs">
-            <Button variant="light" size="xs" onClick={resetForm}>
+            <Button
+              variant="light"
+              size="xs"
+              onClick={() => {
+                resetForm();
+                if (isMobile) {
+                  setIsMobileEditorOpen(true);
+                }
+              }}
+            >
               New
             </Button>
           </Group>
@@ -1011,7 +1040,9 @@ export default function ArticlesPage() {
           </Stack>
         </ScrollArea>
       </div>
+      ) : null}
 
+      {!isMobile ? (
       <div
         onMouseDown={startPaneResize}
         style={{
@@ -1025,7 +1056,9 @@ export default function ArticlesPage() {
           background: "linear-gradient(to right, transparent 3px, #e9ecef 3px, #e9ecef 4px, transparent 4px)"
         }}
       />
+      ) : null}
 
+      {!isMobile || isMobileEditorOpen ? (
       <div style={{ padding: "12px clamp(8px, 2.5vw, 12px)", overflow: "auto" }}>
         {!hasLoadedArticles ? (
           <Center h="100%">
@@ -1038,6 +1071,11 @@ export default function ArticlesPage() {
         <Stack>
           <Group justify="space-between">
             <Group gap="xs" wrap="nowrap">
+              {isMobile ? (
+                <Button variant="subtle" size="xs" onClick={() => setIsMobileEditorOpen(false)}>
+                  Back
+                </Button>
+              ) : null}
               <Text fw={700}>{editingId ? "Edit Article" : "New Article"}</Text>
               {editingId && (autosaveStatus === "saving" || autosaveStatus === "error") ? (
                 <Text size="xs" c={autosaveStatus === "error" ? "red" : "dimmed"}>
@@ -1215,7 +1253,7 @@ export default function ArticlesPage() {
                 className="markdown-editor-monospace"
                 value={markdown}
                 onChange={(value) => setMarkdown(value ?? "")}
-                preview="live"
+                preview={isMobile ? "edit" : "live"}
                 height={350}
                 textareaProps={{
                   placeholder: "Write your article content (paste image inline)",
@@ -1260,6 +1298,7 @@ export default function ArticlesPage() {
         </Stack>
         )}
       </div>
+      ) : null}
 
       <Modal
         opened={Boolean(deleteArticleId)}

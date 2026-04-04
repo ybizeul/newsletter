@@ -12,6 +12,7 @@ import {
   Text,
   TextInput
 } from "@mantine/core";
+import { useMediaQuery } from "@mantine/hooks";
 import {
   IconAlignCenter,
   IconAlignLeft,
@@ -453,6 +454,8 @@ export default function HeadersPage() {
   const autosaveClearSavedRef = useRef<number | null>(null);
   const lastSavedDraftRef = useRef<string>("");
   const [leftPaneWidth, setLeftPaneWidth] = useState(getStoredHeadersPaneWidth);
+  const isMobile = useMediaQuery("(max-width: 48em)");
+  const [isMobileEditorOpen, setIsMobileEditorOpen] = useState(false);
   const [headers, setHeaders] = useState<Header[]>([]);
   const [selectedHeaderId, setSelectedHeaderID] = useState<string | null>(null);
   const [title, setTitle] = useState("");
@@ -706,6 +709,9 @@ export default function HeadersPage() {
       editor?.commands.setContent(rawContent || "<p></p>");
       lastSavedDraftRef.current = JSON.stringify({ title: header.title.trim(), markdown: rawContent });
       setAutosaveStatus("idle");
+      if (isMobile) {
+        setIsMobileEditorOpen(true);
+      }
       requestAnimationFrame(normalizeEditorTableBorders);
       return;
     }
@@ -715,16 +721,26 @@ export default function HeadersPage() {
       editor?.commands.setContent(html || "<p></p>");
       lastSavedDraftRef.current = JSON.stringify({ title: header.title.trim(), markdown: html || "<p></p>" });
       setAutosaveStatus("idle");
+      if (isMobile) {
+        setIsMobileEditorOpen(true);
+      }
       requestAnimationFrame(normalizeEditorTableBorders);
     } catch {
       editor?.commands.setContent("<p></p>");
       lastSavedDraftRef.current = JSON.stringify({ title: header.title.trim(), markdown: "<p></p>" });
       setAutosaveStatus("idle");
+      if (isMobile) {
+        setIsMobileEditorOpen(true);
+      }
     }
   };
 
   useEffect(() => {
     if (headers.length === 0) {
+      return;
+    }
+
+    if (isMobile && !selectedHeaderId) {
       return;
     }
 
@@ -736,7 +752,13 @@ export default function HeadersPage() {
     if (!headers.some((header) => header.id === selectedHeaderId)) {
       resetForm();
     }
-  }, [headers]);
+  }, [headers, isMobile, selectedHeaderId]);
+
+  useEffect(() => {
+    if (!isMobile) {
+      setIsMobileEditorOpen(false);
+    }
+  }, [isMobile]);
 
   const onSave = async () => {
     if (!title.trim()) {
@@ -851,6 +873,9 @@ export default function HeadersPage() {
       setHeaders((current) => current.filter((header) => header.id !== deleteHeaderId));
       if (selectedHeaderId === deleteHeaderId) {
         resetForm();
+        if (isMobile) {
+          setIsMobileEditorOpen(false);
+        }
       }
       setDeleteHeaderId(null);
     } catch (err) {
@@ -1067,18 +1092,28 @@ export default function HeadersPage() {
       ref={containerRef}
       style={{
         display: "grid",
-        gridTemplateColumns: `${leftPaneWidth}px 1fr`,
+        gridTemplateColumns: isMobile ? "1fr" : `${leftPaneWidth}px 1fr`,
         gap: 0,
         height: "calc(100vh - 120px)",
         minHeight: 560,
         position: "relative"
       }}
     >
+      {!isMobile || !isMobileEditorOpen ? (
       <div style={{ overflow: "hidden" }}>
         <Group justify="space-between" p="sm" style={{ borderBottom: "1px solid #e9ecef" }}>
           <Text fw={600}>Headers ({headers.length})</Text>
           <Group gap="xs">
-            <Button variant="light" size="xs" onClick={resetForm}>
+            <Button
+              variant="light"
+              size="xs"
+              onClick={() => {
+                resetForm();
+                if (isMobile) {
+                  setIsMobileEditorOpen(true);
+                }
+              }}
+            >
               New
             </Button>
           </Group>
@@ -1144,7 +1179,9 @@ export default function HeadersPage() {
           </Stack>
         </ScrollArea>
       </div>
+      ) : null}
 
+      {!isMobile ? (
       <div
         onMouseDown={startPaneResize}
         style={{
@@ -1158,11 +1195,18 @@ export default function HeadersPage() {
           background: "linear-gradient(to right, transparent 3px, #e9ecef 3px, #e9ecef 4px, transparent 4px)"
         }}
       />
+      ) : null}
 
+      {!isMobile || isMobileEditorOpen ? (
       <div style={{ padding: "12px clamp(8px, 2.5vw, 12px)", overflow: "auto" }}>
         <Stack>
           <Group justify="space-between">
             <Group gap="xs" wrap="nowrap">
+              {isMobile ? (
+                <Button variant="subtle" size="xs" onClick={() => setIsMobileEditorOpen(false)}>
+                  Back
+                </Button>
+              ) : null}
               <Text fw={700}>{selectedHeaderId ? "Edit Header" : "New Header"}</Text>
               {selectedHeaderId && (autosaveStatus === "saving" || autosaveStatus === "error") ? (
                 <Text size="xs" c={autosaveStatus === "error" ? "red" : "dimmed"}>
@@ -1397,6 +1441,7 @@ export default function HeadersPage() {
           {error ? <Text c="red">{error}</Text> : null}
         </Stack>
       </div>
+      ) : null}
 
       <Modal
         opened={Boolean(deleteHeaderId)}
