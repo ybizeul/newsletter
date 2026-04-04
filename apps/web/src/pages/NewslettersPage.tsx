@@ -618,13 +618,13 @@ export default function NewslettersPage() {
               >
                 <Stack gap={6} style={{ flex: 1 }}>
                   <Group justify="space-between" align="flex-start" wrap="nowrap" gap="xs">
-                    <Group gap={6} wrap="nowrap" style={{ flex: 1, minWidth: 0 }}>
+                    <Group gap={6} wrap="nowrap" style={{ flex: 1, minWidth: 0, justifyContent: "flex-start" }}>
                       <Text
                         fw={700}
                         size="sm"
                         style={{
-                          flex: 1,
                           minWidth: 0,
+                          maxWidth: "100%",
                           whiteSpace: "nowrap",
                           overflow: "hidden",
                           textOverflow: "ellipsis"
