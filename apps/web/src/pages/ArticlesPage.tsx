@@ -218,6 +218,11 @@ function toArticleSummary(article: Article): ArticleSummary {
 
 export default function ArticlesPage() {
   const containerRef = useRef<HTMLDivElement | null>(null);
+  const headerRowRef = useRef<HTMLDivElement | null>(null);
+  const headerLeftRef = useRef<HTMLDivElement | null>(null);
+  const headerActionsRef = useRef<HTMLDivElement | null>(null);
+  const favoriteCompactRef = useRef<HTMLButtonElement | null>(null);
+  const favoriteMeasureRef = useRef<HTMLButtonElement | null>(null);
   const autosaveTimerRef = useRef<number | null>(null);
   const autosaveClearSavedRef = useRef<number | null>(null);
   const lastSavedDraftRef = useRef<string>("");
@@ -259,6 +264,7 @@ export default function ArticlesPage() {
   const [isAddingToFavorite, setIsAddingToFavorite] = useState(false);
   const [isFavoriteMembershipLoading, setIsFavoriteMembershipLoading] = useState(false);
   const [isEditingArticleInFavorite, setIsEditingArticleInFavorite] = useState(false);
+  const [isCompactFavoriteAction, setIsCompactFavoriteAction] = useState(false);
 
   const loadArticles = async () => {
     setIsLoading(true);
@@ -513,6 +519,52 @@ export default function ArticlesPage() {
       setIsMobileEditorOpen(false);
     }
   }, [isMobile]);
+
+  useEffect(() => {
+    const row = headerRowRef.current;
+    const left = headerLeftRef.current;
+    const actions = headerActionsRef.current;
+    if (!row || !left || !actions || !isMobile || !editingId || !favoriteNewsletterId) {
+      setIsCompactFavoriteAction(false);
+      return;
+    }
+
+    const evaluateCompactMode = () => {
+      const available = row.clientWidth;
+      const leftNeeded = left.scrollWidth;
+      const actionsNeeded = actions.scrollWidth;
+      const currentlyNeeded = leftNeeded + actionsNeeded;
+
+      if (!isCompactFavoriteAction && currentlyNeeded > available + 1) {
+        setIsCompactFavoriteAction(true);
+        return;
+      }
+
+      if (isCompactFavoriteAction) {
+        const compactWidth = favoriteCompactRef.current?.offsetWidth ?? 34;
+        const fullWidth = favoriteMeasureRef.current?.offsetWidth ?? compactWidth;
+        const extraNeededForFull = Math.max(0, fullWidth - compactWidth);
+        const neededForFull = currentlyNeeded + extraNeededForFull;
+
+        if (neededForFull <= available - 12) {
+          setIsCompactFavoriteAction(false);
+        }
+      }
+    };
+
+    const rafId = window.requestAnimationFrame(evaluateCompactMode);
+    const resizeObserver = new ResizeObserver(evaluateCompactMode);
+    resizeObserver.observe(row);
+    resizeObserver.observe(left);
+    resizeObserver.observe(actions);
+    window.addEventListener("resize", evaluateCompactMode);
+
+    return () => {
+      window.cancelAnimationFrame(rafId);
+      resizeObserver.disconnect();
+      window.removeEventListener("resize", evaluateCompactMode);
+    };
+  }, [isMobile, editingId, favoriteNewsletterId, favoriteNewsletterName, autosaveStatus, isCompactFavoriteAction]);
 
   const buildArticleDraftPayload = () => ({
     title: title.trim(),
@@ -1069,47 +1121,87 @@ export default function ArticlesPage() {
           </Center>
         ) : (
         <Stack>
-          <Group justify="space-between">
-            <Group gap="xs" wrap="nowrap">
+          <Group justify="space-between" wrap="nowrap" ref={headerRowRef}>
+            <Group gap="xs" wrap="nowrap" ref={headerLeftRef}>
               {isMobile ? (
                 <Button variant="subtle" size="xs" onClick={() => setIsMobileEditorOpen(false)}>
-                  Close
+                  Back
                 </Button>
               ) : null}
-              <Text fw={700}>{editingId ? "Edit Article" : "New Article"}</Text>
+              <Text fw={700} style={{ whiteSpace: "nowrap", flexShrink: 0 }}>
+                {editingId ? "Edit Article" : "New Article"}
+              </Text>
               {editingId && (autosaveStatus === "saving" || autosaveStatus === "error") ? (
                 <Text size="xs" c={autosaveStatus === "error" ? "red" : "dimmed"}>
                   {autosaveStatus === "saving" ? "Saving..." : "Autosave failed"}
                 </Text>
               ) : null}
-              {editingId && favoriteNewsletterId ? (
-                <Button
-                  variant="default"
-                  size="xs"
-                  leftSection={
-                    <IconMail
-                      size={14}
-                      color={isEditingArticleInFavorite ? "#228be6" : "#adb5bd"}
-                    />
-                  }
-                  onClick={() => void onToggleFavoriteNewsletterMembership()}
-                  disabled={!favoriteNewsletterId || !favoriteNewsletterName || isAddingToFavorite || isFavoriteMembershipLoading}
-                  loading={isAddingToFavorite}
-                >
-                  {favoriteNewsletterName
-                    ? `${isEditingArticleInFavorite ? "Remove from" : "Add to"} ${favoriteNewsletterName}`
-                    : "Add to favorite newsletter"}
-                </Button>
-              ) : null}
             </Group>
             {editingId ? (
-              <Group gap="xs">
+              <Group gap="xs" wrap="nowrap" ref={headerActionsRef}>
+                {favoriteNewsletterId ? (
+                  isCompactFavoriteAction ? (
+                    <ActionIcon
+                      ref={favoriteCompactRef}
+                      variant="default"
+                      size="md"
+                      onClick={() => void onToggleFavoriteNewsletterMembership()}
+                      disabled={!favoriteNewsletterId || !favoriteNewsletterName || isAddingToFavorite || isFavoriteMembershipLoading}
+                      loading={isAddingToFavorite}
+                      title={favoriteNewsletterName
+                        ? `${isEditingArticleInFavorite ? "Remove from" : "Add to"} ${favoriteNewsletterName}`
+                        : "Add to favorite newsletter"}
+                      aria-label={favoriteNewsletterName
+                        ? `${isEditingArticleInFavorite ? "Remove from" : "Add to"} ${favoriteNewsletterName}`
+                        : "Add to favorite newsletter"}
+                    >
+                      <IconMail
+                        size={14}
+                        color={isEditingArticleInFavorite ? "#228be6" : "#adb5bd"}
+                      />
+                    </ActionIcon>
+                  ) : (
+                    <Button
+                      variant="default"
+                      size="xs"
+                      leftSection={
+                        <IconMail
+                          size={14}
+                          color={isEditingArticleInFavorite ? "#228be6" : "#adb5bd"}
+                        />
+                      }
+                      onClick={() => void onToggleFavoriteNewsletterMembership()}
+                      disabled={!favoriteNewsletterId || !favoriteNewsletterName || isAddingToFavorite || isFavoriteMembershipLoading}
+                      loading={isAddingToFavorite}
+                    >
+                      {favoriteNewsletterName
+                        ? `${isEditingArticleInFavorite ? "Remove from" : "Add to"} ${favoriteNewsletterName}`
+                        : "Add to favorite newsletter"}
+                    </Button>
+                  )
+                ) : null}
                 <Button color="red" variant="light" size="xs" onClick={() => requestDeleteArticle(editingId)}>
                   Delete
                 </Button>
               </Group>
             ) : null}
           </Group>
+
+          {editingId && favoriteNewsletterId ? (
+            <Button
+              ref={favoriteMeasureRef}
+              variant="default"
+              size="xs"
+              leftSection={<IconMail size={14} color={isEditingArticleInFavorite ? "#228be6" : "#adb5bd"} />}
+              style={{ position: "absolute", visibility: "hidden", pointerEvents: "none", height: 0, overflow: "hidden" }}
+              tabIndex={-1}
+              aria-hidden
+            >
+              {favoriteNewsletterName
+                ? `${isEditingArticleInFavorite ? "Remove from" : "Add to"} ${favoriteNewsletterName}`
+                : "Add to favorite newsletter"}
+            </Button>
+          ) : null}
 
           <Group align="flex-end" wrap="nowrap">
             <UnstyledButton

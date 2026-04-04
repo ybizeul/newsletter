@@ -1204,7 +1204,7 @@ export default function HeadersPage() {
             <Group gap="xs" wrap="nowrap">
               {isMobile ? (
                 <Button variant="subtle" size="xs" onClick={() => setIsMobileEditorOpen(false)}>
-                  Close
+                  Back
                 </Button>
               ) : null}
               <Text fw={700}>{selectedHeaderId ? "Edit Header" : "New Header"}</Text>
