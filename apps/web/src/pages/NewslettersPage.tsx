@@ -725,7 +725,7 @@ export default function NewslettersPage() {
             <Group gap="xs" wrap="nowrap">
               {isMobile ? (
                 <Button variant="subtle" size="xs" onClick={() => setIsMobileEditorOpen(false)}>
-                  Back
+                  Close
                 </Button>
               ) : null}
               <Text fw={700}>{selectedNewsletterId ? "Edit Newsletter" : "New Newsletter"}</Text>

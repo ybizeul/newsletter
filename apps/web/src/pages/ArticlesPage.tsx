@@ -1073,7 +1073,7 @@ export default function ArticlesPage() {
             <Group gap="xs" wrap="nowrap">
               {isMobile ? (
                 <Button variant="subtle" size="xs" onClick={() => setIsMobileEditorOpen(false)}>
-                  Back
+                  Close
                 </Button>
               ) : null}
               <Text fw={700}>{editingId ? "Edit Article" : "New Article"}</Text>
