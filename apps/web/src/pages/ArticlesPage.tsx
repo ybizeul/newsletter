@@ -23,7 +23,7 @@ import {
   UnstyledButton,
   useCombobox
 } from "@mantine/core";
-import { IconCheck, IconChevronDown, IconFilePlus, IconMail, IconPencil, IconRefresh, IconSearch, IconStar } from "@tabler/icons-react";
+import { IconCheck, IconChevronDown, IconFilePlus, IconMail, IconPencil, IconRefresh, IconSearch } from "@tabler/icons-react";
 import MDEditor from "@uiw/react-md-editor";
 import { renderToStaticMarkup } from "react-dom/server";
 import "@uiw/react-md-editor/markdown-editor.css";
@@ -1048,10 +1048,9 @@ export default function ArticlesPage() {
                   variant="default"
                   size="xs"
                   leftSection={
-                    <IconStar
+                    <IconMail
                       size={14}
-                      fill={isEditingArticleInFavorite ? "#fcc419" : "#ffffff"}
-                      color={isEditingArticleInFavorite ? "#f59f00" : "#adb5bd"}
+                      color={isEditingArticleInFavorite ? "#228be6" : "#adb5bd"}
                     />
                   }
                   onClick={() => void onToggleFavoriteNewsletterMembership()}
