@@ -16,9 +16,7 @@ import {
   TextInput
 } from "@mantine/core";
 import {
-  IconFilePlus,
   IconGripVertical,
-  IconRefresh,
   IconSend,
   IconStar,
   IconX
@@ -408,6 +406,7 @@ export default function NewslettersPage() {
     }
 
     autosaveTimerRef.current = window.setTimeout(async () => {
+      const savingStartedAt = Date.now();
       setAutosaveStatus("saving");
       try {
         const updated = await updateNewsletter(selectedNewsletterId, payload);
@@ -415,11 +414,15 @@ export default function NewslettersPage() {
           current.map((newsletter) => (newsletter.id === selectedNewsletterId ? withFavoriteFlag(toNewsletterSummary(updated)) : newsletter))
         );
         lastSavedDraftRef.current = serializedPayload;
-        setAutosaveStatus("saved");
-        scheduleAutosaveSavedReset();
+        if (autosaveClearSavedRef.current !== null) {
+          window.clearTimeout(autosaveClearSavedRef.current);
+        }
+        const remainingSavingMs = Math.max(0, 1000 - (Date.now() - savingStartedAt));
+        autosaveClearSavedRef.current = window.setTimeout(() => {
+          setAutosaveStatus("idle");
+        }, remainingSavingMs);
       } catch (err) {
         setAutosaveStatus("error");
-        setError(err instanceof Error ? err.message : "Failed to autosave newsletter");
       }
     }, 900);
 
@@ -590,12 +593,9 @@ export default function NewslettersPage() {
         <Group justify="space-between" p="sm" style={{ borderBottom: "1px solid #e9ecef" }}>
           <Text fw={600}>Newsletters ({newsletters.length})</Text>
           <Group gap="xs">
-            <ActionIcon variant="light" onClick={resetForm} title="New newsletter">
-              <IconFilePlus size={16} />
-            </ActionIcon>
-            <ActionIcon variant="light" onClick={() => void loadData()} loading={isLoading} title="Refresh">
-              <IconRefresh size={16} />
-            </ActionIcon>
+            <Button variant="light" size="xs" onClick={resetForm}>
+              New
+            </Button>
           </Group>
         </Group>
 
@@ -689,7 +689,14 @@ export default function NewslettersPage() {
         ) : (
         <Stack>
           <Group justify="space-between">
-            <Text fw={700}>{selectedNewsletterId ? "Edit Newsletter" : "New Newsletter"}</Text>
+            <Group gap="xs" wrap="nowrap">
+              <Text fw={700}>{selectedNewsletterId ? "Edit Newsletter" : "New Newsletter"}</Text>
+              {selectedNewsletterId && (autosaveStatus === "saving" || autosaveStatus === "error") ? (
+                <Text size="xs" c={autosaveStatus === "error" ? "red" : "dimmed"}>
+                  {autosaveStatus === "saving" ? "Saving..." : "Autosave failed"}
+                </Text>
+              ) : null}
+            </Group>
             {selectedNewsletterId ? (
               <Group gap="xs">
                 <ActionIcon
@@ -713,9 +720,6 @@ export default function NewslettersPage() {
                   onClick={() => navigate(`/newsletters/${selectedNewsletterId}/preview`)}
                 >
                   Preview
-                </Button>
-                <Button variant="default" size="xs" onClick={resetForm}>
-                  Cancel
                 </Button>
                 <Button color="red" variant="light" size="xs" onClick={() => requestDeleteNewsletter(selectedNewsletterId)}>
                   Delete
@@ -907,9 +911,11 @@ export default function NewslettersPage() {
 
           <Group justify="space-between">
             <Group gap="xs">
-              <Button onClick={() => void onSave()} loading={isSubmitting}>
-                {selectedNewsletterId ? "Save Changes" : "Create Newsletter"}
-              </Button>
+              {!selectedNewsletterId ? (
+                <Button onClick={() => void onSave()} loading={isSubmitting}>
+                  Create Newsletter
+                </Button>
+              ) : null}
               {smtpConfigured ? (
                 <Button variant="light" onClick={() => void onSchedule()} disabled={!selectedNewsletterId}>
                   Schedule
@@ -927,17 +933,7 @@ export default function NewslettersPage() {
                 </Button>
               ) : null}
             </Group>
-            <Text size="xs" c={autosaveStatus === "error" ? "red" : "dimmed"}>
-              {selectedNewsletterId
-                ? autosaveStatus === "saving"
-                  ? "Autosaving..."
-                  : autosaveStatus === "saved"
-                    ? "All changes saved"
-                    : autosaveStatus === "error"
-                      ? "Autosave failed"
-                      : ""
-                : ""}
-            </Text>
+            <div />
           </Group>
 
           {selectedNewsletter?.deliveryError ? (

@@ -23,7 +23,7 @@ import {
   UnstyledButton,
   useCombobox
 } from "@mantine/core";
-import { IconCheck, IconChevronDown, IconFilePlus, IconMail, IconPencil, IconRefresh, IconSearch } from "@tabler/icons-react";
+import { IconCheck, IconChevronDown, IconMail, IconPencil, IconSearch } from "@tabler/icons-react";
 import MDEditor from "@uiw/react-md-editor";
 import { renderToStaticMarkup } from "react-dom/server";
 import "@uiw/react-md-editor/markdown-editor.css";
@@ -567,6 +567,7 @@ export default function ArticlesPage() {
     }
 
     autosaveTimerRef.current = window.setTimeout(async () => {
+      const savingStartedAt = Date.now();
       setAutosaveStatus("saving");
       try {
         const updated = await updateArticle(editingId, payload);
@@ -574,17 +575,15 @@ export default function ArticlesPage() {
           current.map((article) => (article.id === editingId ? toArticleSummary(updated) : article))
         );
         lastSavedDraftRef.current = serializedPayload;
-        setAutosaveStatus("saved");
-
         if (autosaveClearSavedRef.current !== null) {
           window.clearTimeout(autosaveClearSavedRef.current);
         }
+        const remainingSavingMs = Math.max(0, 1000 - (Date.now() - savingStartedAt));
         autosaveClearSavedRef.current = window.setTimeout(() => {
           setAutosaveStatus("idle");
-        }, 1200);
+        }, remainingSavingMs);
       } catch (err) {
         setAutosaveStatus("error");
-        setError(err instanceof Error ? err.message : "Failed to autosave article");
       }
     }, 900);
 
@@ -864,12 +863,9 @@ export default function ArticlesPage() {
         <Group justify="space-between" p="sm" style={{ borderBottom: "1px solid #e9ecef" }}>
           <Text fw={600}>Articles ({articles.length})</Text>
           <Group gap="xs">
-            <ActionIcon variant="light" onClick={resetForm} title="New article">
-              <IconFilePlus size={16} />
-            </ActionIcon>
-            <ActionIcon variant="light" onClick={() => void loadArticles()} loading={isLoading} title="Refresh">
-              <IconRefresh size={16} />
-            </ActionIcon>
+            <Button variant="light" size="xs" onClick={resetForm}>
+              New
+            </Button>
           </Group>
         </Group>
 
@@ -1043,6 +1039,11 @@ export default function ArticlesPage() {
           <Group justify="space-between">
             <Group gap="xs" wrap="nowrap">
               <Text fw={700}>{editingId ? "Edit Article" : "New Article"}</Text>
+              {editingId && (autosaveStatus === "saving" || autosaveStatus === "error") ? (
+                <Text size="xs" c={autosaveStatus === "error" ? "red" : "dimmed"}>
+                  {autosaveStatus === "saving" ? "Saving..." : "Autosave failed"}
+                </Text>
+              ) : null}
               {editingId && favoriteNewsletterId ? (
                 <Button
                   variant="default"
@@ -1065,9 +1066,6 @@ export default function ArticlesPage() {
             </Group>
             {editingId ? (
               <Group gap="xs">
-                <Button variant="default" size="xs" onClick={resetForm}>
-                  Cancel
-                </Button>
                 <Button color="red" variant="light" size="xs" onClick={() => requestDeleteArticle(editingId)}>
                   Delete
                 </Button>
@@ -1250,20 +1248,12 @@ export default function ArticlesPage() {
           </Input.Wrapper>
 
           <Group justify="space-between">
-            <Text size="xs" c={autosaveStatus === "error" ? "red" : "dimmed"}>
-              {editingId
-                ? autosaveStatus === "saving"
-                  ? "Autosaving..."
-                  : autosaveStatus === "saved"
-                    ? "All changes saved"
-                    : autosaveStatus === "error"
-                      ? "Autosave failed"
-                      : ""
-                : ""}
-            </Text>
-            <Button leftSection={<IconPencil size={16} />} onClick={() => void onSubmit()} loading={isSubmitting}>
-              {editingId ? "Save Changes" : "Create Article"}
-            </Button>
+            <div />
+            {!editingId ? (
+              <Button leftSection={<IconPencil size={16} />} onClick={() => void onSubmit()} loading={isSubmitting}>
+                Create Article
+              </Button>
+            ) : null}
           </Group>
 
           {error ? <Text c="red">{error}</Text> : null}

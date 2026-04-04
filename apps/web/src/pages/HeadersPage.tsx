@@ -18,10 +18,8 @@ import {
   IconAlignRight,
   IconChevronDown,
   IconBold,
-  IconFilePlus,
   IconH1,
   IconItalic,
-  IconRefresh,
   IconTable,
   IconTablePlus,
   IconUnderline
@@ -451,12 +449,17 @@ function readFileAsDataURL(file: File): Promise<string> {
 export default function HeadersPage() {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const lastTablePosRef = useRef<number | null>(null);
+  const autosaveTimerRef = useRef<number | null>(null);
+  const autosaveClearSavedRef = useRef<number | null>(null);
+  const lastSavedDraftRef = useRef<string>("");
   const [leftPaneWidth, setLeftPaneWidth] = useState(getStoredHeadersPaneWidth);
   const [headers, setHeaders] = useState<Header[]>([]);
   const [selectedHeaderId, setSelectedHeaderID] = useState<string | null>(null);
   const [title, setTitle] = useState("");
+  const [editorContentVersion, setEditorContentVersion] = useState(0);
   const [isLoading, setIsLoading] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [autosaveStatus, setAutosaveStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const [error, setError] = useState<string | null>(null);
   const [deleteHeaderId, setDeleteHeaderId] = useState<string | null>(null);
   const [tableDeletionAction, setTableDeletionAction] = useState<"row" | "column" | "table" | null>(null);
@@ -552,11 +555,28 @@ export default function HeadersPage() {
     };
   }, [editor]);
 
+  useEffect(() => {
+    if (!editor) {
+      return;
+    }
+
+    const onUpdate = () => {
+      setEditorContentVersion((current) => current + 1);
+    };
+
+    editor.on("update", onUpdate);
+    return () => {
+      editor.off("update", onUpdate);
+    };
+  }, [editor]);
+
   const resetForm = () => {
     setSelectedHeaderID(null);
     setTitle("");
     lastTablePosRef.current = null;
     editor?.commands.setContent("<p></p>");
+    lastSavedDraftRef.current = "";
+    setAutosaveStatus("idle");
   };
 
   const normalizeEditorTableBorders = () => {
@@ -684,6 +704,8 @@ export default function HeadersPage() {
     const rawContent = header.markdown ?? "";
     if (looksLikeHTML(rawContent)) {
       editor?.commands.setContent(rawContent || "<p></p>");
+      lastSavedDraftRef.current = JSON.stringify({ title: header.title.trim(), markdown: rawContent });
+      setAutosaveStatus("idle");
       requestAnimationFrame(normalizeEditorTableBorders);
       return;
     }
@@ -691,9 +713,13 @@ export default function HeadersPage() {
     try {
       const html = await renderMarkdown(rawContent);
       editor?.commands.setContent(html || "<p></p>");
+      lastSavedDraftRef.current = JSON.stringify({ title: header.title.trim(), markdown: html || "<p></p>" });
+      setAutosaveStatus("idle");
       requestAnimationFrame(normalizeEditorTableBorders);
     } catch {
       editor?.commands.setContent("<p></p>");
+      lastSavedDraftRef.current = JSON.stringify({ title: header.title.trim(), markdown: "<p></p>" });
+      setAutosaveStatus("idle");
     }
   };
 
@@ -731,6 +757,8 @@ export default function HeadersPage() {
           markdown
         });
         setHeaders((current) => current.map((header) => (header.id === selectedHeaderId ? updated : header)));
+        lastSavedDraftRef.current = JSON.stringify({ title: title.trim(), markdown });
+        setAutosaveStatus("saved");
       } else {
         const created = await createHeader({
           creatorId: DEMO_CREATOR_ID,
@@ -739,13 +767,74 @@ export default function HeadersPage() {
         });
         setHeaders((current) => [created, ...current]);
         setSelectedHeaderID(created.id);
+        lastSavedDraftRef.current = JSON.stringify({ title: created.title.trim(), markdown: created.markdown });
+        setAutosaveStatus("idle");
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to save header");
+      setAutosaveStatus("error");
     } finally {
       setIsSubmitting(false);
     }
   };
+
+  useEffect(() => {
+    if (!editor || !selectedHeaderId || isSubmitting) {
+      return;
+    }
+
+    const trimmedTitle = title.trim();
+    if (!trimmedTitle) {
+      return;
+    }
+
+    const markdown = normalizeHeaderTableCellHorizontalAlignment(editor.getHTML() ?? "");
+    const serializedPayload = JSON.stringify({ title: trimmedTitle, markdown });
+    if (serializedPayload === lastSavedDraftRef.current) {
+      return;
+    }
+
+    if (autosaveTimerRef.current !== null) {
+      window.clearTimeout(autosaveTimerRef.current);
+    }
+
+    autosaveTimerRef.current = window.setTimeout(async () => {
+      const savingStartedAt = Date.now();
+      setAutosaveStatus("saving");
+      try {
+        const updated = await updateHeader(selectedHeaderId, {
+          title: trimmedTitle,
+          markdown
+        });
+        setHeaders((current) => current.map((header) => (header.id === selectedHeaderId ? updated : header)));
+        lastSavedDraftRef.current = serializedPayload;
+        if (autosaveClearSavedRef.current !== null) {
+          window.clearTimeout(autosaveClearSavedRef.current);
+        }
+        const remainingSavingMs = Math.max(0, 1000 - (Date.now() - savingStartedAt));
+        autosaveClearSavedRef.current = window.setTimeout(() => {
+          setAutosaveStatus("idle");
+        }, remainingSavingMs);
+      } catch (err) {
+        setAutosaveStatus("error");
+      }
+    }, 900);
+
+    return () => {
+      if (autosaveTimerRef.current !== null) {
+        window.clearTimeout(autosaveTimerRef.current);
+      }
+    };
+  }, [editor, selectedHeaderId, title, editorContentVersion, isSubmitting]);
+
+  useEffect(() => () => {
+    if (autosaveTimerRef.current !== null) {
+      window.clearTimeout(autosaveTimerRef.current);
+    }
+    if (autosaveClearSavedRef.current !== null) {
+      window.clearTimeout(autosaveClearSavedRef.current);
+    }
+  }, []);
 
   const requestDeleteHeader = (headerId: string) => {
     setDeleteHeaderId(headerId);
@@ -989,12 +1078,9 @@ export default function HeadersPage() {
         <Group justify="space-between" p="sm" style={{ borderBottom: "1px solid #e9ecef" }}>
           <Text fw={600}>Headers ({headers.length})</Text>
           <Group gap="xs">
-            <ActionIcon variant="light" onClick={resetForm} title="New header">
-              <IconFilePlus size={16} />
-            </ActionIcon>
-            <ActionIcon variant="light" onClick={() => void loadHeaders()} loading={isLoading} title="Refresh">
-              <IconRefresh size={16} />
-            </ActionIcon>
+            <Button variant="light" size="xs" onClick={resetForm}>
+              New
+            </Button>
           </Group>
         </Group>
 
@@ -1076,12 +1162,16 @@ export default function HeadersPage() {
       <div style={{ padding: "12px clamp(8px, 2.5vw, 12px)", overflow: "auto" }}>
         <Stack>
           <Group justify="space-between">
-            <Text fw={700}>{selectedHeaderId ? "Edit Header" : "New Header"}</Text>
+            <Group gap="xs" wrap="nowrap">
+              <Text fw={700}>{selectedHeaderId ? "Edit Header" : "New Header"}</Text>
+              {selectedHeaderId && (autosaveStatus === "saving" || autosaveStatus === "error") ? (
+                <Text size="xs" c={autosaveStatus === "error" ? "red" : "dimmed"}>
+                  {autosaveStatus === "saving" ? "Saving..." : "Autosave failed"}
+                </Text>
+              ) : null}
+            </Group>
             {selectedHeaderId ? (
               <Group gap="xs">
-                <Button variant="default" size="xs" onClick={resetForm}>
-                  Cancel
-                </Button>
                 <Button color="red" variant="light" size="xs" onClick={() => requestDeleteHeader(selectedHeaderId)}>
                   Delete
                 </Button>
@@ -1294,10 +1384,13 @@ export default function HeadersPage() {
           </Stack>
 
           <Group justify="space-between">
+            <div />
             <Group gap="xs">
-              <Button onClick={() => void onSave()} loading={isSubmitting}>
-                {selectedHeaderId ? "Save Changes" : "Create Header"}
-              </Button>
+              {!selectedHeaderId ? (
+                <Button onClick={() => void onSave()} loading={isSubmitting}>
+                  Create Header
+                </Button>
+              ) : null}
             </Group>
           </Group>
 
