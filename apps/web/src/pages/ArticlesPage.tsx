@@ -23,7 +23,7 @@ import {
   UnstyledButton,
   useCombobox
 } from "@mantine/core";
-import { IconCheck, IconChevronDown, IconFilePlus, IconPencil, IconRefresh, IconSearch, IconStar } from "@tabler/icons-react";
+import { IconCheck, IconChevronDown, IconFilePlus, IconMail, IconPencil, IconRefresh, IconSearch, IconStar } from "@tabler/icons-react";
 import MDEditor from "@uiw/react-md-editor";
 import { renderToStaticMarkup } from "react-dom/server";
 import "@uiw/react-md-editor/markdown-editor.css";
@@ -252,6 +252,7 @@ export default function ArticlesPage() {
   const [autosaveStatus, setAutosaveStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const [favoriteNewsletterId, setFavoriteNewsletterId] = useState<string | null>(getStoredFavoriteNewsletterId);
   const [favoriteNewsletterName, setFavoriteNewsletterName] = useState<string>("");
+  const [favoriteNewsletterArticleIds, setFavoriteNewsletterArticleIds] = useState<string[]>([]);
   const [isAddingToFavorite, setIsAddingToFavorite] = useState(false);
   const [isFavoriteMembershipLoading, setIsFavoriteMembershipLoading] = useState(false);
   const [isEditingArticleInFavorite, setIsEditingArticleInFavorite] = useState(false);
@@ -281,6 +282,7 @@ export default function ArticlesPage() {
 
       if (!currentFavoriteId) {
         setFavoriteNewsletterName("");
+        setFavoriteNewsletterArticleIds([]);
         return;
       }
 
@@ -291,11 +293,16 @@ export default function ArticlesPage() {
           window.localStorage.removeItem(FAVORITE_NEWSLETTER_ID_STORAGE_KEY);
           setFavoriteNewsletterId(null);
           setFavoriteNewsletterName("");
+          setFavoriteNewsletterArticleIds([]);
           return;
         }
         setFavoriteNewsletterName(favorite.title);
+
+        const favoriteDetails = await getNewsletter(currentFavoriteId);
+        setFavoriteNewsletterArticleIds(favoriteDetails.articleIds);
       } catch {
         setFavoriteNewsletterName("");
+        setFavoriteNewsletterArticleIds([]);
       }
     };
 
@@ -316,6 +323,7 @@ export default function ArticlesPage() {
         const newsletter = await getNewsletter(favoriteNewsletterId);
         if (!cancelled) {
           setIsEditingArticleInFavorite(newsletter.articleIds.includes(editingId));
+          setFavoriteNewsletterArticleIds(newsletter.articleIds);
         }
       } catch {
         if (!cancelled) {
@@ -356,6 +364,7 @@ export default function ArticlesPage() {
         articleIds: nextArticleIds,
         recipientIds: newsletter.recipientIds
       });
+      setFavoriteNewsletterArticleIds(nextArticleIds);
       setIsEditingArticleInFavorite(!articleAlreadyIncluded);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to update favorite newsletter articles");
@@ -948,19 +957,24 @@ export default function ArticlesPage() {
               >
                 <Stack gap={6} style={{ flex: 1 }}>
                   <Group justify="space-between" align="flex-start" wrap="nowrap" gap="xs">
-                    <Text
-                      fw={700}
-                      size="sm"
-                      style={{
-                        flex: 1,
-                        minWidth: 0,
-                        whiteSpace: "nowrap",
-                        overflow: "hidden",
-                        textOverflow: "ellipsis"
-                      }}
-                    >
-                      {titleText}
-                    </Text>
+                    <Group gap={6} wrap="nowrap" style={{ flex: 1, minWidth: 0, justifyContent: "flex-start" }}>
+                      <Text
+                        fw={700}
+                        size="sm"
+                        style={{
+                          minWidth: 0,
+                          maxWidth: "100%",
+                          whiteSpace: "nowrap",
+                          overflow: "hidden",
+                          textOverflow: "ellipsis"
+                        }}
+                      >
+                        {titleText}
+                      </Text>
+                      {favoriteNewsletterArticleIds.includes(article.id) ? (
+                        <IconMail size={12} color="#228be6" style={{ flexShrink: 0 }} />
+                      ) : null}
+                    </Group>
                     <Text size="xs" c="dimmed" style={{ flexShrink: 0 }}>
                       {formatArticleCreatedAt(article.createdAt)}
                     </Text>
