@@ -11,8 +11,21 @@ Collaborative newsletter product monorepo:
 - `apps/web`: React web app
 - `apps/api`: Go API server
 - `local/docker-compose.yml`: local dependencies (MongoDB)
-- `infra/docker-compose.deploy.yml`: full Docker Compose deployment example
+- `infra/docker/docker-compose.yml`: Docker Compose deployment example
 - `infra/k8s`: Kubernetes resource file examples
+
+## Product Notes
+
+### Favorite newsletter workflow
+
+- The favorite newsletter is stored in browser local storage (`newsletter.favorite.id`).
+- Only one newsletter can be favorite at a time.
+- In the newsletters list, the favorite newsletter shows a yellow star next to its title.
+- In the articles list, articles that belong to the favorite newsletter show a blue envelope icon next to their title.
+- In article edit view, the action button toggles between:
+	- `Add to <favorite newsletter>` (white star)
+	- `Remove from <favorite newsletter>` (yellow star)
+- If no favorite newsletter is defined, the add/remove button is hidden.
 
 ## Local Development
 
@@ -48,10 +61,10 @@ Then open:
 
 ## Deployment Example: Docker Compose
 
-Use the deployment-oriented compose file at `infra/docker-compose.deploy.yml`.
+Use the deployment-oriented compose file at `infra/docker/docker-compose.yml`.
 
 ```bash
-docker compose -f infra/docker-compose.deploy.yml up -d
+docker compose -f infra/docker/docker-compose.yml up -d
 ```
 
 This starts:
