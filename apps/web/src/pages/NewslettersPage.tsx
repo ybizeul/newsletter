@@ -17,6 +17,8 @@ import {
 } from "@mantine/core";
 import { useMediaQuery } from "@mantine/hooks";
 import {
+  IconChevronDown,
+  IconChevronUp,
   IconGripVertical,
   IconSend,
   IconStar,
@@ -570,6 +572,25 @@ export default function NewslettersPage() {
     });
   };
 
+  const moveArticleByOffset = (articleId: string, offset: -1 | 1) => {
+    setArticleIDs((current) => {
+      const sourceIndex = current.indexOf(articleId);
+      if (sourceIndex < 0) {
+        return current;
+      }
+
+      const targetIndex = sourceIndex + offset;
+      if (targetIndex < 0 || targetIndex >= current.length) {
+        return current;
+      }
+
+      const next = [...current];
+      const [moved] = next.splice(sourceIndex, 1);
+      next.splice(targetIndex, 0, moved);
+      return next;
+    });
+  };
+
   const selectedNewsletter = newsletters.find((newsletter) => newsletter.id === selectedNewsletterId) ?? null;
 
   const startPaneResize = (event: ReactMouseEvent<HTMLDivElement>) => {
@@ -838,15 +859,27 @@ export default function NewslettersPage() {
             </Group>
 
             <Stack gap={8}>
-              {selectedArticleRows.map((article) => (
+              {selectedArticleRows.map((article, index) => (
                 <div
                   key={article.id}
-                  draggable
-                  onDragStart={() => setDraggedArticleId(article.id)}
-                  onDragEnd={() => setDraggedArticleId(null)}
-                  onDragOver={(event) => event.preventDefault()}
+                  draggable={!isMobile}
+                  onDragStart={() => {
+                    if (!isMobile) {
+                      setDraggedArticleId(article.id);
+                    }
+                  }}
+                  onDragEnd={() => {
+                    if (!isMobile) {
+                      setDraggedArticleId(null);
+                    }
+                  }}
+                  onDragOver={(event) => {
+                    if (!isMobile) {
+                      event.preventDefault();
+                    }
+                  }}
                   onDragEnter={() => {
-                    if (draggedArticleId) {
+                    if (!isMobile && draggedArticleId) {
                       moveArticle(draggedArticleId, article.id);
                     }
                   }}
@@ -856,7 +889,7 @@ export default function NewslettersPage() {
                     borderRadius: 8,
                     padding: "8px 10px",
                     background: "#fff",
-                    cursor: "grab"
+                    cursor: isMobile ? "default" : "grab"
                   }}
                 >
                   <Group justify="space-between" wrap="nowrap" style={{ width: "100%" }}>
@@ -904,14 +937,38 @@ export default function NewslettersPage() {
                         {article.title}
                       </Text>
                     </Group>
-                    <ActionIcon
-                      color="red"
-                      variant="subtle"
-                      onClick={() => removeArticleFromNewsletter(article.id)}
-                      title="Remove"
-                    >
-                      <IconX size={16} />
-                    </ActionIcon>
+                    <Group gap={4} wrap="nowrap">
+                      {isMobile ? (
+                        <>
+                          <ActionIcon
+                            variant="subtle"
+                            color="gray"
+                            onClick={() => moveArticleByOffset(article.id, -1)}
+                            disabled={index === 0}
+                            title="Move up"
+                          >
+                            <IconChevronUp size={16} />
+                          </ActionIcon>
+                          <ActionIcon
+                            variant="subtle"
+                            color="gray"
+                            onClick={() => moveArticleByOffset(article.id, 1)}
+                            disabled={index === selectedArticleRows.length - 1}
+                            title="Move down"
+                          >
+                            <IconChevronDown size={16} />
+                          </ActionIcon>
+                        </>
+                      ) : null}
+                      <ActionIcon
+                        color="red"
+                        variant="subtle"
+                        onClick={() => removeArticleFromNewsletter(article.id)}
+                        title="Remove"
+                      >
+                        <IconX size={16} />
+                      </ActionIcon>
+                    </Group>
                   </Group>
                 </div>
               ))}
