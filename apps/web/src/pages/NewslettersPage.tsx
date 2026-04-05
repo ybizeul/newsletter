@@ -894,16 +894,18 @@ export default function NewslettersPage() {
                 >
                   <Group justify="space-between" wrap="nowrap" style={{ width: "100%" }}>
                     <Group gap="xs" wrap="nowrap" style={{ flex: 1, minWidth: 0 }}>
-                      <div
-                        style={{
-                          display: "inline-flex",
-                          alignItems: "center",
-                          justifyContent: "center"
-                        }}
-                        title="Drag row to reorder"
-                      >
-                        <IconGripVertical size={16} color="#868e96" />
-                      </div>
+                      {!isMobile ? (
+                        <div
+                          style={{
+                            display: "inline-flex",
+                            alignItems: "center",
+                            justifyContent: "center"
+                          }}
+                          title="Drag row to reorder"
+                        >
+                          <IconGripVertical size={16} color="#868e96" />
+                        </div>
+                      ) : null}
                       <Box
                         style={{
                           width: 26,
