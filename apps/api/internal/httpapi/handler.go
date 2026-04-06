@@ -124,8 +124,9 @@ func (h *Handler) CreateArticle(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) ListArticles(w http.ResponseWriter, r *http.Request) {
 	findOptions := options.Find().SetSort(bson.D{{Key: "createdAt", Value: -1}})
+	view := strings.ToLower(strings.TrimSpace(r.URL.Query().Get("view")))
 
-	if strings.EqualFold(strings.TrimSpace(r.URL.Query().Get("view")), "summary") {
+	if view != "full" {
 		findOptions.SetProjection(bson.M{
 			"title":        1,
 			"markdown":     1,
