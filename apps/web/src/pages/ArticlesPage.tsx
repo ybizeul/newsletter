@@ -271,6 +271,7 @@ export default function ArticlesPage() {
   const [editingId, setEditingID] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isDuplicatingArticle, setIsDuplicatingArticle] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [deleteArticleId, setDeleteArticleId] = useState<string | null>(null);
   const [hasLoadedArticles, setHasLoadedArticles] = useState(false);
@@ -765,6 +766,35 @@ export default function ArticlesPage() {
     }
   };
 
+  const onDuplicateArticle = async () => {
+    if (!editingId) {
+      return;
+    }
+
+    setIsDuplicatingArticle(true);
+    setError(null);
+
+    try {
+      const source = await getArticle(editingId);
+      const created = await createArticle({
+        authorId: DEMO_AUTHOR_ID,
+        title: `${source.title} (copy)`,
+        markdown: source.markdown,
+        tags: source.tags ?? [],
+        topicIcon: source.topicIcon ?? "",
+        illustration: source.illustration ?? ""
+      });
+
+      const createdSummary = toArticleSummary(created);
+      setArticles((current) => [createdSummary, ...current]);
+      void onEdit(createdSummary);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to duplicate article");
+    } finally {
+      setIsDuplicatingArticle(false);
+    }
+  };
+
   const insertAtCursor = (
     target: HTMLTextAreaElement,
     currentText: string,
@@ -1242,6 +1272,14 @@ export default function ArticlesPage() {
                     </Button>
                   )
                 ) : null}
+                <Button
+                  variant="default"
+                  size="xs"
+                  onClick={() => void onDuplicateArticle()}
+                  loading={isDuplicatingArticle}
+                >
+                  Duplicate
+                </Button>
                 <Button color="red" variant="light" size="xs" onClick={() => requestDeleteArticle(editingId)}>
                   Delete
                 </Button>

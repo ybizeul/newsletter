@@ -156,6 +156,7 @@ export default function NewslettersPage() {
   const [smtpConfigured, setSmtpConfigured] = useState(true);
   const [isLoading, setIsLoading] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isDuplicatingNewsletter, setIsDuplicatingNewsletter] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [deleteNewsletterId, setDeleteNewsletterId] = useState<string | null>(null);
   const [hasLoadedNewslettersData, setHasLoadedNewslettersData] = useState(false);
@@ -549,6 +550,36 @@ export default function NewslettersPage() {
     }
   };
 
+  const onDuplicateNewsletter = async () => {
+    if (!selectedNewsletterId) {
+      return;
+    }
+
+    setIsDuplicatingNewsletter(true);
+    setError(null);
+
+    try {
+      const source = await getNewsletter(selectedNewsletterId);
+      const created = await createNewsletter({
+        creatorId: DEMO_CREATOR_ID,
+        title: `${source.title} (copy)`,
+        headerId: source.headerId ?? "",
+        introMarkdown: source.introMarkdown,
+        includeIndex: Boolean(source.includeIndex),
+        articleIds: source.articleIds,
+        recipientIds: source.recipientIds
+      });
+
+      const createdSummary = withFavoriteFlag(toNewsletterSummary(created));
+      setNewsletters((current) => [createdSummary, ...current]);
+      void onSelectNewsletter(createdSummary);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to duplicate newsletter");
+    } finally {
+      setIsDuplicatingNewsletter(false);
+    }
+  };
+
   const removeArticleFromNewsletter = (articleId: string) => {
     setArticleIDs((current) => current.filter((id) => id !== articleId));
   };
@@ -779,6 +810,14 @@ export default function NewslettersPage() {
                   onClick={() => navigate(`/newsletters/${selectedNewsletterId}/preview`)}
                 >
                   Preview
+                </Button>
+                <Button
+                  variant="default"
+                  size="xs"
+                  onClick={() => void onDuplicateNewsletter()}
+                  loading={isDuplicatingNewsletter}
+                >
+                  Duplicate
                 </Button>
                 <Button color="red" variant="light" size="xs" onClick={() => requestDeleteNewsletter(selectedNewsletterId)}>
                   Delete

@@ -462,6 +462,7 @@ export default function HeadersPage() {
   const [editorContentVersion, setEditorContentVersion] = useState(0);
   const [isLoading, setIsLoading] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isDuplicatingHeader, setIsDuplicatingHeader] = useState(false);
   const [autosaveStatus, setAutosaveStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const [error, setError] = useState<string | null>(null);
   const [deleteHeaderId, setDeleteHeaderId] = useState<string | null>(null);
@@ -883,6 +884,36 @@ export default function HeadersPage() {
     }
   };
 
+  const onDuplicateHeader = async () => {
+    if (!selectedHeaderId) {
+      return;
+    }
+
+    const source = headers.find((header) => header.id === selectedHeaderId);
+    if (!source) {
+      setError("Selected header was not found");
+      return;
+    }
+
+    setIsDuplicatingHeader(true);
+    setError(null);
+
+    try {
+      const created = await createHeader({
+        creatorId: DEMO_CREATOR_ID,
+        title: `${source.title} (copy)`,
+        markdown: source.markdown
+      });
+
+      setHeaders((current) => [created, ...current]);
+      void onSelectHeader(created);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to duplicate header");
+    } finally {
+      setIsDuplicatingHeader(false);
+    }
+  };
+
   const requestDeleteTableElement = (action: "row" | "column" | "table") => {
     setTableDeletionAction(action);
   };
@@ -1216,6 +1247,14 @@ export default function HeadersPage() {
             </Group>
             {selectedHeaderId ? (
               <Group gap="xs">
+                <Button
+                  variant="default"
+                  size="xs"
+                  onClick={() => void onDuplicateHeader()}
+                  loading={isDuplicatingHeader}
+                >
+                  Duplicate
+                </Button>
                 <Button color="red" variant="light" size="xs" onClick={() => requestDeleteHeader(selectedHeaderId)}>
                   Delete
                 </Button>
