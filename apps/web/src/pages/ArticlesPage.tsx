@@ -111,14 +111,15 @@ function buildTopicIconIllustration(iconMap: TablerIconMap | null, iconName: str
   return `data:image/svg+xml,${encodeURIComponent(finalSvg)}`;
 }
 
-function buildPastedImageTopicIconIllustration(imageDataUrl: string, circleColor: string, sizePercent: number): string {
+function buildPastedImageTopicIconIllustration(imageDataUrl: string, circleColor: string, sizeDelta: number): string {
   const trimmed = imageDataUrl.trim();
   if (!trimmed || !trimmed.startsWith("data:image/svg+xml")) {
     return "";
   }
 
-  const clampedPercent = Math.min(Math.max(sizePercent, 30), 100);
-  const insetSize = 40 * (clampedPercent / 100);
+  const clampedDelta = Math.min(Math.max(sizeDelta, -100), 100);
+  const scale = 1 + clampedDelta / 100;
+  const insetSize = 40 * scale;
   const insetOffset = (40 - insetSize) / 2;
 
   const finalSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 40 40"><defs><clipPath id="topicIconClip"><circle cx="20" cy="20" r="20"/></clipPath></defs><circle cx="20" cy="20" r="20" fill="${circleColor}"/><g clip-path="url(#topicIconClip)"><svg x="${insetOffset}" y="${insetOffset}" width="${insetSize}" height="${insetSize}" viewBox="0 0 40 40"><image href="${trimmed}" x="0" y="0" width="40" height="40" preserveAspectRatio="xMidYMid slice"/></svg></g></svg>`;
@@ -323,7 +324,7 @@ export default function ArticlesPage() {
   const [tags, setTags] = useState<string[]>([]);
   const [topicIcon, setTopicIcon] = useState("");
   const [customIconImageDataUrl, setCustomIconImageDataUrl] = useState("");
-  const [customIconImageSizePercent, setCustomIconImageSizePercent] = useState(100);
+  const [customIconImageSizeDelta, setCustomIconImageSizeDelta] = useState(0);
   const [topicIconBgColor, setTopicIconBgColor] = useState(DEFAULT_TOPIC_ICON_BG);
   const [topicIconStrokeColor, setTopicIconStrokeColor] = useState(DEFAULT_TOPIC_ICON_STROKE);
   const [topicIconIllustration, setTopicIconIllustration] = useState("");
@@ -502,7 +503,7 @@ export default function ArticlesPage() {
     setTags([]);
     setTopicIcon("");
     setCustomIconImageDataUrl("");
-    setCustomIconImageSizePercent(100);
+    setCustomIconImageSizeDelta(0);
     setTopicIconBgColor(DEFAULT_TOPIC_ICON_BG);
     setTopicIconStrokeColor(DEFAULT_TOPIC_ICON_STROKE);
     setTopicIconIllustration("");
@@ -554,7 +555,7 @@ export default function ArticlesPage() {
       setPastedImageMap(normalized.imageMap);
       setTopicIcon(fullArticle.topicIcon ?? "");
       setCustomIconImageDataUrl(fullArticle.topicIcon ? "" : (fullArticle.illustration ?? ""));
-      setCustomIconImageSizePercent(100);
+      setCustomIconImageSizeDelta(0);
       setTopicIconBgColor(extractTopicIconBackgroundColor(fullArticle.illustration));
       setTopicIconStrokeColor(extractTopicIconStrokeColor(fullArticle.illustration));
       setTopicIconIllustration(fullArticle.illustration ?? "");
@@ -578,9 +579,9 @@ export default function ArticlesPage() {
 
   const generatedTopicIconIllustration = useMemo(
     () => customIconImageDataUrl.trim()
-      ? buildPastedImageTopicIconIllustration(customIconImageDataUrl, topicIconBgColor, customIconImageSizePercent)
+      ? buildPastedImageTopicIconIllustration(customIconImageDataUrl, topicIconBgColor, customIconImageSizeDelta)
       : buildTopicIconIllustration(tablerIconMap, resolvedTopicIconName, topicIconBgColor, topicIconStrokeColor),
-    [customIconImageDataUrl, customIconImageSizePercent, tablerIconMap, resolvedTopicIconName, topicIconBgColor, topicIconStrokeColor]
+    [customIconImageDataUrl, customIconImageSizeDelta, tablerIconMap, resolvedTopicIconName, topicIconBgColor, topicIconStrokeColor]
   );
 
   useEffect(() => {
@@ -610,7 +611,7 @@ export default function ArticlesPage() {
     const applySvgMarkup = (svgMarkup: string) => {
       setError(null);
       setTopicIcon("");
-      setCustomIconImageSizePercent(100);
+      setCustomIconImageSizeDelta(0);
       setCustomIconImageDataUrl(svgMarkupToDataUrl(svgMarkup));
     };
 
@@ -689,7 +690,7 @@ export default function ArticlesPage() {
       }
 
       setTopicIcon("");
-      setCustomIconImageSizePercent(100);
+      setCustomIconImageSizeDelta(0);
       setCustomIconImageDataUrl(reader.result);
     };
     reader.onerror = () => {
@@ -719,7 +720,7 @@ export default function ArticlesPage() {
       }
 
       setTopicIcon("");
-      setCustomIconImageSizePercent(100);
+      setCustomIconImageSizeDelta(0);
       setCustomIconImageDataUrl(reader.result);
     };
     reader.onerror = () => {
@@ -752,6 +753,13 @@ export default function ArticlesPage() {
       setIsMobileEditorOpen(false);
     }
   }, [isMobile]);
+
+  useEffect(() => {
+    if (!isIconBrowserOpen) {
+      return;
+    }
+    setCustomIconImageSizeDelta(0);
+  }, [isIconBrowserOpen]);
 
   useEffect(() => {
     const row = headerRowRef.current;
@@ -1139,6 +1147,8 @@ export default function ArticlesPage() {
       .filter((tag) => !tags.some((selected) => selected.toLowerCase() === tag.toLowerCase()))
       .filter((tag) => (query ? tag.toLowerCase().includes(query) : true));
   }, [existingTags, tagSearch, tags]);
+
+  const iconSizeSliderThumbPosition = (customIconImageSizeDelta + 100) / 2;
 
   const toggleSearchFilter = (key: "title" | "content" | "tag") => {
     setArticleSearchCriteria((current) => {
@@ -1694,7 +1704,7 @@ export default function ArticlesPage() {
                 onClick={() => {
                   setTopicIcon("");
                   setCustomIconImageDataUrl("");
-                  setCustomIconImageSizePercent(100);
+                  setCustomIconImageSizeDelta(0);
                 }}
                 style={{
                   width: 96,
@@ -1754,7 +1764,7 @@ export default function ArticlesPage() {
                   onClick={() => {
                     setTopicIcon("");
                     setCustomIconImageDataUrl("");
-                    setCustomIconImageSizePercent(100);
+                    setCustomIconImageSizeDelta(0);
                   }}
                 >
                   Clear icon
@@ -1770,97 +1780,119 @@ export default function ArticlesPage() {
             withBorder
             p="sm"
             radius="md"
-            tabIndex={0}
-            onPaste={onPasteTopicIconImage}
-            style={{ outline: "none" }}
           >
-            <Stack gap={4}>
-              <Text fw={600} size="sm">Paste custom image</Text>
-              <Text size="xs" c="dimmed">
-                Click here and paste an SVG image from clipboard.
-              </Text>
-              <Group justify="flex-start" style={{ width: "100%" }}>
-                <Button
-                  variant="default"
-                  size="xs"
-                  onClick={() => iconSvgUploadInputRef.current?.click()}
-                >
-                  Upload SVG
-                </Button>
-                <input
-                  ref={iconSvgUploadInputRef}
-                  type="file"
-                  accept=".svg,image/svg+xml"
-                  onChange={onUploadTopicIconSvg}
-                  style={{ display: "none" }}
-                />
-                <Box style={{ width: 180, maxWidth: "100%" }}>
-                  <Text size="xs" c="dimmed" mb={4}>Size</Text>
-                  <Slider
-                    min={30}
-                    max={100}
-                    step={1}
-                    value={customIconImageSizePercent}
-                    onChange={setCustomIconImageSizePercent}
-                    disabled={!customIconImageDataUrl}
-                  />
-                </Box>
+            <Stack gap="sm">
+              <Box
+                tabIndex={0}
+                onPaste={onPasteTopicIconImage}
+                style={{ outline: "none" }}
+              >
+                <Stack gap={4}>
+                  <Text fw={600} size="sm">Paste custom image</Text>
+                  <Text size="xs" c="dimmed">
+                    Click here and paste an SVG image from clipboard.
+                  </Text>
+                  <Group justify="flex-start" style={{ width: "100%" }}>
+                    <Button
+                      variant="default"
+                      size="xs"
+                      onClick={() => iconSvgUploadInputRef.current?.click()}
+                    >
+                      Upload SVG
+                    </Button>
+                    <input
+                      ref={iconSvgUploadInputRef}
+                      type="file"
+                      accept=".svg,image/svg+xml"
+                      onChange={onUploadTopicIconSvg}
+                      style={{ display: "none" }}
+                    />
+                    <Box style={{ width: 180, maxWidth: "100%" }}>
+                      <Text size="xs" c="dimmed" mb={4}>Size</Text>
+                      <Slider
+                        min={-100}
+                        max={100}
+                        step={1}
+                        value={customIconImageSizeDelta}
+                        onChange={setCustomIconImageSizeDelta}
+                        label={(value) => (value > 0 ? `+${value}` : `${value}`)}
+                        disabled={!customIconImageDataUrl}
+                        styles={{
+                          track: {
+                            background:
+                              customIconImageSizeDelta >= 0
+                                ? `linear-gradient(to right, var(--mantine-color-gray-3) 0%, var(--mantine-color-gray-3) 50%, var(--mantine-color-blue-6) 50%, var(--mantine-color-blue-6) ${iconSizeSliderThumbPosition}%, var(--mantine-color-gray-3) ${iconSizeSliderThumbPosition}%, var(--mantine-color-gray-3) 100%)`
+                                : `linear-gradient(to right, var(--mantine-color-gray-3) 0%, var(--mantine-color-gray-3) ${iconSizeSliderThumbPosition}%, var(--mantine-color-blue-6) ${iconSizeSliderThumbPosition}%, var(--mantine-color-blue-6) 50%, var(--mantine-color-gray-3) 50%, var(--mantine-color-gray-3) 100%)`,
+                            opacity: customIconImageDataUrl ? 1 : 0.55
+                          },
+                          bar: { background: "transparent" }
+                        }}
+                      />
+                    </Box>
+                  </Group>
+                </Stack>
+              </Box>
+
+              <Group gap="xs" wrap="nowrap" align="center">
+                <Box style={{ flex: 1, height: 1, background: "#dee2e6" }} />
+                <Text size="xs" c="dimmed" fw={600}>or</Text>
+                <Box style={{ flex: 1, height: 1, background: "#dee2e6" }} />
               </Group>
+
+              <TextInput
+                label="Search icon"
+                description="Filter Tabler icon names before selecting one for the topic icon."
+                placeholder="Search icon name (e.g. sparkles, mail, chart)"
+                value={iconSearch}
+                onChange={(event) => setIconSearch(event.currentTarget.value)}
+              />
+
+              <ScrollArea h={420}>
+                <SimpleGrid cols={{ base: 2, sm: 3, md: 4 }} spacing="xs">
+                  {isIconLibraryLoading ? (
+                    <Center py="lg" style={{ gridColumn: "1 / -1" }}>
+                      <Loader size="sm" />
+                    </Center>
+                  ) : null}
+                  {filteredIconNames.map((iconName) => {
+                    const IconComponent = tablerIconMap?.[iconName];
+
+                    if (!IconComponent) {
+                      return null;
+                    }
+
+                    const isSelected = topicIcon === iconName;
+                    return (
+                      <UnstyledButton
+                        key={iconName}
+                        onClick={() => {
+                          setTopicIcon(iconName);
+                          setCustomIconImageDataUrl("");
+                          setCustomIconImageSizeDelta(0);
+                        }}
+                        style={{
+                          border: isSelected ? "1px solid #228be6" : "1px solid #dee2e6",
+                          borderRadius: 8,
+                          background: isSelected ? "#e7f5ff" : "#fff",
+                          cursor: "pointer",
+                          padding: "10px 8px",
+                          display: "flex",
+                          flexDirection: "column",
+                          alignItems: "center",
+                          gap: 6
+                        }}
+                      >
+                        <IconComponent size={20} />
+                        <Text size="xs" ta="center" lineClamp={2}>
+                          {iconName}
+                        </Text>
+                      </UnstyledButton>
+                    );
+                  })}
+                </SimpleGrid>
+              </ScrollArea>
             </Stack>
           </Paper>
-
-          <TextInput
-            label="Search icon"
-            description="Filter Tabler icon names before selecting one for the topic icon."
-            placeholder="Search icon name (e.g. sparkles, mail, chart)"
-            value={iconSearch}
-            onChange={(event) => setIconSearch(event.currentTarget.value)}
-          />
-
-          <ScrollArea h={420}>
-            <SimpleGrid cols={{ base: 2, sm: 3, md: 4 }} spacing="xs">
-              {isIconLibraryLoading ? (
-                <Center py="lg" style={{ gridColumn: "1 / -1" }}>
-                  <Loader size="sm" />
-                </Center>
-              ) : null}
-              {filteredIconNames.map((iconName) => {
-                const IconComponent = tablerIconMap?.[iconName];
-
-                if (!IconComponent) {
-                  return null;
-                }
-
-                const isSelected = topicIcon === iconName;
-                return (
-                  <UnstyledButton
-                    key={iconName}
-                    onClick={() => {
-                      setTopicIcon(iconName);
-                      setCustomIconImageDataUrl("");
-                      setCustomIconImageSizePercent(100);
-                    }}
-                    style={{
-                      border: isSelected ? "1px solid #228be6" : "1px solid #dee2e6",
-                      borderRadius: 8,
-                      background: isSelected ? "#e7f5ff" : "#fff",
-                      cursor: "pointer",
-                      padding: "10px 8px",
-                      display: "flex",
-                      flexDirection: "column",
-                      alignItems: "center",
-                      gap: 6
-                    }}
-                  >
-                    <IconComponent size={20} />
-                    <Text size="xs" ta="center" lineClamp={2}>
-                      {iconName}
-                    </Text>
-                  </UnstyledButton>
-                );
-              })}
-            </SimpleGrid>
-          </ScrollArea>
         </Stack>
       </Modal>
     </div>
