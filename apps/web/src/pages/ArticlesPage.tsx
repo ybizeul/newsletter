@@ -1788,9 +1788,9 @@ export default function ArticlesPage() {
                 style={{ outline: "none" }}
               >
                 <Stack gap={4}>
-                  <Text fw={600} size="sm">Paste custom image</Text>
+                  <Text fw={600} size="sm">Custom icon</Text>
                   <Text size="xs" c="dimmed">
-                    Click here and paste an SVG image from clipboard.
+                    Click here and paste an SVG image from clipboard or upload a file on disk.
                   </Text>
                   <Group justify="flex-start" style={{ width: "100%" }}>
                     <Button
