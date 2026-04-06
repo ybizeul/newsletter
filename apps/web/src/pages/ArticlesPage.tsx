@@ -113,7 +113,7 @@ function buildTopicIconIllustration(iconMap: TablerIconMap | null, iconName: str
 
 function buildPastedImageTopicIconIllustration(imageDataUrl: string, circleColor: string, sizePercent: number): string {
   const trimmed = imageDataUrl.trim();
-  if (!trimmed) {
+  if (!trimmed || !trimmed.startsWith("data:image/svg+xml")) {
     return "";
   }
 
@@ -123,6 +123,75 @@ function buildPastedImageTopicIconIllustration(imageDataUrl: string, circleColor
 
   const finalSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 40 40"><defs><clipPath id="topicIconClip"><circle cx="20" cy="20" r="20"/></clipPath></defs><circle cx="20" cy="20" r="20" fill="${circleColor}"/><g clip-path="url(#topicIconClip)"><svg x="${insetOffset}" y="${insetOffset}" width="${insetSize}" height="${insetSize}" viewBox="0 0 40 40"><image href="${trimmed}" x="0" y="0" width="40" height="40" preserveAspectRatio="xMidYMid slice"/></svg></g></svg>`;
   return `data:image/svg+xml,${encodeURIComponent(finalSvg)}`;
+}
+
+function isSvgImageFile(file: File): boolean {
+  const mime = file.type.toLowerCase();
+  if (mime === "image/svg+xml") {
+    return true;
+  }
+  return file.name.toLowerCase().endsWith(".svg");
+}
+
+function extractSvgMarkup(input: string): string {
+  const trimmed = input.trim();
+  const match = trimmed.match(/<svg[\s\S]*<\/svg>/i);
+  return (match?.[0] ?? "").trim();
+}
+
+function decodeHtmlEntities(input: string): string {
+  const textarea = document.createElement("textarea");
+  textarea.innerHTML = input;
+  return textarea.value;
+}
+
+function decodeSvgDataUrl(input: string): string {
+  const trimmed = input.trim();
+  if (!/^data:image\/svg\+xml/i.test(trimmed)) {
+    return "";
+  }
+
+  const commaIndex = trimmed.indexOf(",");
+  if (commaIndex === -1) {
+    return "";
+  }
+
+  const header = trimmed.slice(0, commaIndex).toLowerCase();
+  const payload = trimmed.slice(commaIndex + 1);
+
+  try {
+    if (header.includes(";base64")) {
+      return atob(payload);
+    }
+    return decodeURIComponent(payload);
+  } catch {
+    return "";
+  }
+}
+
+function extractSvgMarkupFromClipboardText(input: string): string {
+  if (!input.trim()) {
+    return "";
+  }
+
+  const candidates = [
+    input,
+    decodeHtmlEntities(input),
+    decodeSvgDataUrl(input)
+  ];
+
+  for (const candidate of candidates) {
+    const svg = extractSvgMarkup(candidate);
+    if (svg) {
+      return svg;
+    }
+  }
+
+  return "";
+}
+
+function svgMarkupToDataUrl(svgMarkup: string): string {
+  return `data:image/svg+xml,${encodeURIComponent(svgMarkup)}`;
 }
 
 function resolveTablerIconName(iconMap: TablerIconMap | null, input: string): string {
@@ -537,7 +606,61 @@ export default function ArticlesPage() {
   }, [customIconImageDataUrl, topicIcon, tablerIconMap, generatedTopicIconIllustration]);
 
   const onPasteTopicIconImage = (event: ClipboardEvent<HTMLDivElement>) => {
-    const items = Array.from(event.clipboardData.items);
+    const applySvgMarkup = (svgMarkup: string) => {
+      setError(null);
+      setTopicIcon("");
+      setCustomIconImageSizePercent(100);
+      setCustomIconImageDataUrl(svgMarkupToDataUrl(svgMarkup));
+    };
+
+    const clipboardData = event.clipboardData;
+    const items = Array.from(clipboardData.items);
+
+    // Prefer textual clipboard payloads first: many tools provide SVG text plus a raster preview image.
+    const syncTextPayload = [
+      clipboardData.getData("text/plain"),
+      clipboardData.getData("text/html"),
+      clipboardData.getData("text/uri-list"),
+      clipboardData.getData("image/svg+xml")
+    ]
+      .filter(Boolean)
+      .join("\n");
+
+    const syncSvg = extractSvgMarkupFromClipboardText(syncTextPayload);
+    if (syncSvg) {
+      event.preventDefault();
+      applySvgMarkup(syncSvg);
+      return;
+    }
+
+    const stringItems = items.filter((item) => item.kind === "string");
+    if (stringItems.length > 0) {
+      event.preventDefault();
+      let pending = stringItems.length;
+      let resolved = false;
+
+      for (const item of stringItems) {
+        item.getAsString((value) => {
+          if (resolved) {
+            return;
+          }
+
+          const svgMarkup = extractSvgMarkupFromClipboardText(value);
+          if (svgMarkup) {
+            resolved = true;
+            applySvgMarkup(svgMarkup);
+            return;
+          }
+
+          pending -= 1;
+          if (pending === 0) {
+            setError("Could not find valid SVG markup in pasted text");
+          }
+        });
+      }
+      return;
+    }
+
     const imageItem = items.find((item) => item.kind === "file" && item.type.startsWith("image/"));
     if (!imageItem) {
       return;
@@ -545,6 +668,12 @@ export default function ArticlesPage() {
 
     const file = imageItem.getAsFile();
     if (!file) {
+      return;
+    }
+
+    if (!isSvgImageFile(file)) {
+      event.preventDefault();
+      setError("Only SVG images are supported for article icons");
       return;
     }
 
@@ -1617,7 +1746,7 @@ export default function ArticlesPage() {
             <Stack gap={4}>
               <Text fw={600} size="sm">Paste custom image</Text>
               <Text size="xs" c="dimmed">
-                Click here and paste an image from clipboard (PNG, JPG, WebP, GIF, or SVG image).
+                Click here and paste an SVG image from clipboard.
               </Text>
               <Group justify="flex-start" style={{ width: "100%" }}>
                 <Box style={{ width: 180, maxWidth: "100%" }}>
