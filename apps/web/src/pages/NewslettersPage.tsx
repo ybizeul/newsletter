@@ -49,6 +49,15 @@ const NEWSLETTERS_PANE_WIDTH_STORAGE_KEY = "newsletter.newsletters.pane.width";
 const FAVORITE_NEWSLETTER_ID_STORAGE_KEY = "newsletter.favorite.id";
 const MAX_RECIPIENTS = 3;
 
+type NewslettersDataCache = {
+  articles: ArticleSummary[];
+  headers: Header[];
+  newsletters: NewsletterSummary[];
+  smtpConfigured: boolean;
+};
+
+let cachedNewslettersData: NewslettersDataCache | null = null;
+
 function getStoredNewslettersPaneWidth(): number {
   const raw = window.localStorage.getItem(NEWSLETTERS_PANE_WIDTH_STORAGE_KEY);
   const parsed = Number(raw);
@@ -141,9 +150,15 @@ export default function NewslettersPage() {
   const [isMobileEditorOpen, setIsMobileEditorOpen] = useState(false);
   const navigate = useNavigate();
   const location = useLocation();
-  const [articles, setArticles] = useState<ArticleSummary[]>([]);
-  const [headers, setHeaders] = useState<Header[]>([]);
-  const [newsletters, setNewsletters] = useState<NewsletterSummary[]>([]);
+  const [articles, setArticles] = useState<ArticleSummary[]>(() => cachedNewslettersData?.articles ?? []);
+  const [headers, setHeaders] = useState<Header[]>(() => cachedNewslettersData?.headers ?? []);
+  const [newsletters, setNewsletters] = useState<NewsletterSummary[]>(() => {
+    const favoriteId = getStoredFavoriteNewsletterId();
+    return (cachedNewslettersData?.newsletters ?? []).map((newsletter) => ({
+      ...newsletter,
+      isFavorite: newsletter.id === favoriteId
+    }));
+  });
   const [selectedNewsletterId, setSelectedNewsletterID] = useState<string | null>(null);
   const [title, setTitle] = useState("");
   const [headerId, setHeaderId] = useState<string | null>(null);
@@ -153,13 +168,13 @@ export default function NewslettersPage() {
   const [draggedArticleId, setDraggedArticleId] = useState<string | null>(null);
   const [recipientRaw, setRecipientRaw] = useState("first@example.com,second@example.com");
   const [scheduledAtInput, setScheduledAtInput] = useState<string | null>(null);
-  const [smtpConfigured, setSmtpConfigured] = useState(true);
+  const [smtpConfigured, setSmtpConfigured] = useState(() => cachedNewslettersData?.smtpConfigured ?? true);
   const [isLoading, setIsLoading] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isDuplicatingNewsletter, setIsDuplicatingNewsletter] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [deleteNewsletterId, setDeleteNewsletterId] = useState<string | null>(null);
-  const [hasLoadedNewslettersData, setHasLoadedNewslettersData] = useState(false);
+  const [hasLoadedNewslettersData, setHasLoadedNewslettersData] = useState(() => cachedNewslettersData !== null);
   const [autosaveStatus, setAutosaveStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const [favoriteNewsletterId, setFavoriteNewsletterId] = useState<string | null>(getStoredFavoriteNewsletterId);
 
@@ -207,6 +222,12 @@ export default function NewslettersPage() {
         listNewsletterSummaries(),
         getRuntimeConfig()
       ]);
+      cachedNewslettersData = {
+        articles: articleItems,
+        headers: headerItems,
+        newsletters: newsletterItems,
+        smtpConfigured: runtimeConfig.smtpConfigured
+      };
       setArticles(articleItems);
       setHeaders(headerItems);
       setNewsletters(newsletterItems.map(withFavoriteFlag));
@@ -218,6 +239,18 @@ export default function NewslettersPage() {
       setHasLoadedNewslettersData(true);
     }
   };
+
+  useEffect(() => {
+    if (!hasLoadedNewslettersData) {
+      return;
+    }
+    cachedNewslettersData = {
+      articles,
+      headers,
+      newsletters,
+      smtpConfigured
+    };
+  }, [articles, headers, newsletters, smtpConfigured, hasLoadedNewslettersData]);
 
   useEffect(() => {
     void loadData();
@@ -252,11 +285,17 @@ export default function NewslettersPage() {
       try {
         const latestArticles = await listArticleSummaries();
         setArticles(latestArticles);
+        cachedNewslettersData = {
+          articles: latestArticles,
+          headers,
+          newsletters,
+          smtpConfigured
+        };
       } catch (err) {
         setError(err instanceof Error ? err.message : "Failed to refresh articles");
       }
     })();
-  }, [location.pathname]);
+  }, [location.pathname, headers, newsletters, smtpConfigured]);
 
   const resetForm = () => {
     setSelectedNewsletterID(null);

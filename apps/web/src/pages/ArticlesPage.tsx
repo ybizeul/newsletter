@@ -43,6 +43,8 @@ const ARTICLES_PANE_WIDTH_STORAGE_KEY = "newsletter.articles.pane.width";
 const FAVORITE_NEWSLETTER_ID_STORAGE_KEY = "newsletter.favorite.id";
 const TAG_COLORS = ["blue", "teal", "cyan", "grape", "indigo", "violet", "lime", "orange", "pink"] as const;
 
+let cachedArticleSummaries: ArticleSummary[] | null = null;
+
 function getStoredArticlesPaneWidth(): number {
   const raw = window.localStorage.getItem(ARTICLES_PANE_WIDTH_STORAGE_KEY);
   const parsed = Number(raw);
@@ -244,7 +246,7 @@ export default function ArticlesPage() {
   const [leftPaneWidth, setLeftPaneWidth] = useState(getStoredArticlesPaneWidth);
   const isMobile = useMediaQuery("(max-width: 48em)");
   const [isMobileEditorOpen, setIsMobileEditorOpen] = useState(false);
-  const [articles, setArticles] = useState<ArticleSummary[]>([]);
+  const [articles, setArticles] = useState<ArticleSummary[]>(() => cachedArticleSummaries ?? []);
   const [selectedArticleId, setSelectedArticleID] = useState<string | null>(null);
   const [title, setTitle] = useState("");
   const [markdown, setMarkdown] = useState("");
@@ -274,7 +276,7 @@ export default function ArticlesPage() {
   const [isDuplicatingArticle, setIsDuplicatingArticle] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [deleteArticleId, setDeleteArticleId] = useState<string | null>(null);
-  const [hasLoadedArticles, setHasLoadedArticles] = useState(false);
+  const [hasLoadedArticles, setHasLoadedArticles] = useState(() => cachedArticleSummaries !== null);
   const [autosaveStatus, setAutosaveStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const [favoriteNewsletterId, setFavoriteNewsletterId] = useState<string | null>(getStoredFavoriteNewsletterId);
   const [favoriteNewsletterName, setFavoriteNewsletterName] = useState<string>("");
@@ -289,6 +291,7 @@ export default function ArticlesPage() {
     setError(null);
     try {
       const items = await listArticleSummaries();
+      cachedArticleSummaries = items;
       setArticles(items);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load articles");
@@ -297,6 +300,13 @@ export default function ArticlesPage() {
       setHasLoadedArticles(true);
     }
   };
+
+  useEffect(() => {
+    if (!hasLoadedArticles) {
+      return;
+    }
+    cachedArticleSummaries = articles;
+  }, [articles, hasLoadedArticles]);
 
   useEffect(() => {
     void loadArticles();

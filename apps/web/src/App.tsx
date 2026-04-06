@@ -1,13 +1,13 @@
-import { lazy, Suspense, type MouseEvent as ReactMouseEvent, useState } from "react";
-import { ActionIcon, Anchor, AppShell, Box, Burger, Center, Group, Loader, Modal, NavLink, ScrollArea, Stack, Text } from "@mantine/core";
+import { type MouseEvent as ReactMouseEvent, useState } from "react";
+import { ActionIcon, Anchor, AppShell, Box, Burger, Group, Modal, NavLink, ScrollArea, Stack, Text } from "@mantine/core";
 import { useDisclosure } from "@mantine/hooks";
 import { IconAlignBoxCenterTop, IconArticle, IconHelpCircle, IconMail, IconStar } from "@tabler/icons-react";
 import { Navigate, Route, Routes, useLocation, useNavigate } from "react-router-dom";
 
-const ArticlesPage = lazy(() => import("./pages/ArticlesPage"));
-const HeadersPage = lazy(() => import("./pages/HeadersPage"));
-const NewslettersPage = lazy(() => import("./pages/NewslettersPage"));
-const NewsletterPreviewPage = lazy(() => import("./pages/NewsletterPreviewPage"));
+import ArticlesPage from "./pages/ArticlesPage";
+import HeadersPage from "./pages/HeadersPage";
+import NewslettersPage from "./pages/NewslettersPage";
+import NewsletterPreviewPage from "./pages/NewsletterPreviewPage";
 
 const NAVBAR_WIDTH_STORAGE_KEY = "newsletter.navbar.width";
 
@@ -200,21 +200,13 @@ function App() {
       />
 
       <AppShell.Main>
-        <Suspense
-          fallback={(
-            <Center h="calc(100vh - 60px)">
-              <Loader size="sm" />
-            </Center>
-          )}
-        >
-          <Routes>
-            <Route path="/articles" element={<ArticlesPage />} />
-            <Route path="/newsletters" element={<NewslettersPage />} />
-            <Route path="/headers" element={<HeadersPage />} />
-            <Route path="/newsletters/:id/preview" element={<NewsletterPreviewPage />} />
-            <Route path="*" element={<Navigate to="/articles" replace />} />
-          </Routes>
-        </Suspense>
+        <Routes>
+          <Route path="/articles" element={<ArticlesPage />} />
+          <Route path="/newsletters" element={<NewslettersPage />} />
+          <Route path="/headers" element={<HeadersPage />} />
+          <Route path="/newsletters/:id/preview" element={<NewsletterPreviewPage />} />
+          <Route path="*" element={<Navigate to="/articles" replace />} />
+        </Routes>
       </AppShell.Main>
     </AppShell>
   );
