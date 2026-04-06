@@ -1167,7 +1167,7 @@ export default function ArticlesPage() {
                 );
               })()
             ))}
-            {isLoading ? (
+            {isLoading && articles.length === 0 ? (
               <Group justify="center" p="md" gap="xs">
                 <Loader size="sm" />
                 <Text c="dimmed" size="sm">Loading articles...</Text>
@@ -1344,7 +1344,7 @@ export default function ArticlesPage() {
             <TextInput
               style={{ flex: 1 }}
               label="Title"
-              description="Internal article title used in the article list and newsletter sections."
+              description="Article title used in the article list and newsletter sections."
               placeholder="Article title"
               value={title}
               onChange={(event) => setTitle(event.currentTarget.value)}

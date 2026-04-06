@@ -731,7 +731,7 @@ export default function NewslettersPage() {
                 );
               })()
             ))}
-            {isLoading ? (
+            {isLoading && newsletters.length === 0 ? (
               <Group justify="center" p="md" gap="xs">
                 <Loader size="sm" />
                 <Text c="dimmed" size="sm">Loading newsletters...</Text>
