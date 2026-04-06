@@ -554,8 +554,10 @@ export default function ArticlesPage() {
       setMarkdown(normalized.normalized);
       setPastedImageMap(normalized.imageMap);
       setTopicIcon(fullArticle.topicIcon ?? "");
-      setCustomIconImageDataUrl(fullArticle.topicIcon ? "" : (fullArticle.illustration ?? ""));
-      setCustomIconImageSizeDelta(0);
+      setCustomIconImageDataUrl(
+        fullArticle.iconSource ?? (fullArticle.topicIcon ? "" : (fullArticle.illustration ?? ""))
+      );
+      setCustomIconImageSizeDelta(typeof fullArticle.iconZoom === "number" ? fullArticle.iconZoom : 0);
       setTopicIconBgColor(extractTopicIconBackgroundColor(fullArticle.illustration));
       setTopicIconStrokeColor(extractTopicIconStrokeColor(fullArticle.illustration));
       setTopicIconIllustration(fullArticle.illustration ?? "");
@@ -564,7 +566,9 @@ export default function ArticlesPage() {
         markdown: fullArticle.markdown,
         tags: fullArticle.tags ?? [],
         topicIcon: fullArticle.topicIcon ?? "",
-        illustration: fullArticle.illustration ?? ""
+        illustration: fullArticle.illustration ?? "",
+        iconSource: fullArticle.iconSource ?? "",
+        iconZoom: typeof fullArticle.iconZoom === "number" ? fullArticle.iconZoom : 0
       });
       setAutosaveStatus("idle");
       if (isMobile) {
@@ -755,13 +759,6 @@ export default function ArticlesPage() {
   }, [isMobile]);
 
   useEffect(() => {
-    if (!isIconBrowserOpen) {
-      return;
-    }
-    setCustomIconImageSizeDelta(0);
-  }, [isIconBrowserOpen]);
-
-  useEffect(() => {
     const row = headerRowRef.current;
     const left = headerLeftRef.current;
     const actions = headerActionsRef.current;
@@ -812,7 +809,9 @@ export default function ArticlesPage() {
     markdown: resolvePastedImageTokens(markdown.trim()),
     tags,
     topicIcon: topicIcon.trim(),
-    illustration: topicIconIllustration
+    illustration: topicIconIllustration,
+    iconSource: customIconImageDataUrl.trim(),
+    iconZoom: customIconImageDataUrl.trim() ? customIconImageSizeDelta : 0
   });
 
   const onSubmit = async () => {
@@ -960,7 +959,9 @@ export default function ArticlesPage() {
         markdown: source.markdown,
         tags: source.tags ?? [],
         topicIcon: source.topicIcon ?? "",
-        illustration: source.illustration ?? ""
+        illustration: source.illustration ?? "",
+        iconSource: source.iconSource ?? "",
+        iconZoom: typeof source.iconZoom === "number" ? source.iconZoom : 0
       });
 
       const createdSummary = toArticleSummary(created);

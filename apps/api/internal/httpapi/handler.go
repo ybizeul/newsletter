@@ -56,6 +56,8 @@ type createArticleRequest struct {
 	Tags         []string `json:"tags"`
 	TopicIcon    string   `json:"topicIcon"`
 	Illustration string   `json:"illustration"`
+	IconSource   string   `json:"iconSource"`
+	IconZoom     int      `json:"iconZoom"`
 }
 
 type articleSummary struct {
@@ -107,6 +109,8 @@ func (h *Handler) CreateArticle(w http.ResponseWriter, r *http.Request) {
 		Tags:         normalizeArticleTags(req.Tags),
 		TopicIcon:    req.TopicIcon,
 		Illustration: req.Illustration,
+		IconSource:   strings.TrimSpace(req.IconSource),
+		IconZoom:     normalizeIconZoom(req.IconZoom),
 		SentCount:    0,
 		Status:       model.ArticleStatusDraft,
 		Version:      1,
@@ -213,6 +217,8 @@ type updateArticleRequest struct {
 	Tags         []string `json:"tags"`
 	TopicIcon    string   `json:"topicIcon"`
 	Illustration string   `json:"illustration"`
+	IconSource   string   `json:"iconSource"`
+	IconZoom     int      `json:"iconZoom"`
 }
 
 func (h *Handler) UpdateArticle(w http.ResponseWriter, r *http.Request, id string) {
@@ -234,6 +240,8 @@ func (h *Handler) UpdateArticle(w http.ResponseWriter, r *http.Request, id strin
 			"tags":         normalizeArticleTags(req.Tags),
 			"topicIcon":    strings.TrimSpace(req.TopicIcon),
 			"illustration": strings.TrimSpace(req.Illustration),
+			"iconSource":   strings.TrimSpace(req.IconSource),
+			"iconZoom":     normalizeIconZoom(req.IconZoom),
 			"updatedAt":    time.Now().UTC(),
 		},
 		"$inc": bson.M{"version": 1},
@@ -279,6 +287,16 @@ func normalizeArticleTags(tags []string) []string {
 	}
 
 	return normalized
+}
+
+func normalizeIconZoom(value int) int {
+	if value < -100 {
+		return -100
+	}
+	if value > 100 {
+		return 100
+	}
+	return value
 }
 
 func normalizeRecipientIDs(recipientIDs []string) ([]string, error) {

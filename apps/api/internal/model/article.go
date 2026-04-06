@@ -18,6 +18,8 @@ type Article struct {
 	Tags          []string      `bson:"tags,omitempty" json:"tags,omitempty"`
 	TopicIcon     string        `bson:"topicIcon,omitempty" json:"topicIcon,omitempty"`
 	Illustration  string        `bson:"illustration,omitempty" json:"illustration,omitempty"`
+	IconSource    string        `bson:"iconSource,omitempty" json:"iconSource,omitempty"`
+	IconZoom      int           `bson:"iconZoom,omitempty" json:"iconZoom,omitempty"`
 	SentCount     int64         `bson:"sentCount" json:"sentCount"`
 	LastUsed      *time.Time    `bson:"last_used,omitempty" json:"lastUsed,omitempty"`
 	Status        ArticleStatus `bson:"status" json:"status"`

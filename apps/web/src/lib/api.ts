@@ -9,6 +9,8 @@ type CreateArticlePayload = {
   tags?: string[];
   topicIcon?: string;
   illustration?: string;
+  iconSource?: string;
+  iconZoom?: number;
 };
 
 type CreateNewsletterPayload = {
@@ -36,6 +38,8 @@ type UpdateArticlePayload = {
   tags?: string[];
   topicIcon?: string;
   illustration?: string;
+  iconSource?: string;
+  iconZoom?: number;
 };
 
 type CreateHeaderPayload = {
