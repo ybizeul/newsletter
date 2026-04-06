@@ -16,6 +16,7 @@ import {
   Pill,
   PillsInput,
   ScrollArea,
+  Slider,
   SimpleGrid,
   Stack,
   Text,
@@ -105,6 +106,20 @@ function buildTopicIconIllustration(iconMap: TablerIconMap | null, iconName: str
   const iconSvg = `<g transform="translate(8 8)" color="${strokeColor}" stroke="currentColor" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${iconInner}</g>`;
 
   const finalSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 40 40"><circle cx="20" cy="20" r="20" fill="${circleColor}"/>${iconSvg}</svg>`;
+  return `data:image/svg+xml,${encodeURIComponent(finalSvg)}`;
+}
+
+function buildPastedImageTopicIconIllustration(imageDataUrl: string, circleColor: string, sizePercent: number): string {
+  const trimmed = imageDataUrl.trim();
+  if (!trimmed) {
+    return "";
+  }
+
+  const clampedPercent = Math.min(Math.max(sizePercent, 30), 100);
+  const insetSize = 40 * (clampedPercent / 100);
+  const insetOffset = (40 - insetSize) / 2;
+
+  const finalSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 40 40"><defs><clipPath id="topicIconClip"><circle cx="20" cy="20" r="20"/></clipPath></defs><circle cx="20" cy="20" r="20" fill="${circleColor}"/><g clip-path="url(#topicIconClip)"><svg x="${insetOffset}" y="${insetOffset}" width="${insetSize}" height="${insetSize}" viewBox="0 0 40 40"><image href="${trimmed}" x="0" y="0" width="40" height="40" preserveAspectRatio="xMidYMid slice"/></svg></g></svg>`;
   return `data:image/svg+xml,${encodeURIComponent(finalSvg)}`;
 }
 
@@ -235,6 +250,8 @@ export default function ArticlesPage() {
   const [markdown, setMarkdown] = useState("");
   const [tags, setTags] = useState<string[]>([]);
   const [topicIcon, setTopicIcon] = useState("");
+  const [customIconImageDataUrl, setCustomIconImageDataUrl] = useState("");
+  const [customIconImageSizePercent, setCustomIconImageSizePercent] = useState(100);
   const [topicIconBgColor, setTopicIconBgColor] = useState(DEFAULT_TOPIC_ICON_BG);
   const [topicIconStrokeColor, setTopicIconStrokeColor] = useState(DEFAULT_TOPIC_ICON_STROKE);
   const [topicIconIllustration, setTopicIconIllustration] = useState("");
@@ -403,6 +420,8 @@ export default function ArticlesPage() {
     setMarkdown("");
     setTags([]);
     setTopicIcon("");
+    setCustomIconImageDataUrl("");
+    setCustomIconImageSizePercent(100);
     setTopicIconBgColor(DEFAULT_TOPIC_ICON_BG);
     setTopicIconStrokeColor(DEFAULT_TOPIC_ICON_STROKE);
     setTopicIconIllustration("");
@@ -453,6 +472,8 @@ export default function ArticlesPage() {
       setMarkdown(normalized.normalized);
       setPastedImageMap(normalized.imageMap);
       setTopicIcon(fullArticle.topicIcon ?? "");
+      setCustomIconImageDataUrl(fullArticle.topicIcon ? "" : (fullArticle.illustration ?? ""));
+      setCustomIconImageSizePercent(100);
       setTopicIconBgColor(extractTopicIconBackgroundColor(fullArticle.illustration));
       setTopicIconStrokeColor(extractTopicIconStrokeColor(fullArticle.illustration));
       setTopicIconIllustration(fullArticle.illustration ?? "");
@@ -475,11 +496,20 @@ export default function ArticlesPage() {
   const resolvedTopicIconName = useMemo(() => resolveTablerIconName(tablerIconMap, topicIcon), [tablerIconMap, topicIcon]);
 
   const generatedTopicIconIllustration = useMemo(
-    () => buildTopicIconIllustration(tablerIconMap, resolvedTopicIconName, topicIconBgColor, topicIconStrokeColor),
-    [tablerIconMap, resolvedTopicIconName, topicIconBgColor, topicIconStrokeColor]
+    () => customIconImageDataUrl.trim()
+      ? buildPastedImageTopicIconIllustration(customIconImageDataUrl, topicIconBgColor, customIconImageSizePercent)
+      : buildTopicIconIllustration(tablerIconMap, resolvedTopicIconName, topicIconBgColor, topicIconStrokeColor),
+    [customIconImageDataUrl, customIconImageSizePercent, tablerIconMap, resolvedTopicIconName, topicIconBgColor, topicIconStrokeColor]
   );
 
   useEffect(() => {
+    if (customIconImageDataUrl.trim()) {
+      if (generatedTopicIconIllustration) {
+        setTopicIconIllustration(generatedTopicIconIllustration);
+      }
+      return;
+    }
+
     if (!topicIcon.trim()) {
       setTopicIconIllustration("");
       return;
@@ -493,7 +523,39 @@ export default function ArticlesPage() {
     if (generatedTopicIconIllustration) {
       setTopicIconIllustration(generatedTopicIconIllustration);
     }
-  }, [topicIcon, tablerIconMap, generatedTopicIconIllustration]);
+  }, [customIconImageDataUrl, topicIcon, tablerIconMap, generatedTopicIconIllustration]);
+
+  const onPasteTopicIconImage = (event: ClipboardEvent<HTMLDivElement>) => {
+    const items = Array.from(event.clipboardData.items);
+    const imageItem = items.find((item) => item.kind === "file" && item.type.startsWith("image/"));
+    if (!imageItem) {
+      return;
+    }
+
+    const file = imageItem.getAsFile();
+    if (!file) {
+      return;
+    }
+
+    event.preventDefault();
+    setError(null);
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      if (typeof reader.result !== "string") {
+        setError("Failed to read pasted image");
+        return;
+      }
+
+      setTopicIcon("");
+      setCustomIconImageSizePercent(100);
+      setCustomIconImageDataUrl(reader.result);
+    };
+    reader.onerror = () => {
+      setError("Failed to read pasted image");
+    };
+    reader.readAsDataURL(file);
+  };
 
   useEffect(() => {
     if (articles.length === 0) {
@@ -1421,7 +1483,11 @@ export default function ArticlesPage() {
           <Paper withBorder p="sm" radius="md">
             <Stack gap="sm" align="center">
               <UnstyledButton
-                onClick={() => setTopicIcon("")}
+                onClick={() => {
+                  setTopicIcon("");
+                  setCustomIconImageDataUrl("");
+                  setCustomIconImageSizePercent(100);
+                }}
                 style={{
                   width: 96,
                   height: 96,
@@ -1474,7 +1540,15 @@ export default function ArticlesPage() {
 
             <Group justify="flex-end" mt="sm">
               <Group gap="xs">
-                <Button variant="subtle" color="gray" onClick={() => setTopicIcon("")}>
+                <Button
+                  variant="subtle"
+                  color="gray"
+                  onClick={() => {
+                    setTopicIcon("");
+                    setCustomIconImageDataUrl("");
+                    setCustomIconImageSizePercent(100);
+                  }}
+                >
                   Clear icon
                 </Button>
                 <Button variant="default" onClick={() => setIsIconBrowserOpen(false)}>
@@ -1482,6 +1556,35 @@ export default function ArticlesPage() {
                 </Button>
               </Group>
             </Group>
+          </Paper>
+
+          <Paper
+            withBorder
+            p="sm"
+            radius="md"
+            tabIndex={0}
+            onPaste={onPasteTopicIconImage}
+            style={{ outline: "none" }}
+          >
+            <Stack gap={4}>
+              <Text fw={600} size="sm">Paste custom image</Text>
+              <Text size="xs" c="dimmed">
+                Click here and paste an image from clipboard (PNG, JPG, WebP, GIF, or SVG image).
+              </Text>
+              <Group justify="flex-start" style={{ width: "100%" }}>
+                <Box style={{ width: 180, maxWidth: "100%" }}>
+                  <Text size="xs" c="dimmed" mb={4}>Size</Text>
+                  <Slider
+                    min={30}
+                    max={100}
+                    step={1}
+                    value={customIconImageSizePercent}
+                    onChange={setCustomIconImageSizePercent}
+                    disabled={!customIconImageDataUrl}
+                  />
+                </Box>
+              </Group>
+            </Stack>
           </Paper>
 
           <TextInput
@@ -1512,6 +1615,8 @@ export default function ArticlesPage() {
                     key={iconName}
                     onClick={() => {
                       setTopicIcon(iconName);
+                      setCustomIconImageDataUrl("");
+                      setCustomIconImageSizePercent(100);
                     }}
                     style={{
                       border: isSelected ? "1px solid #228be6" : "1px solid #dee2e6",
