@@ -117,12 +117,46 @@ function buildPastedImageTopicIconIllustration(imageDataUrl: string, circleColor
     return "";
   }
 
+  const extractAspectRatioFromSvgDataUrl = (dataUrl: string): number | null => {
+    const decoded = decodeSvgDataUrl(dataUrl);
+    if (!decoded) {
+      return null;
+    }
+
+    const viewBoxMatch = decoded.match(/viewBox\s*=\s*["']\s*[-+]?\d*\.?\d+\s+[-+]?\d*\.?\d+\s+([-+]?\d*\.?\d+)\s+([-+]?\d*\.?\d+)\s*["']/i);
+    if (viewBoxMatch) {
+      const width = Number(viewBoxMatch[1]);
+      const height = Number(viewBoxMatch[2]);
+      if (Number.isFinite(width) && Number.isFinite(height) && width > 0 && height > 0) {
+        return width / height;
+      }
+    }
+
+    const widthMatch = decoded.match(/\bwidth\s*=\s*["']\s*([-+]?\d*\.?\d+)/i);
+    const heightMatch = decoded.match(/\bheight\s*=\s*["']\s*([-+]?\d*\.?\d+)/i);
+    if (widthMatch && heightMatch) {
+      const width = Number(widthMatch[1]);
+      const height = Number(heightMatch[1]);
+      if (Number.isFinite(width) && Number.isFinite(height) && width > 0 && height > 0) {
+        return width / height;
+      }
+    }
+
+    return null;
+  };
+
   const clampedDelta = Math.min(Math.max(sizeDelta, -100), 100);
   const scale = 1 + clampedDelta / 100;
   const insetSize = 40 * scale;
   const insetOffset = (40 - insetSize) / 2;
+  const aspectRatio = extractAspectRatioFromSvgDataUrl(trimmed) ?? 1;
 
-  const finalSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 40 40"><defs><clipPath id="topicIconClip"><circle cx="20" cy="20" r="20"/></clipPath></defs><circle cx="20" cy="20" r="20" fill="${circleColor}"/><g clip-path="url(#topicIconClip)"><svg x="${insetOffset}" y="${insetOffset}" width="${insetSize}" height="${insetSize}" viewBox="0 0 40 40"><image href="${trimmed}" x="0" y="0" width="40" height="40" preserveAspectRatio="xMidYMid slice"/></svg></g></svg>`;
+  const imageWidth = aspectRatio >= 1 ? insetSize : insetSize * aspectRatio;
+  const imageHeight = aspectRatio >= 1 ? insetSize / aspectRatio : insetSize;
+  const imageX = insetOffset + (insetSize - imageWidth) / 2;
+  const imageY = insetOffset + (insetSize - imageHeight) / 2;
+
+  const finalSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 40 40"><defs><clipPath id="topicIconClip"><circle cx="20" cy="20" r="20"/></clipPath></defs><circle cx="20" cy="20" r="20" fill="${circleColor}"/><g clip-path="url(#topicIconClip)"><image href="${trimmed}" x="${imageX}" y="${imageY}" width="${imageWidth}" height="${imageHeight}" preserveAspectRatio="none"/></g></svg>`;
   return `data:image/svg+xml,${encodeURIComponent(finalSvg)}`;
 }
 
