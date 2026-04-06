@@ -309,6 +309,7 @@ export default function ArticlesPage() {
   const headerActionsRef = useRef<HTMLDivElement | null>(null);
   const favoriteCompactRef = useRef<HTMLButtonElement | null>(null);
   const favoriteMeasureRef = useRef<HTMLButtonElement | null>(null);
+  const iconSvgUploadInputRef = useRef<HTMLInputElement | null>(null);
   const autosaveTimerRef = useRef<number | null>(null);
   const autosaveClearSavedRef = useRef<number | null>(null);
   const lastSavedDraftRef = useRef<string>("");
@@ -693,6 +694,36 @@ export default function ArticlesPage() {
     };
     reader.onerror = () => {
       setError("Failed to read pasted image");
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const onUploadTopicIconSvg = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.currentTarget.files?.[0];
+    event.currentTarget.value = "";
+    if (!file) {
+      return;
+    }
+
+    if (!isSvgImageFile(file)) {
+      setError("Only SVG images are supported for article icons");
+      return;
+    }
+
+    setError(null);
+    const reader = new FileReader();
+    reader.onload = () => {
+      if (typeof reader.result !== "string") {
+        setError("Failed to read SVG file");
+        return;
+      }
+
+      setTopicIcon("");
+      setCustomIconImageSizePercent(100);
+      setCustomIconImageDataUrl(reader.result);
+    };
+    reader.onerror = () => {
+      setError("Failed to read SVG file");
     };
     reader.readAsDataURL(file);
   };
@@ -1749,6 +1780,20 @@ export default function ArticlesPage() {
                 Click here and paste an SVG image from clipboard.
               </Text>
               <Group justify="flex-start" style={{ width: "100%" }}>
+                <Button
+                  variant="default"
+                  size="xs"
+                  onClick={() => iconSvgUploadInputRef.current?.click()}
+                >
+                  Upload SVG
+                </Button>
+                <input
+                  ref={iconSvgUploadInputRef}
+                  type="file"
+                  accept=".svg,image/svg+xml"
+                  onChange={onUploadTopicIconSvg}
+                  style={{ display: "none" }}
+                />
                 <Box style={{ width: 180, maxWidth: "100%" }}>
                   <Text size="xs" c="dimmed" mb={4}>Size</Text>
                   <Slider
