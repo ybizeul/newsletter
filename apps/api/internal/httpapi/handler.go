@@ -54,16 +54,16 @@ func NewHandler(db *mongo.Database, cfg config.Config) *Handler {
 }
 
 type createArticleRequest struct {
-	AuthorID     string   `json:"authorId"`
-	Title        string   `json:"title"`
-	Markdown     string   `json:"markdown"`
-	Tags         []string `json:"tags"`
-	TopicIcon    string   `json:"topicIcon"`
-	Illustration string   `json:"illustration"`
-	IconSource   string   `json:"iconSource"`
-	IconZoom     int      `json:"iconZoom"`
-	IconBgColor  string   `json:"iconBgColor"`
-	IconStrokeColor string `json:"iconStrokeColor"`
+	AuthorID        string   `json:"authorId"`
+	Title           string   `json:"title"`
+	Markdown        string   `json:"markdown"`
+	Tags            []string `json:"tags"`
+	TopicIcon       string   `json:"topicIcon"`
+	Illustration    string   `json:"illustration"`
+	IconSource      string   `json:"iconSource"`
+	IconZoom        int      `json:"iconZoom"`
+	IconBgColor     string   `json:"iconBgColor"`
+	IconStrokeColor string   `json:"iconStrokeColor"`
 }
 
 type articleSummary struct {
@@ -108,22 +108,22 @@ func (h *Handler) CreateArticle(w http.ResponseWriter, r *http.Request) {
 
 	now := time.Now().UTC()
 	article := model.Article{
-		ID:           bson.NewObjectID().Hex(),
-		AuthorID:     req.AuthorID,
-		Title:        req.Title,
-		Markdown:     req.Markdown,
-		Tags:         normalizeArticleTags(req.Tags),
-		TopicIcon:    req.TopicIcon,
-		Illustration: req.Illustration,
-		IconSource:   strings.TrimSpace(req.IconSource),
-		IconZoom:     normalizeIconZoom(req.IconZoom),
-		IconBgColor:  strings.TrimSpace(req.IconBgColor),
+		ID:              bson.NewObjectID().Hex(),
+		AuthorID:        req.AuthorID,
+		Title:           req.Title,
+		Markdown:        req.Markdown,
+		Tags:            normalizeArticleTags(req.Tags),
+		TopicIcon:       req.TopicIcon,
+		Illustration:    req.Illustration,
+		IconSource:      strings.TrimSpace(req.IconSource),
+		IconZoom:        normalizeIconZoom(req.IconZoom),
+		IconBgColor:     strings.TrimSpace(req.IconBgColor),
 		IconStrokeColor: strings.TrimSpace(req.IconStrokeColor),
-		SentCount:    0,
-		Status:       model.ArticleStatusDraft,
-		Version:      1,
-		CreatedAt:    now,
-		UpdatedAt:    now,
+		SentCount:       0,
+		Status:          model.ArticleStatusDraft,
+		Version:         1,
+		CreatedAt:       now,
+		UpdatedAt:       now,
 	}
 
 	if _, err := h.articles.InsertOne(r.Context(), article); err != nil {
@@ -220,15 +220,15 @@ func (h *Handler) GetArticle(w http.ResponseWriter, r *http.Request, id string) 
 }
 
 type updateArticleRequest struct {
-	Title        string   `json:"title"`
-	Markdown     string   `json:"markdown"`
-	Tags         []string `json:"tags"`
-	TopicIcon    string   `json:"topicIcon"`
-	Illustration string   `json:"illustration"`
-	IconSource   string   `json:"iconSource"`
-	IconZoom     int      `json:"iconZoom"`
-	IconBgColor  string   `json:"iconBgColor"`
-	IconStrokeColor string `json:"iconStrokeColor"`
+	Title           string   `json:"title"`
+	Markdown        string   `json:"markdown"`
+	Tags            []string `json:"tags"`
+	TopicIcon       string   `json:"topicIcon"`
+	Illustration    string   `json:"illustration"`
+	IconSource      string   `json:"iconSource"`
+	IconZoom        int      `json:"iconZoom"`
+	IconBgColor     string   `json:"iconBgColor"`
+	IconStrokeColor string   `json:"iconStrokeColor"`
 }
 
 func (h *Handler) UpdateArticle(w http.ResponseWriter, r *http.Request, id string) {
@@ -245,16 +245,16 @@ func (h *Handler) UpdateArticle(w http.ResponseWriter, r *http.Request, id strin
 
 	update := bson.M{
 		"$set": bson.M{
-			"title":        strings.TrimSpace(req.Title),
-			"markdown":     req.Markdown,
-			"tags":         normalizeArticleTags(req.Tags),
-			"topicIcon":    strings.TrimSpace(req.TopicIcon),
-			"illustration": strings.TrimSpace(req.Illustration),
-			"iconSource":   strings.TrimSpace(req.IconSource),
-			"iconZoom":     normalizeIconZoom(req.IconZoom),
-			"iconBgColor":  strings.TrimSpace(req.IconBgColor),
+			"title":           strings.TrimSpace(req.Title),
+			"markdown":        req.Markdown,
+			"tags":            normalizeArticleTags(req.Tags),
+			"topicIcon":       strings.TrimSpace(req.TopicIcon),
+			"illustration":    strings.TrimSpace(req.Illustration),
+			"iconSource":      strings.TrimSpace(req.IconSource),
+			"iconZoom":        normalizeIconZoom(req.IconZoom),
+			"iconBgColor":     strings.TrimSpace(req.IconBgColor),
 			"iconStrokeColor": strings.TrimSpace(req.IconStrokeColor),
-			"updatedAt":    time.Now().UTC(),
+			"updatedAt":       time.Now().UTC(),
 		},
 		"$inc": bson.M{"version": 1},
 	}
