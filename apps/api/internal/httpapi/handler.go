@@ -1147,12 +1147,16 @@ func (h *Handler) renderNewsletter(ctx context.Context, newsletter model.Newslet
 	introHTML = enforceImageFullWidth(introHTML)
 
 	var body strings.Builder
-	body.WriteString("<!doctype html><html><body style=\"font-family:Arial,Helvetica,sans-serif;line-height:1.5;color:#111\">\n")
-	body.WriteString("<div style=\"max-width:680px;margin:0 auto;padding:24px 8px\">\n")
+	body.WriteString("<!doctype html><html><body style=\"margin:0;padding:0;font-family:Arial,Helvetica,sans-serif;line-height:1.5;color:#111\">\n")
+	body.WriteString("<table role=\"presentation\" cellpadding=\"0\" cellspacing=\"0\" border=\"0\" width=\"100%\" style=\"border-collapse:collapse;margin:0;padding:0;mso-table-lspace:0pt;mso-table-rspace:0pt;\">\n")
+	body.WriteString("<tr><td align=\"center\" style=\"padding:24px 8px;mso-line-height-rule:exactly\">\n")
+	body.WriteString("<!--[if mso]><table role=\"presentation\" cellpadding=\"0\" cellspacing=\"0\" border=\"0\" width=\"680\" align=\"center\" style=\"border-collapse:collapse;\"><tr><td width=\"680\" style=\"width:680px;\"><![endif]-->\n")
+	body.WriteString("<table role=\"presentation\" cellpadding=\"0\" cellspacing=\"0\" border=\"0\" width=\"100%\" align=\"center\" style=\"width:100%;max-width:680px;border-collapse:collapse;margin:0 auto;table-layout:fixed;mso-table-lspace:0pt;mso-table-rspace:0pt;\">\n")
+	body.WriteString("<tr><td style=\"padding:0;text-align:left;width:100%;word-break:break-word;overflow-wrap:anywhere;\">\n")
 	if headerHTML != "" {
-		body.WriteString("<section style=\"margin-bottom:20px\">" + headerHTML + "</section>\n")
+		body.WriteString("<div style=\"margin-bottom:20px\">" + headerHTML + "</div>\n")
 	}
-	body.WriteString("<section style=\"margin-bottom:28px\">" + introHTML + "</section>\n")
+	body.WriteString("<div style=\"margin-bottom:28px\">" + introHTML + "</div>\n")
 
 	var text strings.Builder
 	if headerText != "" {
@@ -1200,27 +1204,30 @@ func (h *Handler) renderNewsletter(ctx context.Context, newsletter model.Newslet
 			}
 		}
 
-		body.WriteString("<article style=\"margin-bottom:32px;border-top:1px solid #e5e7eb;padding-top:20px\">\n")
+		body.WriteString("<table role=\"presentation\" cellpadding=\"0\" cellspacing=\"0\" width=\"100%\" style=\"border-collapse:collapse;margin:0 0 20px;table-layout:fixed\"><tr><td style=\"border-top:1px solid #e5e7eb;font-size:0;line-height:0;height:0\">&nbsp;</td></tr></table>\n")
+		body.WriteString("<div style=\"margin-bottom:32px\">\n")
 		if hasIconIllustration {
 			body.WriteString("<table role=\"presentation\" cellpadding=\"0\" cellspacing=\"0\" style=\"border-collapse:collapse;table-layout:fixed;margin:0 0 8px;width:100%\"><tr>")
 			body.WriteString("<td style=\"width:40px;vertical-align:middle\"><img src=\"" + html.EscapeString(iconIllustration) + "\" alt=\"\" width=\"40\" height=\"40\" style=\"display:block;width:40px;height:40px;border-radius:9999px\" /></td>")
 			body.WriteString("<td style=\"width:10px;font-size:0;line-height:0\">&nbsp;</td>")
-			body.WriteString("<td style=\"vertical-align:middle;word-break:break-word;overflow-wrap:anywhere\"><p style=\"margin:0;font-size:20px;line-height:26px;font-weight:700;word-break:break-word;overflow-wrap:anywhere\">" + html.EscapeString(article.Title) + "</p></td>")
+			body.WriteString("<td style=\"vertical-align:middle;word-break:break-word;overflow-wrap:anywhere;font-size:20px;line-height:26px;color:#111111;mso-line-height-rule:exactly;\"><b style=\"font-weight:700;mso-bidi-font-weight:bold;\">" + html.EscapeString(article.Title) + "</b></td>")
 			body.WriteString("</tr></table>\n")
 		} else {
-			body.WriteString("<p style=\"margin:0 0 8px;font-size:20px;line-height:26px;font-weight:700;word-break:break-word;overflow-wrap:anywhere\">" + html.EscapeString(article.Title) + "</p>\n")
+			body.WriteString("<table role=\"presentation\" cellpadding=\"0\" cellspacing=\"0\" width=\"100%\" style=\"border-collapse:collapse;margin:0 0 8px;table-layout:fixed\"><tr><td style=\"vertical-align:middle;word-break:break-word;overflow-wrap:anywhere;font-size:20px;line-height:26px;color:#111111;mso-line-height-rule:exactly;\"><b style=\"font-weight:700;mso-bidi-font-weight:bold;\">" + html.EscapeString(article.Title) + "</b></td></tr></table>\n")
 		}
 		if illustration != "" && !hasIconIllustration {
 			body.WriteString("<p style=\"margin:12px 0\"><img src=\"" + html.EscapeString(illustration) + "\" alt=\"" + html.EscapeString(article.Title) + "\" style=\"max-width:100%;width:100%;height:auto;display:block;margin:0 auto;float:none;border-radius:8px\" /></p>\n")
 		}
 		body.WriteString(articleHTML + "\n")
-		body.WriteString("</article>\n")
+		body.WriteString("</div>\n")
 
 		text.WriteString(article.Title + "\n")
 		text.WriteString(article.Markdown + "\n\n")
 	}
 
-	body.WriteString("</div></body></html>")
+	body.WriteString("</td></tr></table>\n")
+	body.WriteString("<!--[if mso]></td></tr></table><![endif]-->\n")
+	body.WriteString("</td></tr></table></body></html>")
 	htmlBody := convertSVGDataURLsInHTMLToPNG(body.String())
 	return htmlBody, strings.TrimSpace(text.String()), nil
 }
@@ -1291,8 +1298,12 @@ func convertSVGDataURLToPNGDataURL(input string) (string, error) {
 
 func enforceImageFullWidth(input string) string {
 	re := regexp.MustCompile(`(?i)<img\b([^>]*)>`)
+	widthAttrRe := regexp.MustCompile(`(?i)\swidth\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)`)
+	heightAttrRe := regexp.MustCompile(`(?i)\sheight\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)`)
 
 	return re.ReplaceAllStringFunc(input, func(tag string) string {
+		tag = widthAttrRe.ReplaceAllString(tag, "")
+		tag = heightAttrRe.ReplaceAllString(tag, "")
 		styleRe := regexp.MustCompile(`(?i)style\s*=\s*"([^"]*)"`)
 		if matches := styleRe.FindStringSubmatch(tag); len(matches) == 2 {
 			styleValue := strings.TrimSpace(matches[1])
@@ -1300,17 +1311,29 @@ func enforceImageFullWidth(input string) string {
 				styleValue += ";"
 			}
 			styleValue += "max-width:100%;width:100%;height:auto;display:block;margin:0 auto;float:none;"
-			return styleRe.ReplaceAllString(tag, `style="`+styleValue+`"`)
+			updated := styleRe.ReplaceAllString(tag, `style="`+styleValue+`"`)
+			if !regexp.MustCompile(`(?i)\swidth\s*=`).MatchString(updated) {
+				updated = strings.Replace(updated, ">", ` width="100%">`, 1)
+			}
+			return updated
 		}
 
-		return strings.Replace(tag, "<img", `<img style="max-width:100%;width:100%;height:auto;display:block;margin:0 auto;float:none;"`, 1)
+		updated := strings.Replace(tag, "<img", `<img style="max-width:100%;width:100%;height:auto;display:block;margin:0 auto;float:none;"`, 1)
+		if !regexp.MustCompile(`(?i)\swidth\s*=`).MatchString(updated) {
+			updated = strings.Replace(updated, ">", ` width="100%">`, 1)
+		}
+		return updated
 	})
 }
 
 func enforceImageNaturalWidth(input string) string {
 	re := regexp.MustCompile(`(?i)<img\b([^>]*)>`)
+	widthAttrRe := regexp.MustCompile(`(?i)\swidth\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)`)
+	heightAttrRe := regexp.MustCompile(`(?i)\sheight\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)`)
 
 	return re.ReplaceAllStringFunc(input, func(tag string) string {
+		tag = widthAttrRe.ReplaceAllString(tag, "")
+		tag = heightAttrRe.ReplaceAllString(tag, "")
 		styleRe := regexp.MustCompile(`(?i)style\s*=\s*"([^"]*)"`)
 		if matches := styleRe.FindStringSubmatch(tag); len(matches) == 2 {
 			styleValue := strings.TrimSpace(matches[1])
