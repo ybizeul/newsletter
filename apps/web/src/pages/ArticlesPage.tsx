@@ -41,6 +41,7 @@ const DEFAULT_TOPIC_ICON_BG = "#228be6";
 const DEFAULT_TOPIC_ICON_STROKE = "#ffffff";
 const ARTICLES_PANE_WIDTH_STORAGE_KEY = "newsletter.articles.pane.width";
 const FAVORITE_NEWSLETTER_ID_STORAGE_KEY = "newsletter.favorite.id";
+const NEWSLETTER_MAX_CONTENT_WIDTH_PX = 680;
 const TAG_COLORS = ["blue", "teal", "cyan", "grape", "indigo", "violet", "lime", "orange", "pink"] as const;
 
 let cachedArticleSummaries: ArticleSummary[] | null = null;
@@ -390,6 +391,7 @@ export default function ArticlesPage() {
   const [isFavoriteMembershipLoading, setIsFavoriteMembershipLoading] = useState(false);
   const [isEditingArticleInFavorite, setIsEditingArticleInFavorite] = useState(false);
   const [isCompactFavoriteAction, setIsCompactFavoriteAction] = useState(false);
+  const [isManualNewArticleMode, setIsManualNewArticleMode] = useState(false);
 
   const loadArticles = async () => {
     setIsLoading(true);
@@ -577,6 +579,7 @@ export default function ArticlesPage() {
   };
 
   const onEdit = async (article: ArticleSummary) => {
+    setIsManualNewArticleMode(false);
     setError(null);
     try {
       const fullArticle = await getArticle(article.id);
@@ -777,14 +780,18 @@ export default function ArticlesPage() {
     }
 
     if (selectedArticleId === null && editingId === null) {
+      if (isManualNewArticleMode) {
+        return;
+      }
       void onEdit(articles[0]);
       return;
     }
 
     if (selectedArticleId && !articles.some((article) => article.id === selectedArticleId)) {
+      setIsManualNewArticleMode(false);
       resetForm();
     }
-  }, [articles, isMobile, selectedArticleId, editingId]);
+  }, [articles, isMobile, selectedArticleId, editingId, isManualNewArticleMode]);
 
   useEffect(() => {
     if (!isMobile) {
@@ -878,6 +885,7 @@ export default function ArticlesPage() {
         setArticles((current) => [toArticleSummary(created), ...current]);
         setSelectedArticleID(created.id);
         setEditingID(created.id);
+        setIsManualNewArticleMode(false);
         lastSavedDraftRef.current = JSON.stringify(payload);
         setAutosaveStatus("saved");
       }
@@ -1035,12 +1043,47 @@ export default function ArticlesPage() {
     const reader = new FileReader();
     reader.onload = () => {
       if (typeof reader.result === "string") {
-        const dataURL = reader.result;
-        const token = `img_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-        setPastedImageMap((current) => ({ ...current, [token]: dataURL }));
-        setMarkdown((current) =>
-          insertAtCursor(target, current, `\n![Pasted image](paste://${token})\n`)
-        );
+        const sourceDataURL = reader.result;
+        const img = new Image();
+
+        img.onload = () => {
+          const sourceWidth = img.naturalWidth;
+          const sourceHeight = img.naturalHeight;
+
+          if (!Number.isFinite(sourceWidth) || !Number.isFinite(sourceHeight) || sourceWidth <= 0 || sourceHeight <= 0) {
+            setError("Failed to process pasted image");
+            return;
+          }
+
+          const targetWidth = Math.min(sourceWidth, NEWSLETTER_MAX_CONTENT_WIDTH_PX);
+          const targetHeight = Math.max(1, Math.round((sourceHeight * targetWidth) / sourceWidth));
+
+          const canvas = document.createElement("canvas");
+          canvas.width = targetWidth;
+          canvas.height = targetHeight;
+
+          const ctx = canvas.getContext("2d");
+          if (!ctx) {
+            setError("Failed to process pasted image");
+            return;
+          }
+
+          // Fit down to newsletter width while preserving aspect ratio.
+          ctx.drawImage(img, 0, 0, targetWidth, targetHeight);
+
+          const jpegDataURL = canvas.toDataURL("image/jpeg", 0.8);
+          const token = `img_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+          setPastedImageMap((current) => ({ ...current, [token]: jpegDataURL }));
+          setMarkdown((current) =>
+            insertAtCursor(target, current, `\n![Pasted image](paste://${token})\n`)
+          );
+        };
+
+        img.onerror = () => {
+          setError("Failed to process pasted image");
+        };
+
+        img.src = sourceDataURL;
       }
     };
     reader.onerror = () => {
@@ -1246,6 +1289,7 @@ export default function ArticlesPage() {
               variant="light"
               size="xs"
               onClick={() => {
+                setIsManualNewArticleMode(true);
                 resetForm();
                 if (isMobile) {
                   setIsMobileEditorOpen(true);

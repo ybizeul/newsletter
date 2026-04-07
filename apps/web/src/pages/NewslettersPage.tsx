@@ -177,6 +177,7 @@ export default function NewslettersPage() {
   const [hasLoadedNewslettersData, setHasLoadedNewslettersData] = useState(() => cachedNewslettersData !== null);
   const [autosaveStatus, setAutosaveStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const [favoriteNewsletterId, setFavoriteNewsletterId] = useState<string | null>(getStoredFavoriteNewsletterId);
+  const [isManualNewNewsletterMode, setIsManualNewNewsletterMode] = useState(false);
 
   const withFavoriteFlag = (newsletter: NewsletterSummary): NewsletterSummary => ({
     ...newsletter,
@@ -312,6 +313,7 @@ export default function NewslettersPage() {
   };
 
   const onSelectNewsletter = async (newsletter: NewsletterSummary) => {
+    setIsManualNewNewsletterMode(false);
     setError(null);
     try {
       const fullNewsletter = await getNewsletter(newsletter.id);
@@ -354,14 +356,18 @@ export default function NewslettersPage() {
     }
 
     if (!selectedNewsletterId) {
+      if (isManualNewNewsletterMode) {
+        return;
+      }
       void onSelectNewsletter(newsletters[0]);
       return;
     }
 
     if (!newsletters.some((newsletter) => newsletter.id === selectedNewsletterId)) {
+      setIsManualNewNewsletterMode(false);
       resetForm();
     }
-  }, [newsletters, isMobile, selectedNewsletterId]);
+  }, [newsletters, isMobile, selectedNewsletterId, isManualNewNewsletterMode]);
 
   useEffect(() => {
     if (!isMobile) {
@@ -427,6 +433,7 @@ export default function NewslettersPage() {
         });
         setNewsletters((current) => [withFavoriteFlag(toNewsletterSummary(created)), ...current]);
         setSelectedNewsletterID(created.id);
+        setIsManualNewNewsletterMode(false);
         lastSavedDraftRef.current = JSON.stringify(payload);
         setAutosaveStatus("saved");
         scheduleAutosaveSavedReset();
@@ -708,6 +715,7 @@ export default function NewslettersPage() {
               variant="light"
               size="xs"
               onClick={() => {
+                setIsManualNewNewsletterMode(true);
                 resetForm();
                 if (isMobile) {
                   setIsMobileEditorOpen(true);

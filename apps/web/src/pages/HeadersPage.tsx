@@ -467,6 +467,7 @@ export default function HeadersPage() {
   const [error, setError] = useState<string | null>(null);
   const [deleteHeaderId, setDeleteHeaderId] = useState<string | null>(null);
   const [tableDeletionAction, setTableDeletionAction] = useState<"row" | "column" | "table" | null>(null);
+  const [isManualNewHeaderMode, setIsManualNewHeaderMode] = useState(false);
 
   const editor = useEditor({
     extensions: [
@@ -701,6 +702,7 @@ export default function HeadersPage() {
   }, [editor]);
 
   const onSelectHeader = async (header: Header) => {
+    setIsManualNewHeaderMode(false);
     setSelectedHeaderID(header.id);
     setTitle(header.title);
     lastTablePosRef.current = null;
@@ -746,14 +748,18 @@ export default function HeadersPage() {
     }
 
     if (!selectedHeaderId) {
+      if (isManualNewHeaderMode) {
+        return;
+      }
       void onSelectHeader(headers[0]);
       return;
     }
 
     if (!headers.some((header) => header.id === selectedHeaderId)) {
+      setIsManualNewHeaderMode(false);
       resetForm();
     }
-  }, [headers, isMobile, selectedHeaderId]);
+  }, [headers, isMobile, selectedHeaderId, isManualNewHeaderMode]);
 
   useEffect(() => {
     if (!isMobile) {
@@ -790,6 +796,7 @@ export default function HeadersPage() {
         });
         setHeaders((current) => [created, ...current]);
         setSelectedHeaderID(created.id);
+        setIsManualNewHeaderMode(false);
         lastSavedDraftRef.current = JSON.stringify({ title: created.title.trim(), markdown: created.markdown });
         setAutosaveStatus("idle");
       }
@@ -1139,6 +1146,7 @@ export default function HeadersPage() {
               variant="light"
               size="xs"
               onClick={() => {
+                setIsManualNewHeaderMode(true);
                 resetForm();
                 if (isMobile) {
                   setIsMobileEditorOpen(true);
