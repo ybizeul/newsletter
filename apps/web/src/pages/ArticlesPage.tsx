@@ -42,6 +42,7 @@ const DEFAULT_TOPIC_ICON_STROKE = "#ffffff";
 const ARTICLES_PANE_WIDTH_STORAGE_KEY = "newsletter.articles.pane.width";
 const FAVORITE_NEWSLETTER_ID_STORAGE_KEY = "newsletter.favorite.id";
 const NEWSLETTER_MAX_CONTENT_WIDTH_PX = 680;
+const ICON_PNG_RASTER_SIZE = 90;
 const TAG_COLORS = ["blue", "teal", "cyan", "grape", "indigo", "violet", "lime", "orange", "pink"] as const;
 
 let cachedArticleSummaries: ArticleSummary[] | null = null;
@@ -110,6 +111,35 @@ function buildTopicIconIllustration(iconMap: TablerIconMap | null, iconName: str
 
   const finalSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 40 40"><circle cx="20" cy="20" r="20" fill="${circleColor}"/>${iconSvg}</svg>`;
   return `data:image/svg+xml,${encodeURIComponent(finalSvg)}`;
+}
+
+async function rasterizeSvgDataUrlToPngDataUrl(svgDataUrl: string): Promise<string> {
+  return await new Promise<string>((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => {
+      const canvas = document.createElement("canvas");
+      const sourceWidth = img.naturalWidth || 40;
+      const sourceHeight = img.naturalHeight || 40;
+      canvas.width = ICON_PNG_RASTER_SIZE;
+      canvas.height = ICON_PNG_RASTER_SIZE;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) {
+        reject(new Error("Failed to create icon canvas"));
+        return;
+      }
+
+      const scale = Math.min(ICON_PNG_RASTER_SIZE / sourceWidth, ICON_PNG_RASTER_SIZE / sourceHeight);
+      const drawWidth = sourceWidth * scale;
+      const drawHeight = sourceHeight * scale;
+      const offsetX = (ICON_PNG_RASTER_SIZE - drawWidth) / 2;
+      const offsetY = (ICON_PNG_RASTER_SIZE - drawHeight) / 2;
+
+      ctx.drawImage(img, offsetX, offsetY, drawWidth, drawHeight);
+      resolve(canvas.toDataURL("image/png"));
+    };
+    img.onerror = () => reject(new Error("Failed to rasterize icon"));
+    img.src = svgDataUrl;
+  });
 }
 
 function buildPastedImageTopicIconIllustration(imageDataUrl: string, circleColor: string, sizeDelta: number): string {
@@ -592,11 +622,14 @@ export default function ArticlesPage() {
       setPastedImageMap(normalized.imageMap);
       setTopicIcon(fullArticle.topicIcon ?? "");
       setCustomIconImageDataUrl(
-        fullArticle.iconSource ?? (fullArticle.topicIcon ? "" : (fullArticle.illustration ?? ""))
+        fullArticle.topicIcon
+          ? ""
+          : (fullArticle.iconSource?.startsWith("data:image/svg+xml") ? fullArticle.iconSource : "")
       );
       setCustomIconImageSizeDelta(typeof fullArticle.iconZoom === "number" ? fullArticle.iconZoom : 0);
-      setTopicIconBgColor(extractTopicIconBackgroundColor(fullArticle.illustration));
-      setTopicIconStrokeColor(extractTopicIconStrokeColor(fullArticle.illustration));
+      const iconStyleSource = fullArticle.iconSource || fullArticle.illustration;
+      setTopicIconBgColor(fullArticle.iconBgColor || extractTopicIconBackgroundColor(iconStyleSource));
+      setTopicIconStrokeColor(fullArticle.iconStrokeColor || extractTopicIconStrokeColor(iconStyleSource));
       setTopicIconIllustration(fullArticle.illustration ?? "");
       lastSavedDraftRef.current = JSON.stringify({
         title: fullArticle.title,
@@ -605,7 +638,9 @@ export default function ArticlesPage() {
         topicIcon: fullArticle.topicIcon ?? "",
         illustration: fullArticle.illustration ?? "",
         iconSource: fullArticle.iconSource ?? "",
-        iconZoom: typeof fullArticle.iconZoom === "number" ? fullArticle.iconZoom : 0
+        iconZoom: typeof fullArticle.iconZoom === "number" ? fullArticle.iconZoom : 0,
+        iconBgColor: fullArticle.iconBgColor || "",
+        iconStrokeColor: fullArticle.iconStrokeColor || ""
       });
       setAutosaveStatus("idle");
       if (isMobile) {
@@ -618,7 +653,7 @@ export default function ArticlesPage() {
 
   const resolvedTopicIconName = useMemo(() => resolveTablerIconName(tablerIconMap, topicIcon), [tablerIconMap, topicIcon]);
 
-  const generatedTopicIconIllustration = useMemo(
+  const generatedTopicIconSource = useMemo(
     () => customIconImageDataUrl.trim()
       ? buildPastedImageTopicIconIllustration(customIconImageDataUrl, topicIconBgColor, customIconImageSizeDelta)
       : buildTopicIconIllustration(tablerIconMap, resolvedTopicIconName, topicIconBgColor, topicIconStrokeColor),
@@ -626,27 +661,33 @@ export default function ArticlesPage() {
   );
 
   useEffect(() => {
-    if (customIconImageDataUrl.trim()) {
-      if (generatedTopicIconIllustration) {
-        setTopicIconIllustration(generatedTopicIconIllustration);
-      }
-      return;
-    }
-
-    if (!topicIcon.trim()) {
+    if (!customIconImageDataUrl.trim() && !topicIcon.trim()) {
       setTopicIconIllustration("");
       return;
     }
 
-    if (!tablerIconMap) {
+    if (!generatedTopicIconSource) {
       void loadTablerIcons();
       return;
     }
 
-    if (generatedTopicIconIllustration) {
-      setTopicIconIllustration(generatedTopicIconIllustration);
-    }
-  }, [customIconImageDataUrl, topicIcon, tablerIconMap, generatedTopicIconIllustration]);
+    let cancelled = false;
+    void rasterizeSvgDataUrlToPngDataUrl(generatedTopicIconSource)
+      .then((pngDataUrl) => {
+        if (!cancelled) {
+          setTopicIconIllustration(pngDataUrl);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setError("Failed to generate icon preview");
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [customIconImageDataUrl, topicIcon, generatedTopicIconSource]);
 
   const onPasteTopicIconImage = (event: ClipboardEvent<HTMLDivElement>) => {
     const applySvgMarkup = (svgMarkup: string) => {
@@ -851,8 +892,12 @@ export default function ArticlesPage() {
     tags,
     topicIcon: topicIcon.trim(),
     illustration: topicIconIllustration,
-    iconSource: customIconImageDataUrl.trim(),
-    iconZoom: customIconImageDataUrl.trim() ? customIconImageSizeDelta : 0
+    iconSource: customIconImageDataUrl.trim()
+      ? customIconImageDataUrl.trim()
+      : buildTopicIconIllustration(tablerIconMap, resolvedTopicIconName, topicIconBgColor, topicIconStrokeColor),
+    iconZoom: customIconImageDataUrl.trim() ? customIconImageSizeDelta : 0,
+    iconBgColor: topicIconBgColor,
+    iconStrokeColor: topicIconStrokeColor
   });
 
   const onSubmit = async () => {
@@ -1003,7 +1048,9 @@ export default function ArticlesPage() {
         topicIcon: source.topicIcon ?? "",
         illustration: source.illustration ?? "",
         iconSource: source.iconSource ?? "",
-        iconZoom: typeof source.iconZoom === "number" ? source.iconZoom : 0
+        iconZoom: typeof source.iconZoom === "number" ? source.iconZoom : 0,
+        iconBgColor: source.iconBgColor ?? "",
+        iconStrokeColor: source.iconStrokeColor ?? ""
       });
 
       const createdSummary = toArticleSummary(created);

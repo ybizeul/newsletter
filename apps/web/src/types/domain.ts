@@ -12,6 +12,8 @@ export interface Article {
   illustration?: string;
   iconSource?: string;
   iconZoom?: number;
+  iconBgColor?: string;
+  iconStrokeColor?: string;
   sentCount?: number;
   lastUsed?: string;
   status: ArticleStatus;

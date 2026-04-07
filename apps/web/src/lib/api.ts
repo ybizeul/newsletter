@@ -11,6 +11,8 @@ type CreateArticlePayload = {
   illustration?: string;
   iconSource?: string;
   iconZoom?: number;
+  iconBgColor?: string;
+  iconStrokeColor?: string;
 };
 
 type CreateNewsletterPayload = {
@@ -40,6 +42,8 @@ type UpdateArticlePayload = {
   illustration?: string;
   iconSource?: string;
   iconZoom?: number;
+  iconBgColor?: string;
+  iconStrokeColor?: string;
 };
 
 type CreateHeaderPayload = {

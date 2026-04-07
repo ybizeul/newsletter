@@ -8,6 +8,8 @@ import (
 	"errors"
 	"fmt"
 	"html"
+	"image"
+	"image/png"
 	"log"
 	"net/http"
 	"net/smtp"
@@ -21,6 +23,8 @@ import (
 	"newsletter/api/internal/model"
 
 	"github.com/microcosm-cc/bluemonday"
+	"github.com/srwiley/oksvg"
+	"github.com/srwiley/rasterx"
 	"github.com/yuin/goldmark"
 	"github.com/yuin/goldmark/extension"
 	gmhtml "github.com/yuin/goldmark/renderer/html"
@@ -58,6 +62,8 @@ type createArticleRequest struct {
 	Illustration string   `json:"illustration"`
 	IconSource   string   `json:"iconSource"`
 	IconZoom     int      `json:"iconZoom"`
+	IconBgColor  string   `json:"iconBgColor"`
+	IconStrokeColor string `json:"iconStrokeColor"`
 }
 
 type articleSummary struct {
@@ -111,6 +117,8 @@ func (h *Handler) CreateArticle(w http.ResponseWriter, r *http.Request) {
 		Illustration: req.Illustration,
 		IconSource:   strings.TrimSpace(req.IconSource),
 		IconZoom:     normalizeIconZoom(req.IconZoom),
+		IconBgColor:  strings.TrimSpace(req.IconBgColor),
+		IconStrokeColor: strings.TrimSpace(req.IconStrokeColor),
 		SentCount:    0,
 		Status:       model.ArticleStatusDraft,
 		Version:      1,
@@ -219,6 +227,8 @@ type updateArticleRequest struct {
 	Illustration string   `json:"illustration"`
 	IconSource   string   `json:"iconSource"`
 	IconZoom     int      `json:"iconZoom"`
+	IconBgColor  string   `json:"iconBgColor"`
+	IconStrokeColor string `json:"iconStrokeColor"`
 }
 
 func (h *Handler) UpdateArticle(w http.ResponseWriter, r *http.Request, id string) {
@@ -242,6 +252,8 @@ func (h *Handler) UpdateArticle(w http.ResponseWriter, r *http.Request, id strin
 			"illustration": strings.TrimSpace(req.Illustration),
 			"iconSource":   strings.TrimSpace(req.IconSource),
 			"iconZoom":     normalizeIconZoom(req.IconZoom),
+			"iconBgColor":  strings.TrimSpace(req.IconBgColor),
+			"iconStrokeColor": strings.TrimSpace(req.IconStrokeColor),
 			"updatedAt":    time.Now().UTC(),
 		},
 		"$inc": bson.M{"version": 1},
@@ -1175,20 +1187,31 @@ func (h *Handler) renderNewsletter(ctx context.Context, newsletter model.Newslet
 			return "", "", err
 		}
 		articleHTML = enforceImageFullWidth(articleHTML)
-		hasIconIllustration := regexp.MustCompile(`(?i)^data:image/svg\+xml(?:;[^,]*)?,`).MatchString(article.Illustration)
+		illustration := strings.TrimSpace(article.Illustration)
+		hasIconIllustration := strings.TrimSpace(article.IconSource) != "" ||
+			regexp.MustCompile(`(?i)^data:image/svg\+xml(?:;[^,]*)?,`).MatchString(illustration)
+		iconIllustration := illustration
+		if hasIconIllustration {
+			convertedPNG, convErr := convertSVGDataURLToPNGDataURL(illustration)
+			if convErr != nil {
+				log.Printf("icon svg->png conversion failed article_id=%s error=%v", article.ID, convErr)
+			} else {
+				iconIllustration = convertedPNG
+			}
+		}
 
 		body.WriteString("<article style=\"margin-bottom:32px;border-top:1px solid #e5e7eb;padding-top:20px\">\n")
 		if hasIconIllustration {
 			body.WriteString("<table role=\"presentation\" cellpadding=\"0\" cellspacing=\"0\" style=\"border-collapse:collapse;table-layout:fixed;margin:0 0 8px;width:100%\"><tr>")
-			body.WriteString("<td style=\"width:40px;vertical-align:middle\"><img src=\"" + html.EscapeString(article.Illustration) + "\" alt=\"\" width=\"40\" height=\"40\" style=\"display:block;width:40px;height:40px;border-radius:9999px\" /></td>")
+			body.WriteString("<td style=\"width:40px;vertical-align:middle\"><img src=\"" + html.EscapeString(iconIllustration) + "\" alt=\"\" width=\"40\" height=\"40\" style=\"display:block;width:40px;height:40px;border-radius:9999px\" /></td>")
 			body.WriteString("<td style=\"width:10px;font-size:0;line-height:0\">&nbsp;</td>")
 			body.WriteString("<td style=\"vertical-align:middle;word-break:break-word;overflow-wrap:anywhere\"><p style=\"margin:0;font-size:20px;line-height:26px;font-weight:700;word-break:break-word;overflow-wrap:anywhere\">" + html.EscapeString(article.Title) + "</p></td>")
 			body.WriteString("</tr></table>\n")
 		} else {
 			body.WriteString("<p style=\"margin:0 0 8px;font-size:20px;line-height:26px;font-weight:700;word-break:break-word;overflow-wrap:anywhere\">" + html.EscapeString(article.Title) + "</p>\n")
 		}
-		if article.Illustration != "" && !hasIconIllustration {
-			body.WriteString("<p style=\"margin:12px 0\"><img src=\"" + html.EscapeString(article.Illustration) + "\" alt=\"" + html.EscapeString(article.Title) + "\" style=\"max-width:100%;width:100%;height:auto;display:block;margin:0 auto;float:none;border-radius:8px\" /></p>\n")
+		if illustration != "" && !hasIconIllustration {
+			body.WriteString("<p style=\"margin:12px 0\"><img src=\"" + html.EscapeString(illustration) + "\" alt=\"" + html.EscapeString(article.Title) + "\" style=\"max-width:100%;width:100%;height:auto;display:block;margin:0 auto;float:none;border-radius:8px\" /></p>\n")
 		}
 		body.WriteString(articleHTML + "\n")
 		body.WriteString("</article>\n")
@@ -1198,7 +1221,72 @@ func (h *Handler) renderNewsletter(ctx context.Context, newsletter model.Newslet
 	}
 
 	body.WriteString("</div></body></html>")
-	return body.String(), strings.TrimSpace(text.String()), nil
+	htmlBody := convertSVGDataURLsInHTMLToPNG(body.String())
+	return htmlBody, strings.TrimSpace(text.String()), nil
+}
+
+func convertSVGDataURLsInHTMLToPNG(input string) string {
+	svgDataURIRe := regexp.MustCompile(`(?i)data:image/svg\+xml(?:;[^,]*)?,[^"'\s>)]+`)
+	const transparentPNGDataURI = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO7Z2NQAAAAASUVORK5CYII="
+
+	return svgDataURIRe.ReplaceAllStringFunc(input, func(svgURI string) string {
+		converted, err := convertSVGDataURLToPNGDataURL(svgURI)
+		if err != nil {
+			log.Printf("html svg->png replacement failed: %v", err)
+			return transparentPNGDataURI
+		}
+		return converted
+	})
+}
+
+func convertSVGDataURLToPNGDataURL(input string) (string, error) {
+	trimmed := strings.TrimSpace(input)
+	if trimmed == "" {
+		return "", fmt.Errorf("empty svg data url")
+	}
+
+	commaIndex := strings.Index(trimmed, ",")
+	if commaIndex < 0 {
+		return "", fmt.Errorf("invalid svg data url")
+	}
+
+	header := strings.ToLower(trimmed[:commaIndex])
+	if !strings.HasPrefix(header, "data:image/svg+xml") {
+		return "", fmt.Errorf("not an svg data url")
+	}
+
+	payload := trimmed[commaIndex+1:]
+	var svgBytes []byte
+	var err error
+	if strings.Contains(header, ";base64") {
+		svgBytes, err = base64.StdEncoding.DecodeString(payload)
+	} else {
+		var decoded string
+		decoded, err = url.PathUnescape(payload)
+		svgBytes = []byte(decoded)
+	}
+	if err != nil {
+		return "", err
+	}
+
+	icon, err := oksvg.ReadIconStream(bytes.NewReader(svgBytes), oksvg.IgnoreErrorMode)
+	if err != nil {
+		return "", err
+	}
+
+	const targetSize = 80
+	canvas := image.NewRGBA(image.Rect(0, 0, targetSize, targetSize))
+	scanner := rasterx.NewScannerGV(targetSize, targetSize, canvas, canvas.Bounds())
+	dasher := rasterx.NewDasher(targetSize, targetSize, scanner)
+	icon.SetTarget(0, 0, float64(targetSize), float64(targetSize))
+	icon.Draw(dasher, 1)
+
+	var out bytes.Buffer
+	if err := png.Encode(&out, canvas); err != nil {
+		return "", err
+	}
+
+	return "data:image/png;base64," + base64.StdEncoding.EncodeToString(out.Bytes()), nil
 }
 
 func enforceImageFullWidth(input string) string {
