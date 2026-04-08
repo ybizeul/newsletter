@@ -1193,7 +1193,7 @@ func (h *Handler) renderNewsletter(ctx context.Context, newsletter model.Newslet
 		articleHTML = enforceImageFullWidth(articleHTML)
 		illustration := strings.TrimSpace(article.Illustration)
 		hasIconIllustration := strings.TrimSpace(article.IconSource) != "" ||
-			regexp.MustCompile(`(?i)^data:image/svg\+xml(?:;[^,]*)?,`).MatchString(illustration)
+			regexp.MustCompile(`(?i)^data:image/(svg\+xml|png|jpeg|gif)(?:;[^,]*)?,`).MatchString(illustration)
 		iconIllustration := illustration
 		if hasIconIllustration {
 			convertedPNG, convErr := convertSVGDataURLToPNGDataURL(illustration)
