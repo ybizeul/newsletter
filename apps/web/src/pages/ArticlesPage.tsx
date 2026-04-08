@@ -1638,6 +1638,8 @@ export default function ArticlesPage() {
                   alt="Topic icon preview"
                   w={40}
                   h={40}
+                  width={40}
+                  height={40}
                   style={{ display: "block" }}
                 />
               ) : (
@@ -1853,6 +1855,8 @@ export default function ArticlesPage() {
                     alt="Current icon preview"
                     w={96}
                     h={96}
+                    width={96}
+                    height={96}
                     style={{ display: "block" }}
                   />
                 ) : (

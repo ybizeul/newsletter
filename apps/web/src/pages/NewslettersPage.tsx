@@ -1013,6 +1013,8 @@ export default function NewslettersPage() {
                             alt="Article icon"
                             w={26}
                             h={26}
+                            width={26}
+                            height={26}
                             style={{ display: "block" }}
                           />
                         ) : (
