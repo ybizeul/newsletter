@@ -1716,6 +1716,7 @@ func renderMarkdownToSafeHTML(markdown string) (string, error) {
 		"h1", "h2", "h3", "h4", "h5", "h6",
 		"ul", "ol", "li",
 		"strong", "em", "u", "a", "img",
+		"blockquote",
 	)
 	styleValuePattern := regexp.MustCompile(`(?i)^[a-z0-9\s#(),.%'"\-+/]+$`)
 	policy.AllowStyles(
@@ -1739,19 +1740,28 @@ func renderMarkdownToSafeHTML(markdown string) (string, error) {
 		"margin-top",
 		"margin-bottom",
 		"border",
+		"border-left",
 		"border-collapse",
 		"table-layout",
+		"padding",
+		"padding-left",
+		"padding-right",
+		"padding-top",
+		"padding-bottom",
 	).Matching(styleValuePattern).OnElements(
 		"p", "span", "div",
 		"table", "thead", "tbody", "tfoot", "tr", "th", "td",
 		"h1", "h2", "h3", "h4", "h5", "h6",
 		"ul", "ol", "li",
 		"strong", "em", "u", "a", "img",
+		"blockquote",
 	)
-	policy.AllowElements("table", "thead", "tbody", "tfoot", "tr", "th", "td")
+	policy.AllowElements("table", "thead", "tbody", "tfoot", "tr", "th", "td", "blockquote")
 	policy.AllowAttrs("align", "valign", "colspan", "rowspan").OnElements("th", "td")
 
-	return policy.Sanitize(raw.String()), nil
+	sanitized := policy.Sanitize(raw.String())
+	sanitized = strings.ReplaceAll(sanitized, "<blockquote>", `<blockquote style="border-left:4px solid #ccc;background-color:#f5f5f5;margin:1em 0;padding:0.75em 1em">`)
+	return sanitized, nil
 }
 
 type inlineAttachment struct {
