@@ -12,6 +12,7 @@ import (
 	"image/png"
 	"log"
 	"net/http"
+	"net/mail"
 	"net/smtp"
 	"net/url"
 	"regexp"
@@ -1879,6 +1880,11 @@ func (h *Handler) sendSMTP(recipient, subject, htmlBody, textBody string) error 
 	message.WriteString(htmlBody + "\r\n\r\n")
 	message.WriteString("--" + altBoundary + "--\r\n")
 
+	envelopeSender := h.cfg.SMTPFrom
+	if parsed, err := mail.ParseAddress(h.cfg.SMTPFrom); err == nil {
+		envelopeSender = parsed.Address
+	}
+
 	auth := smtp.PlainAuth("", h.cfg.SMTPUser, h.cfg.SMTPPass, h.cfg.SMTPHost)
 	addr := h.cfg.SMTPHost + ":" + h.cfg.SMTPPort
 
@@ -1886,7 +1892,7 @@ func (h *Handler) sendSMTP(recipient, subject, htmlBody, textBody string) error 
 		auth = nil
 	}
 
-	return smtp.SendMail(addr, auth, h.cfg.SMTPFrom, []string{recipient}, []byte(message.String()))
+	return smtp.SendMail(addr, auth, envelopeSender, []string{recipient}, []byte(message.String()))
 }
 
 func (h *Handler) writeJSON(w http.ResponseWriter, status int, payload any) {
