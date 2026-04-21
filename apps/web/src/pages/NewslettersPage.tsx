@@ -164,6 +164,7 @@ export default function NewslettersPage() {
   const [headerId, setHeaderId] = useState<string | null>(null);
   const [introMarkdown, setIntroMarkdown] = useState("");
   const [includeIndex, setIncludeIndex] = useState(false);
+  const [contentWidth, setContentWidth] = useState(680);
   const [articleIds, setArticleIDs] = useState<string[]>([]);
   const [draggedArticleId, setDraggedArticleId] = useState<string | null>(null);
   const [recipientRaw, setRecipientRaw] = useState("first@example.com,second@example.com");
@@ -304,6 +305,7 @@ export default function NewslettersPage() {
     setHeaderId(null);
     setIntroMarkdown("");
     setIncludeIndex(false);
+    setContentWidth(680);
     setArticleIDs([]);
     setDraggedArticleId(null);
     setRecipientRaw("first@example.com,second@example.com");
@@ -322,6 +324,7 @@ export default function NewslettersPage() {
       setHeaderId(fullNewsletter.headerId ?? null);
       setIntroMarkdown(fullNewsletter.introMarkdown);
       setIncludeIndex(Boolean(fullNewsletter.includeIndex));
+      setContentWidth(fullNewsletter.contentWidth || 680);
       setArticleIDs(fullNewsletter.articleIds);
       setRecipientRaw(fullNewsletter.recipientIds.join(","));
       if (fullNewsletter.scheduledAt) {
@@ -334,6 +337,7 @@ export default function NewslettersPage() {
         headerId: fullNewsletter.headerId ?? "",
         introMarkdown: fullNewsletter.introMarkdown.trim(),
         includeIndex: Boolean(fullNewsletter.includeIndex),
+        contentWidth: fullNewsletter.contentWidth || 680,
         articleIds: fullNewsletter.articleIds,
         recipientIds: fullNewsletter.recipientIds
       });
@@ -389,6 +393,7 @@ export default function NewslettersPage() {
     headerId: headerId ?? "",
     introMarkdown: introMarkdown.trim(),
     includeIndex,
+    contentWidth,
     articleIds,
     recipientIds: parseRecipients()
   });
@@ -496,7 +501,7 @@ export default function NewslettersPage() {
         window.clearTimeout(autosaveTimerRef.current);
       }
     };
-  }, [selectedNewsletterId, title, headerId, introMarkdown, includeIndex, articleIds, recipientRaw, hasTooManyRecipients, isSubmitting]);
+  }, [selectedNewsletterId, title, headerId, introMarkdown, includeIndex, contentWidth, articleIds, recipientRaw, hasTooManyRecipients, isSubmitting]);
 
   useEffect(() => () => {
     if (autosaveTimerRef.current !== null) {

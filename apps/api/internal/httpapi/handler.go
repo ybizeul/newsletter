@@ -17,6 +17,7 @@ import (
 	"net/url"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -525,6 +526,7 @@ type updateNewsletterRequest struct {
 	HeaderID      string   `json:"headerId"`
 	IntroMarkdown string   `json:"introMarkdown"`
 	IncludeIndex  bool     `json:"includeIndex"`
+	ContentWidth  int      `json:"contentWidth"`
 	ArticleIDs    []string `json:"articleIds"`
 	RecipientIDs  []string `json:"recipientIds"`
 }
@@ -768,6 +770,7 @@ func (h *Handler) UpdateNewsletter(w http.ResponseWriter, r *http.Request, id st
 			"headerId":      strings.TrimSpace(req.HeaderID),
 			"introMarkdown": req.IntroMarkdown,
 			"includeIndex":  req.IncludeIndex,
+			"contentWidth":  req.ContentWidth,
 			"articleIds":    req.ArticleIDs,
 			"recipientIds":  recipientIDs,
 			"updatedAt":     time.Now().UTC(),
@@ -1121,7 +1124,17 @@ func (h *Handler) updateArticleUsageStats(ctx context.Context, articleIDs []stri
 	return err
 }
 
+func resolveContentWidth(n model.Newsletter) int {
+	if n.ContentWidth >= 500 && n.ContentWidth <= 800 {
+		return n.ContentWidth
+	}
+	return 680
+}
+
 func (h *Handler) renderNewsletter(ctx context.Context, newsletter model.Newsletter, articles []model.Article) (string, string, error) {
+	contentWidth := resolveContentWidth(newsletter)
+	widthStr := strconv.Itoa(contentWidth)
+
 	headerHTML := ""
 	headerText := ""
 	if strings.TrimSpace(newsletter.HeaderID) != "" {
@@ -1151,8 +1164,8 @@ func (h *Handler) renderNewsletter(ctx context.Context, newsletter model.Newslet
 	body.WriteString("<!doctype html><html><body style=\"margin:0;padding:0;font-family:Arial,Helvetica,sans-serif;line-height:1.5;color:#111\">\n")
 	body.WriteString("<table role=\"presentation\" cellpadding=\"0\" cellspacing=\"0\" border=\"0\" width=\"100%\" style=\"border-collapse:collapse;margin:0;padding:0;mso-table-lspace:0pt;mso-table-rspace:0pt;\">\n")
 	body.WriteString("<tr><td align=\"center\" style=\"padding:24px 8px;mso-line-height-rule:exactly\">\n")
-	body.WriteString("<!--[if mso]><table role=\"presentation\" cellpadding=\"0\" cellspacing=\"0\" border=\"0\" width=\"680\" align=\"center\" style=\"border-collapse:collapse;\"><tr><td width=\"680\" style=\"width:680px;\"><![endif]-->\n")
-	body.WriteString("<table role=\"presentation\" cellpadding=\"0\" cellspacing=\"0\" border=\"0\" width=\"100%\" align=\"center\" style=\"width:100%;max-width:680px;border-collapse:collapse;margin:0 auto;table-layout:fixed;mso-table-lspace:0pt;mso-table-rspace:0pt;\">\n")
+	body.WriteString("<!--[if mso]><table role=\"presentation\" cellpadding=\"0\" cellspacing=\"0\" border=\"0\" width=\"" + widthStr + "\" align=\"center\" style=\"border-collapse:collapse;\"><tr><td width=\"" + widthStr + "\" style=\"width:" + widthStr + "px;\"><![endif]-->\n")
+	body.WriteString("<table role=\"presentation\" cellpadding=\"0\" cellspacing=\"0\" border=\"0\" width=\"100%\" align=\"center\" style=\"width:100%;max-width:" + widthStr + "px;border-collapse:collapse;margin:0 auto;table-layout:fixed;mso-table-lspace:0pt;mso-table-rspace:0pt;\">\n")
 	body.WriteString("<tr><td style=\"padding:0;text-align:left;width:100%;word-break:break-word;overflow-wrap:anywhere;\">\n")
 	if headerHTML != "" {
 		body.WriteString("<div style=\"margin-bottom:20px\">" + headerHTML + "</div>\n")

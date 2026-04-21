@@ -1,8 +1,8 @@
-import { useEffect, useState } from "react";
-import { Box, Button, Center, Group, Loader, SegmentedControl, Stack, Text, Title } from "@mantine/core";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { Box, Button, Center, Group, Loader, SegmentedControl, Slider, Stack, Text, Title } from "@mantine/core";
 import { useMediaQuery } from "@mantine/hooks";
 import { Link, useParams } from "react-router-dom";
-import { getNewsletterPreview } from "../lib/api";
+import { getNewsletterPreview, updateNewsletter } from "../lib/api";
 import type { NewsletterPreview } from "../types/domain";
 
 export default function NewsletterPreviewPage() {
@@ -13,7 +13,48 @@ export default function NewsletterPreviewPage() {
   const [isCopying, setIsCopying] = useState(false);
   const [copyMessage, setCopyMessage] = useState<string | null>(null);
   const [previewViewport, setPreviewViewport] = useState<"full" | "mobile">("full");
+  const [contentWidth, setContentWidth] = useState(680);
+  const widthTimerRef = useRef<number | null>(null);
   const isMobileScreen = useMediaQuery("(max-width: 48em)");
+
+  const refreshPreview = useCallback(async (newsletterId: string) => {
+    try {
+      const preview = await getNewsletterPreview(newsletterId);
+      setData(preview);
+    } catch {
+      // keep stale preview on transient error
+    }
+  }, []);
+
+  const onWidthChange = useCallback(
+    (value: number) => {
+      setContentWidth(value);
+      if (!id || !data) return;
+
+      if (widthTimerRef.current !== null) {
+        window.clearTimeout(widthTimerRef.current);
+      }
+
+      const newsletter = data.newsletter;
+      widthTimerRef.current = window.setTimeout(async () => {
+        try {
+          await updateNewsletter(id, {
+            title: newsletter.title,
+            headerId: newsletter.headerId ?? "",
+            introMarkdown: newsletter.introMarkdown,
+            includeIndex: newsletter.includeIndex,
+            contentWidth: value,
+            articleIds: newsletter.articleIds,
+            recipientIds: newsletter.recipientIds
+          });
+          await refreshPreview(id);
+        } catch {
+          // silent — width save is best-effort from preview
+        }
+      }, 400);
+    },
+    [id, data, refreshPreview]
+  );
 
   const copyNewsletterContent = async () => {
     if (!data) {
@@ -66,6 +107,7 @@ export default function NewsletterPreviewPage() {
       try {
         const preview = await getNewsletterPreview(id);
         setData(preview);
+        setContentWidth(preview.newsletter.contentWidth || 680);
       } catch (err) {
         setError(err instanceof Error ? err.message : "Failed to load preview");
       } finally {
@@ -93,7 +135,7 @@ export default function NewsletterPreviewPage() {
       </Group>
 
       {!isMobileScreen ? (
-        <Group justify="center">
+        <Group justify="center" gap="xl">
           <SegmentedControl
             value={previewViewport}
             onChange={(value) => {
@@ -106,6 +148,21 @@ export default function NewsletterPreviewPage() {
               { label: "Mobile", value: "mobile" }
             ]}
           />
+          {data ? (
+            <Group gap="xs" align="center" style={{ minWidth: 260 }}>
+              <Text size="sm" c="dimmed" style={{ whiteSpace: "nowrap" }}>
+                Width: {contentWidth}px
+              </Text>
+              <Slider
+                min={500}
+                max={800}
+                step={10}
+                value={contentWidth}
+                onChange={onWidthChange}
+                style={{ flex: 1 }}
+              />
+            </Group>
+          ) : null}
         </Group>
       ) : null}
 

@@ -535,6 +535,7 @@ export default function ArticlesPage() {
         headerId: newsletter.headerId ?? "",
         introMarkdown: newsletter.introMarkdown,
         includeIndex: newsletter.includeIndex,
+        contentWidth: newsletter.contentWidth || 680,
         articleIds: nextArticleIds,
         recipientIds: newsletter.recipientIds
       });

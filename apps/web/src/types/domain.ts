@@ -45,6 +45,7 @@ export interface Newsletter {
   headerId?: string;
   introMarkdown: string;
   includeIndex: boolean;
+  contentWidth: number;
   articleIds: string[];
   recipientIds: string[];
   isFavorite: boolean;
