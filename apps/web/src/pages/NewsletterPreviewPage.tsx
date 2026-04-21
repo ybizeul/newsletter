@@ -1,12 +1,15 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Box, Button, Center, Group, Loader, SegmentedControl, Slider, Stack, Text, Title } from "@mantine/core";
 import { useMediaQuery } from "@mantine/hooks";
-import { Link, useParams } from "react-router-dom";
+import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { getNewsletterPreview, updateNewsletter } from "../lib/api";
 import type { NewsletterPreview } from "../types/domain";
 
 export default function NewsletterPreviewPage() {
   const { id } = useParams<{ id: string }>();
+  const location = useLocation();
+  const navigate = useNavigate();
+  const selectedNewsletterId = (location.state as { selectedNewsletterId?: string } | null)?.selectedNewsletterId ?? id;
   const [data, setData] = useState<NewsletterPreview | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -128,7 +131,7 @@ export default function NewsletterPreviewPage() {
           <Button variant="light" color="blue" onClick={() => void copyNewsletterContent()} loading={isCopying}>
             Copy
           </Button>
-          <Button component={Link} to="/newsletters" variant="default">
+          <Button variant="default" onClick={() => navigate("/newsletters", { state: { selectedNewsletterId } })}>
             Close
           </Button>
         </Group>

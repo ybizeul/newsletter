@@ -159,7 +159,13 @@ export default function NewslettersPage() {
       isFavorite: newsletter.id === favoriteId
     }));
   });
-  const [selectedNewsletterId, setSelectedNewsletterID] = useState<string | null>(null);
+  const restoredNewsletterIdRef = useRef(
+    (location.state as { selectedNewsletterId?: string } | null)?.selectedNewsletterId ?? null
+  );
+
+  const [selectedNewsletterId, setSelectedNewsletterID] = useState<string | null>(
+    () => restoredNewsletterIdRef.current
+  );
   const [title, setTitle] = useState("");
   const [headerId, setHeaderId] = useState<string | null>(null);
   const [introMarkdown, setIntroMarkdown] = useState("");
@@ -353,6 +359,16 @@ export default function NewslettersPage() {
   useEffect(() => {
     if (newsletters.length === 0) {
       return;
+    }
+
+    if (restoredNewsletterIdRef.current) {
+      const restoredId = restoredNewsletterIdRef.current;
+      restoredNewsletterIdRef.current = null;
+      const match = newsletters.find((n) => n.id === restoredId);
+      if (match) {
+        void onSelectNewsletter(match);
+        return;
+      }
     }
 
     if (isMobile && !selectedNewsletterId) {
@@ -859,7 +875,7 @@ export default function NewslettersPage() {
                   variant="light"
                   color="blue"
                   size="xs"
-                  onClick={() => navigate(`/newsletters/${selectedNewsletterId}/preview`)}
+                  onClick={() => navigate(`/newsletters/${selectedNewsletterId}/preview`, { state: { selectedNewsletterId } })}
                 >
                   Preview
                 </Button>
