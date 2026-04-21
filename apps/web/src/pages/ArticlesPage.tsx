@@ -1956,8 +1956,7 @@ export default function ArticlesPage() {
                                 ? `linear-gradient(to right, var(--mantine-color-gray-3) 0%, var(--mantine-color-gray-3) 50%, var(--mantine-color-blue-6) 50%, var(--mantine-color-blue-6) ${iconSizeSliderThumbPosition}%, var(--mantine-color-gray-3) ${iconSizeSliderThumbPosition}%, var(--mantine-color-gray-3) 100%)`
                                 : `linear-gradient(to right, var(--mantine-color-gray-3) 0%, var(--mantine-color-gray-3) ${iconSizeSliderThumbPosition}%, var(--mantine-color-blue-6) ${iconSizeSliderThumbPosition}%, var(--mantine-color-blue-6) 50%, var(--mantine-color-gray-3) 50%, var(--mantine-color-gray-3) 100%)`,
                             opacity: customIconImageDataUrl ? 1 : 0.55
-                          },
-                          bar: { background: "transparent" }
+                          }
                         }}
                       />
                     </Box>
