@@ -9,9 +9,9 @@
     "preview": "vite preview --host 0.0.0.0 --port 4173"
   },
   "dependencies": {
-    "@mantine/core": "^8.0.0",
-    "@mantine/dates": "^8.3.18",
-    "@mantine/hooks": "^8.0.0",
+    "@mantine/core": "^9.1.0",
+    "@mantine/dates": "^9.1.0",
+    "@mantine/hooks": "^9.1.0",
     "@tabler/icons-react": "^3.31.0",
     "@tiptap/core": "^3.22.1",
     "@tiptap/extension-image": "^3.22.1",
@@ -26,13 +26,13 @@
     "@tiptap/starter-kit": "^3.22.1",
     "@uiw/react-md-editor": "^4.0.8",
     "dayjs": "^1.11.20",
-    "react": "^18.3.1",
-    "react-dom": "^18.3.1",
+    "react": "^19.2.5",
+    "react-dom": "^19.2.5",
     "react-router-dom": "^6.30.0"
   },
   "devDependencies": {
-    "@types/react": "^18.3.18",
-    "@types/react-dom": "^18.3.5",
+    "@types/react": "^19.2.14",
+    "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^4.3.4",
     "typescript": "^5.7.3",
     "vite": "^6.2.0"

@@ -1941,6 +1941,7 @@ export default function ArticlesPage() {
                     <Box style={{ width: 180, maxWidth: "100%" }}>
                       <Text size="xs" c="dimmed" mb={4}>Size</Text>
                       <Slider
+                        startPointValue={0}
                         min={-100}
                         max={100}
                         step={1}
