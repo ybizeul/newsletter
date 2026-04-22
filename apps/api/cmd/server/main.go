@@ -105,9 +105,6 @@ func main() {
 
 		api.Post("/render/markdown", h.RenderMarkdown)
 		api.Get("/runtime-config", h.GetRuntimeConfig)
-		api.Get("/images/{hash}", func(w http.ResponseWriter, r *http.Request) {
-			h.ServeImage(w, r, chi.URLParam(r, "hash"))
-		})
 	})
 
 	r.NotFound(func(w http.ResponseWriter, r *http.Request) {

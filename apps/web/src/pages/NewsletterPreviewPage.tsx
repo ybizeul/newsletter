@@ -69,7 +69,7 @@ export default function NewsletterPreviewPage() {
 
     try {
       const parsed = new DOMParser().parseFromString(data.html, "text/html");
-      const emailHtml = data.copyHtml || data.html;
+      const emailHtml = data.html;
 
       const plainText =
         data.text?.trim() || parsed.body?.textContent?.trim() || (() => {

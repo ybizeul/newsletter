@@ -3,9 +3,7 @@ package httpapi
 import (
 	"bytes"
 	"context"
-	"crypto/sha256"
 	"encoding/base64"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -21,7 +19,6 @@ import (
 	"sort"
 	"strconv"
 	"strings"
-	"sync"
 	"time"
 
 	"newsletter/api/internal/config"
@@ -43,12 +40,6 @@ type Handler struct {
 	headers     *mongo.Collection
 	newsletters *mongo.Collection
 	cfg         config.Config
-	imageCache  sync.Map // map[hash]cachedImage
-}
-
-type cachedImage struct {
-	MimeType string
-	Data     []byte
 }
 
 var errNewsletterAlreadySending = errors.New("newsletter is already sending")
@@ -822,54 +813,12 @@ func (h *Handler) GetNewsletterPreview(w http.ResponseWriter, r *http.Request, i
 		return
 	}
 
-	copyHtml := h.replaceDataURIsWithURLs(r, htmlBody)
-
 	h.writeJSON(w, http.StatusOK, map[string]any{
 		"newsletter": newsletter,
 		"articles":   articles,
 		"html":       htmlBody,
 		"text":       textBody,
-		"copyHtml":   copyHtml,
 	})
-}
-
-func (h *Handler) replaceDataURIsWithURLs(r *http.Request, htmlBody string) string {
-	re := regexp.MustCompile(`src="(data:image/[^"]+)"`)
-	return re.ReplaceAllStringFunc(htmlBody, func(match string) string {
-		sub := re.FindStringSubmatch(match)
-		if len(sub) < 2 {
-			return match
-		}
-		dataURI := sub[1]
-		mimeType, data, err := decodeDataImageURI(dataURI)
-		if err != nil {
-			return match
-		}
-
-		sum := sha256.Sum256(data)
-		hash := hex.EncodeToString(sum[:])
-		h.imageCache.Store(hash, cachedImage{MimeType: mimeType, Data: data})
-
-		scheme := "http"
-		if r.TLS != nil || r.Header.Get("X-Forwarded-Proto") == "https" {
-			scheme = "https"
-		}
-		imgURL := fmt.Sprintf("%s://%s/api/images/%s", scheme, r.Host, hash)
-		return `src="` + imgURL + `"`
-	})
-}
-
-func (h *Handler) ServeImage(w http.ResponseWriter, r *http.Request, hash string) {
-	val, ok := h.imageCache.Load(hash)
-	if !ok {
-		http.NotFound(w, r)
-		return
-	}
-	img := val.(cachedImage)
-	w.Header().Set("Content-Type", img.MimeType)
-	w.Header().Set("Cache-Control", "public, max-age=86400")
-	w.WriteHeader(http.StatusOK)
-	_, _ = w.Write(img.Data)
 }
 
 type renderMarkdownRequest struct {
