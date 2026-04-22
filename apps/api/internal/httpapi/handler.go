@@ -1656,6 +1656,15 @@ func enforceTableCellAlignment(input string) string {
 					updatedOpen = strings.Replace(updatedOpen, ">", ` align="`+align+`">`, 1)
 				}
 				updatedOpen = ensureStyleProp(updatedOpen, "text-align", align)
+
+				// Apple Mail ignores margin-left:auto on display:block images
+				// (width:auto block elements fill container width, leaving no
+				// room for auto margins). Switch to display:inline-block so the
+				// cell's text-align controls image position instead.
+				displayBlockRe := regexp.MustCompile(`(?i)(display\s*:\s*)block\b`)
+				inner = innerImageTagRe.ReplaceAllStringFunc(inner, func(imgTag string) string {
+					return displayBlockRe.ReplaceAllString(imgTag, "${1}inline-block")
+				})
 			}
 			if valign != "" {
 				if !valignAttrRe.MatchString(updatedOpen) {

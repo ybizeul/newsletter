@@ -81,3 +81,19 @@ func TestEnforceTableCellAlignment_InfersAlignmentFromInnerClassAndFloat(t *test
 		t.Fatalf("expected right cell text-align:right style, got html: %s", output)
 	}
 }
+
+func TestEnforceTableCellAlignment_SwitchesImageDisplayToInlineBlockInAlignedCells(t *testing.T) {
+	input := `<table><tr>` +
+		`<th align="left" style="text-align: left;"><img src="left.png" style="display: block; margin: 8px auto 8px 0px;"></th>` +
+		`<th align="right" style="text-align: right;"><img src="right.png" style="display: block; margin: 8px 0px 8px auto;"></th>` +
+		`</tr></table>`
+
+	output := enforceTableCellAlignment(input)
+
+	if !strings.Contains(output, `display: inline-block`) {
+		t.Fatalf("expected display:block to be replaced with display:inline-block in aligned cells, got: %s", output)
+	}
+	if strings.Contains(output, `display: block`) {
+		t.Fatalf("expected no display:block images remaining in aligned cells, got: %s", output)
+	}
+}
