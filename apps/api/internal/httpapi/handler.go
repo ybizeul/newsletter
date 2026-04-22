@@ -3,7 +3,9 @@ package httpapi
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
 	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -19,6 +21,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"newsletter/api/internal/config"
@@ -40,6 +43,12 @@ type Handler struct {
 	headers     *mongo.Collection
 	newsletters *mongo.Collection
 	cfg         config.Config
+	imageCache  sync.Map // map[hash]cachedImage
+}
+
+type cachedImage struct {
+	MimeType string
+	Data     []byte
 }
 
 var errNewsletterAlreadySending = errors.New("newsletter is already sending")
@@ -813,12 +822,54 @@ func (h *Handler) GetNewsletterPreview(w http.ResponseWriter, r *http.Request, i
 		return
 	}
 
+	copyHtml := h.replaceDataURIsWithURLs(r, htmlBody)
+
 	h.writeJSON(w, http.StatusOK, map[string]any{
 		"newsletter": newsletter,
 		"articles":   articles,
 		"html":       htmlBody,
 		"text":       textBody,
+		"copyHtml":   copyHtml,
 	})
+}
+
+func (h *Handler) replaceDataURIsWithURLs(r *http.Request, htmlBody string) string {
+	re := regexp.MustCompile(`src="(data:image/[^"]+)"`)
+	return re.ReplaceAllStringFunc(htmlBody, func(match string) string {
+		sub := re.FindStringSubmatch(match)
+		if len(sub) < 2 {
+			return match
+		}
+		dataURI := sub[1]
+		mimeType, data, err := decodeDataImageURI(dataURI)
+		if err != nil {
+			return match
+		}
+
+		sum := sha256.Sum256(data)
+		hash := hex.EncodeToString(sum[:])
+		h.imageCache.Store(hash, cachedImage{MimeType: mimeType, Data: data})
+
+		scheme := "http"
+		if r.TLS != nil || r.Header.Get("X-Forwarded-Proto") == "https" {
+			scheme = "https"
+		}
+		imgURL := fmt.Sprintf("%s://%s/api/images/%s", scheme, r.Host, hash)
+		return `src="` + imgURL + `"`
+	})
+}
+
+func (h *Handler) ServeImage(w http.ResponseWriter, r *http.Request, hash string) {
+	val, ok := h.imageCache.Load(hash)
+	if !ok {
+		http.NotFound(w, r)
+		return
+	}
+	img := val.(cachedImage)
+	w.Header().Set("Content-Type", img.MimeType)
+	w.Header().Set("Cache-Control", "public, max-age=86400")
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write(img.Data)
 }
 
 type renderMarkdownRequest struct {
@@ -1877,6 +1928,11 @@ func (h *Handler) sendSMTP(recipient, subject, htmlBody, textBody string) error 
 		return nil
 	}
 
+	cidHTML, attachments, err := extractInlineDataImages(htmlBody)
+	if err != nil {
+		return fmt.Errorf("extract inline images: %w", err)
+	}
+
 	message := strings.Builder{}
 	message.WriteString("From: " + h.cfg.SMTPFrom + "\r\n")
 	message.WriteString("To: " + recipient + "\r\n")
@@ -1884,14 +1940,45 @@ func (h *Handler) sendSMTP(recipient, subject, htmlBody, textBody string) error 
 	message.WriteString("MIME-Version: 1.0\r\n")
 
 	altBoundary := fmt.Sprintf("alt-boundary-%d", time.Now().UnixNano())
-	message.WriteString("Content-Type: multipart/alternative; boundary=" + altBoundary + "\r\n\r\n")
-	message.WriteString("--" + altBoundary + "\r\n")
-	message.WriteString("Content-Type: text/plain; charset=UTF-8\r\n\r\n")
-	message.WriteString(textBody + "\r\n\r\n")
-	message.WriteString("--" + altBoundary + "\r\n")
-	message.WriteString("Content-Type: text/html; charset=UTF-8\r\n\r\n")
-	message.WriteString(htmlBody + "\r\n\r\n")
-	message.WriteString("--" + altBoundary + "--\r\n")
+
+	if len(attachments) == 0 {
+		message.WriteString("Content-Type: multipart/alternative; boundary=" + altBoundary + "\r\n\r\n")
+		message.WriteString("--" + altBoundary + "\r\n")
+		message.WriteString("Content-Type: text/plain; charset=UTF-8\r\n\r\n")
+		message.WriteString(textBody + "\r\n\r\n")
+		message.WriteString("--" + altBoundary + "\r\n")
+		message.WriteString("Content-Type: text/html; charset=UTF-8\r\n\r\n")
+		message.WriteString(cidHTML + "\r\n\r\n")
+		message.WriteString("--" + altBoundary + "--\r\n")
+	} else {
+		relBoundary := fmt.Sprintf("rel-boundary-%d", time.Now().UnixNano())
+		message.WriteString("Content-Type: multipart/related; boundary=" + relBoundary + "\r\n\r\n")
+		message.WriteString("--" + relBoundary + "\r\n")
+		message.WriteString("Content-Type: multipart/alternative; boundary=" + altBoundary + "\r\n\r\n")
+		message.WriteString("--" + altBoundary + "\r\n")
+		message.WriteString("Content-Type: text/plain; charset=UTF-8\r\n\r\n")
+		message.WriteString(textBody + "\r\n\r\n")
+		message.WriteString("--" + altBoundary + "\r\n")
+		message.WriteString("Content-Type: text/html; charset=UTF-8\r\n\r\n")
+		message.WriteString(cidHTML + "\r\n\r\n")
+		message.WriteString("--" + altBoundary + "--\r\n")
+		for _, att := range attachments {
+			message.WriteString("--" + relBoundary + "\r\n")
+			message.WriteString("Content-Type: " + att.MimeType + "\r\n")
+			message.WriteString("Content-Transfer-Encoding: base64\r\n")
+			message.WriteString("Content-ID: <" + att.CID + ">\r\n")
+			message.WriteString("Content-Disposition: inline\r\n\r\n")
+			b64 := base64.StdEncoding.EncodeToString(att.Data)
+			for i := 0; i < len(b64); i += 76 {
+				end := i + 76
+				if end > len(b64) {
+					end = len(b64)
+				}
+				message.WriteString(b64[i:end] + "\r\n")
+			}
+		}
+		message.WriteString("--" + relBoundary + "--\r\n")
+	}
 
 	envelopeSender := h.cfg.SMTPFrom
 	if parsed, err := mail.ParseAddress(h.cfg.SMTPFrom); err == nil {

@@ -90,6 +90,7 @@ export interface NewsletterPreview {
   articles: Article[];
   html: string;
   text: string;
+  copyHtml: string;
 }
 
 export interface ListResponse<T> {
