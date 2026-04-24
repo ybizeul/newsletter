@@ -363,8 +363,13 @@ func (h *Handler) UpdateArticle(w http.ResponseWriter, r *http.Request, id strin
 	if req.Public != nil {
 		currentOwner := strings.TrimSpace(strings.ToLower(existing.Owner))
 		requester := resolveOwnerEmail(UserFromContext(r.Context()), "")
+		currentVisibility := existing.Public
+		if currentOwner == "" {
+			// Legacy unowned articles are effectively public even when the field is absent.
+			currentVisibility = true
+		}
 		setFields["public"] = *req.Public
-		if currentOwner == "" && requester != "" {
+		if currentOwner == "" && requester != "" && currentVisibility != *req.Public {
 			setFields["owner"] = requester
 		}
 	}
