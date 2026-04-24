@@ -52,10 +52,10 @@ const TAG_COLORS = ["blue", "teal", "cyan", "grape", "indigo", "violet", "lime",
 
 let cachedArticleSummaries: ArticleSummary[] | null = null;
 
-type ArticleSmartFilter = "all" | "mine" | "others" | "recent" | "private";
+type ArticleSmartFilter = "all" | "mine" | "others" | "recent" | "private" | "public";
 
 function normalizeArticleSmartFilter(input?: string): ArticleSmartFilter {
-  if (input === "mine" || input === "others" || input === "recent" || input === "private" || input === "all") {
+  if (input === "mine" || input === "others" || input === "recent" || input === "private" || input === "public" || input === "all") {
     return input;
   }
   return "all";
@@ -466,6 +466,8 @@ export default function ArticlesPage() {
       ? "Recent"
       : articleSmartFilter === "private"
         ? "Private"
+      : articleSmartFilter === "public"
+        ? "Public"
       : "All";
   const selectedArticleOwner = (selectedArticleSummary?.owner ?? "").trim().toLowerCase();
   const currentUserEmail = (user?.email ?? "").trim().toLowerCase();
@@ -1289,6 +1291,12 @@ export default function ArticlesPage() {
       });
     } else if (articleSmartFilter === "private") {
       scopedArticles = scopedArticles.filter((article) => article.public === false);
+    } else if (articleSmartFilter === "public") {
+      scopedArticles = scopedArticles.filter((article) => {
+        const owner = (article.owner ?? "").trim().toLowerCase();
+        const isMine = currentUserEmail !== "" && owner === currentUserEmail;
+        return article.public !== false && !isMine;
+      });
     }
 
     const query = articleSearchQuery.trim().toLowerCase();
