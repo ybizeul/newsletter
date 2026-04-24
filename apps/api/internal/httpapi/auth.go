@@ -245,7 +245,11 @@ func (a *OIDCAuth) HandleCallback(w http.ResponseWriter, r *http.Request) {
 
 	log.Printf("oidc: authenticated user sub=%q email=%q name=%q", user.ID, user.Email, user.Name)
 
-	sessionValue, err := a.createSession(user, token.AccessToken)
+	accessToken := ""
+	if a.smtpXoauth2 {
+		accessToken = token.AccessToken
+	}
+	sessionValue, err := a.createSession(user, accessToken)
 	if err != nil {
 		log.Printf("oidc: session creation failed: %v", err)
 		http.Error(w, "session error", http.StatusInternalServerError)
