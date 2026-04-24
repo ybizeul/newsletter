@@ -701,6 +701,7 @@ func (h *Handler) CreateNewsletter(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) ListNewsletters(w http.ResponseWriter, r *http.Request) {
 	findOptions := options.Find().SetSort(bson.D{{Key: "createdAt", Value: -1}})
+	visibilityFilter := newsletterVisibilityFilter(UserFromContext(r.Context()))
 
 	if strings.EqualFold(strings.TrimSpace(r.URL.Query().Get("view")), "summary") {
 		findOptions.SetProjection(bson.M{
@@ -756,7 +757,7 @@ func (h *Handler) ListNewsletters(w http.ResponseWriter, r *http.Request) {
 			Preview       string                 `json:"preview"`
 		}
 
-		cursor, err := h.newsletters.Find(r.Context(), bson.M{}, findOptions)
+		cursor, err := h.newsletters.Find(r.Context(), visibilityFilter, findOptions)
 		if err != nil {
 			h.writeError(w, http.StatusInternalServerError, "failed to list newsletters")
 			return
@@ -794,7 +795,7 @@ func (h *Handler) ListNewsletters(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	cursor, err := h.newsletters.Find(r.Context(), bson.M{}, findOptions)
+	cursor, err := h.newsletters.Find(r.Context(), visibilityFilter, findOptions)
 	if err != nil {
 		h.writeError(w, http.StatusInternalServerError, "failed to list newsletters")
 		return
@@ -815,7 +816,7 @@ func (h *Handler) ListNewsletters(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) GetNewsletter(w http.ResponseWriter, r *http.Request, id string) {
 	var newsletter model.Newsletter
-	if err := h.newsletters.FindOne(r.Context(), bson.M{"_id": id}).Decode(&newsletter); err != nil {
+	if err := h.newsletters.FindOne(r.Context(), bson.M{"_id": id, "$and": []bson.M{newsletterVisibilityFilter(UserFromContext(r.Context()))}}).Decode(&newsletter); err != nil {
 		if err == mongo.ErrNoDocuments {
 			h.writeError(w, http.StatusNotFound, "newsletter not found")
 			return
@@ -1330,6 +1331,26 @@ func articleVisibilityFilter(user *User) bson.M {
 		"$or": []bson.M{
 			base,
 			unowned,
+			{"owner": owner},
+		},
+	}
+}
+
+func newsletterVisibilityFilter(user *User) bson.M {
+	owner := resolveOwnerEmail(user, "")
+	if owner == "" {
+		return bson.M{
+			"$or": []bson.M{
+				{"owner": bson.M{"$exists": false}},
+				{"owner": ""},
+			},
+		}
+	}
+
+	return bson.M{
+		"$or": []bson.M{
+			{"owner": bson.M{"$exists": false}},
+			{"owner": ""},
 			{"owner": owner},
 		},
 	}
