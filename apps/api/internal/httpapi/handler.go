@@ -277,6 +277,7 @@ func (h *Handler) ClaimArticle(w http.ResponseWriter, r *http.Request, id string
 	result, err := h.articles.UpdateOne(r.Context(), claimFilter, bson.M{
 		"$set": bson.M{
 			"owner":     owner,
+			"public":    true,
 			"updatedAt": now,
 		},
 	})

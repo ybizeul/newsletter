@@ -1747,7 +1747,7 @@ export default function ArticlesPage() {
             <Checkbox
               checked={isPublic}
               onChange={(event) => setIsPublic(event.currentTarget.checked)}
-              label={isPublic ? "Public article" : "Private article"}
+              label="Public article"
               description="Private articles are visible only to their owner."
             />
           ) : null}
