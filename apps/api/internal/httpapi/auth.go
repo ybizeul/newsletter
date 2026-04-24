@@ -28,12 +28,21 @@ type User struct {
 
 type contextKey int
 
-const userContextKey contextKey = 0
+const (
+	userContextKey        contextKey = 0
+	accessTokenContextKey contextKey = 1
+)
 
 // UserFromContext returns the authenticated user from context, or nil.
 func UserFromContext(ctx context.Context) *User {
 	u, _ := ctx.Value(userContextKey).(*User)
 	return u
+}
+
+// AccessTokenFromContext returns the OAuth2 access token from context, or empty string.
+func AccessTokenFromContext(ctx context.Context) string {
+	t, _ := ctx.Value(accessTokenContextKey).(string)
+	return t
 }
 
 func contextWithUser(ctx context.Context, u *User) context.Context {
@@ -55,6 +64,7 @@ type OIDCAuth struct {
 	clientID     string
 	clientSecret string
 	signingKey   []byte
+	smtpXoauth2  bool
 }
 
 // NewOIDCAuth initialises the OIDC provider via discovery.
@@ -87,6 +97,7 @@ func NewOIDCAuth(cfg config.Config) (*OIDCAuth, error) {
 		clientID:     cfg.OIDCApplicationID,
 		clientSecret: cfg.OIDCSecret,
 		signingKey:   h[:],
+		smtpXoauth2:  cfg.SMTPXoauth2,
 	}, nil
 }
 
@@ -114,12 +125,16 @@ func redirectURI(r *http.Request) string {
 }
 
 func (a *OIDCAuth) oauth2Config(redirectURL string) oauth2.Config {
+	scopes := []string{oidc.ScopeOpenID, "profile", "email"}
+	if a.smtpXoauth2 {
+		scopes = append(scopes, "https://outlook.office.com/SMTP.Send")
+	}
 	return oauth2.Config{
 		ClientID:     a.clientID,
 		ClientSecret: a.clientSecret,
 		Endpoint:     a.provider.Endpoint(),
 		RedirectURL:  redirectURL,
-		Scopes:       []string{oidc.ScopeOpenID, "profile", "email"},
+		Scopes:       scopes,
 	}
 }
 
@@ -230,7 +245,7 @@ func (a *OIDCAuth) HandleCallback(w http.ResponseWriter, r *http.Request) {
 
 	log.Printf("oidc: authenticated user sub=%q email=%q name=%q", user.ID, user.Email, user.Name)
 
-	sessionValue, err := a.createSession(user)
+	sessionValue, err := a.createSession(user, token.AccessToken)
 	if err != nil {
 		log.Printf("oidc: session creation failed: %v", err)
 		http.Error(w, "session error", http.StatusInternalServerError)
@@ -279,7 +294,7 @@ func (a *OIDCAuth) HandleMe(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	user, err := a.parseSession(cookie.Value)
+	payload, err := a.parseSession(cookie.Value)
 	if err != nil {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusUnauthorized)
@@ -288,7 +303,7 @@ func (a *OIDCAuth) HandleMe(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(user)
+	_ = json.NewEncoder(w).Encode(payload.User)
 }
 
 // ---------------------------------------------------------------------------
@@ -308,13 +323,17 @@ func (a *OIDCAuth) Middleware(next http.Handler) http.Handler {
 			return
 		}
 
-		user, err := a.parseSession(cookie.Value)
+		payload, err := a.parseSession(cookie.Value)
 		if err != nil {
 			http.Error(w, `{"error":"invalid session"}`, http.StatusUnauthorized)
 			return
 		}
 
-		next.ServeHTTP(w, r.WithContext(contextWithUser(r.Context(), user)))
+		ctx := contextWithUser(r.Context(), &payload.User)
+		if payload.AccessToken != "" {
+			ctx = context.WithValue(ctx, accessTokenContextKey, payload.AccessToken)
+		}
+		next.ServeHTTP(w, r.WithContext(ctx))
 	})
 }
 
@@ -323,14 +342,16 @@ func (a *OIDCAuth) Middleware(next http.Handler) http.Handler {
 // ---------------------------------------------------------------------------
 
 type sessionPayload struct {
-	User      User  `json:"u"`
-	ExpiresAt int64 `json:"exp"`
+	User        User   `json:"u"`
+	AccessToken string `json:"at,omitempty"`
+	ExpiresAt   int64  `json:"exp"`
 }
 
-func (a *OIDCAuth) createSession(u *User) (string, error) {
+func (a *OIDCAuth) createSession(u *User, accessToken string) (string, error) {
 	p := sessionPayload{
-		User:      *u,
-		ExpiresAt: time.Now().Add(sessionDuration).Unix(),
+		User:        *u,
+		AccessToken: accessToken,
+		ExpiresAt:   time.Now().Add(sessionDuration).Unix(),
 	}
 	data, err := json.Marshal(p)
 	if err != nil {
@@ -341,7 +362,7 @@ func (a *OIDCAuth) createSession(u *User) (string, error) {
 	return encoded + "." + sig, nil
 }
 
-func (a *OIDCAuth) parseSession(token string) (*User, error) {
+func (a *OIDCAuth) parseSession(token string) (*sessionPayload, error) {
 	parts := strings.SplitN(token, ".", 2)
 	if len(parts) != 2 {
 		return nil, fmt.Errorf("malformed session token")
@@ -361,7 +382,7 @@ func (a *OIDCAuth) parseSession(token string) (*User, error) {
 	if time.Now().Unix() > p.ExpiresAt {
 		return nil, fmt.Errorf("session expired")
 	}
-	return &p.User, nil
+	return &p, nil
 }
 
 func (a *OIDCAuth) sign(data string) string {

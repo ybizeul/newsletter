@@ -17,6 +17,7 @@ type Config struct {
 	SMTPFrom      string
 	SMTPUser      string
 	SMTPPass      string
+	SMTPXoauth2   bool
 	DefaultTZ     string
 	ScheduleTick  time.Duration
 
@@ -41,6 +42,7 @@ func Load() Config {
 		SMTPFrom:      getEnv("SMTP_FROM", "no-reply@example.com"),
 		SMTPUser:      getEnv("SMTP_USER", ""),
 		SMTPPass:      getEnv("SMTP_PASS", ""),
+		SMTPXoauth2:   getEnvBool("SMTP_XOAUTH2", false),
 		DefaultTZ:     getEnv("DEFAULT_TZ", "UTC"),
 		ScheduleTick:  20 * time.Second,
 
@@ -71,4 +73,16 @@ func getEnv(key, fallback string) string {
 		return fallback
 	}
 	return v
+}
+
+func getEnvBool(key string, fallback bool) bool {
+	v := os.Getenv(key)
+	switch v {
+	case "true", "1", "yes":
+		return true
+	case "false", "0", "no":
+		return false
+	default:
+		return fallback
+	}
 }

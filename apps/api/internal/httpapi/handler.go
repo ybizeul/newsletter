@@ -1204,13 +1204,19 @@ func (h *Handler) processScheduledNewsletter(ctx context.Context, newsletter mod
 		return err
 	}
 
+	accessToken := AccessTokenFromContext(ctx)
+	var senderEmail string
+	if u := UserFromContext(ctx); u != nil {
+		senderEmail = u.Email
+	}
+
 	for _, recipient := range loadedNewsletter.RecipientIDs {
 		recipient = strings.TrimSpace(recipient)
 		if recipient == "" {
 			continue
 		}
 		log.Printf("smtp send start newsletter_id=%s recipient=%s smtp_host=%s smtp_port=%s", loadedNewsletter.ID, recipient, h.cfg.SMTPHost, h.cfg.SMTPPort)
-		if err := h.sendSMTP(recipient, loadedNewsletter.Title, htmlBody, textBody); err != nil {
+		if err := h.sendSMTP(recipient, loadedNewsletter.Title, htmlBody, textBody, accessToken, senderEmail); err != nil {
 			log.Printf("smtp send failed newsletter_id=%s recipient=%s error=%v", loadedNewsletter.ID, recipient, err)
 			return err
 		}
@@ -2113,7 +2119,26 @@ func decodeDataImageURI(dataURI string) (string, []byte, error) {
 	return mimeType, []byte(decoded), nil
 }
 
-func (h *Handler) sendSMTP(recipient, subject, htmlBody, textBody string) error {
+// xoauth2Auth implements smtp.Auth for the SASL XOAUTH2 mechanism.
+type xoauth2Auth struct {
+	user        string
+	accessToken string
+}
+
+func (a xoauth2Auth) Start(_ *smtp.ServerInfo) (string, []byte, error) {
+	msg := fmt.Sprintf("user=%s\x01auth=Bearer %s\x01\x01", a.user, a.accessToken)
+	return "XOAUTH2", []byte(msg), nil
+}
+
+func (a xoauth2Auth) Next(_ []byte, more bool) ([]byte, error) {
+	if more {
+		// Server sent a challenge (error JSON); return empty to proceed to proper error.
+		return []byte{}, nil
+	}
+	return nil, nil
+}
+
+func (h *Handler) sendSMTP(recipient, subject, htmlBody, textBody, accessToken, senderEmail string) error {
 	if recipient == "" {
 		return nil
 	}
@@ -2175,13 +2200,18 @@ func (h *Handler) sendSMTP(recipient, subject, htmlBody, textBody string) error 
 		envelopeSender = parsed.Address
 	}
 
-	auth := smtp.PlainAuth("", h.cfg.SMTPUser, h.cfg.SMTPPass, h.cfg.SMTPHost)
-	addr := h.cfg.SMTPHost + ":" + h.cfg.SMTPPort
-
-	if h.cfg.SMTPUser == "" {
-		auth = nil
+	var auth smtp.Auth
+	switch {
+	case h.cfg.SMTPXoauth2:
+		if accessToken == "" {
+			return fmt.Errorf("smtp xoauth2 enabled but no access token in context")
+		}
+		auth = xoauth2Auth{user: senderEmail, accessToken: accessToken}
+	case h.cfg.SMTPUser != "":
+		auth = smtp.PlainAuth("", h.cfg.SMTPUser, h.cfg.SMTPPass, h.cfg.SMTPHost)
 	}
 
+	addr := h.cfg.SMTPHost + ":" + h.cfg.SMTPPort
 	return smtp.SendMail(addr, auth, envelopeSender, []string{recipient}, []byte(message.String()))
 }
 

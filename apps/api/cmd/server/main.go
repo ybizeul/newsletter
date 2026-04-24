@@ -18,11 +18,12 @@ import (
 func main() {
 	cfg := config.Load()
 	log.Printf(
-		"smtp config detected host_set=%t from_set=%t user_set=%t pass_set=%t",
+		"smtp config detected host_set=%t from_set=%t user_set=%t pass_set=%t xoauth2=%t",
 		cfg.SMTPHost != "",
 		cfg.SMTPFrom != "",
 		cfg.SMTPUser != "",
 		cfg.SMTPPass != "",
+		cfg.SMTPXoauth2,
 	)
 
 	ctx := context.Background()
