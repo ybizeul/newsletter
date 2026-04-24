@@ -52,10 +52,10 @@ const TAG_COLORS = ["blue", "teal", "cyan", "grape", "indigo", "violet", "lime",
 
 let cachedArticleSummaries: ArticleSummary[] | null = null;
 
-type ArticleSmartFilter = "all" | "mine" | "recent" | "private";
+type ArticleSmartFilter = "all" | "mine" | "others" | "recent" | "private";
 
 function normalizeArticleSmartFilter(input?: string): ArticleSmartFilter {
-  if (input === "mine" || input === "recent" || input === "private" || input === "all") {
+  if (input === "mine" || input === "others" || input === "recent" || input === "private" || input === "all") {
     return input;
   }
   return "all";
@@ -460,6 +460,8 @@ export default function ArticlesPage() {
   );
   const articleFilterLabel = articleSmartFilter === "mine"
     ? "Mine"
+    : articleSmartFilter === "others"
+      ? "Others"
     : articleSmartFilter === "recent"
       ? "Recent"
       : articleSmartFilter === "private"
@@ -1271,6 +1273,14 @@ export default function ArticlesPage() {
       scopedArticles = currentUserEmail
         ? scopedArticles.filter((article) => (article.owner ?? "").trim().toLowerCase() === currentUserEmail)
         : [];
+    } else if (articleSmartFilter === "others") {
+      scopedArticles = scopedArticles.filter((article) => {
+        const owner = (article.owner ?? "").trim().toLowerCase();
+        if (!owner) {
+          return false;
+        }
+        return currentUserEmail ? owner !== currentUserEmail : true;
+      });
     } else if (articleSmartFilter === "recent") {
       const cutoff = Date.now() - RECENT_ARTICLES_WINDOW_MS;
       scopedArticles = scopedArticles.filter((article) => {

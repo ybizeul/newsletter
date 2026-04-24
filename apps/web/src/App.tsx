@@ -1,7 +1,7 @@
 import { type MouseEvent as ReactMouseEvent, useState } from "react";
 import { ActionIcon, Anchor, AppShell, Box, Burger, Center, Group, Loader, Modal, NavLink, ScrollArea, Stack, Text } from "@mantine/core";
 import { useDisclosure } from "@mantine/hooks";
-import { IconAlignBoxCenterTop, IconArticle, IconClock, IconHelpCircle, IconList, IconLock, IconLogout, IconMail, IconStar, IconUser } from "@tabler/icons-react";
+import { IconAlignBoxCenterTop, IconArticle, IconClock, IconHelpCircle, IconList, IconLock, IconLogout, IconMail, IconStar, IconUser, IconUsers } from "@tabler/icons-react";
 import { Navigate, Route, Routes, useLocation, useNavigate } from "react-router-dom";
 
 import ArticlesPage from "./pages/ArticlesPage";
@@ -207,6 +207,18 @@ function App() {
             leftSection={<IconUser size={14} />}
             onClick={() => {
               navigate("/articles/mine");
+              close();
+            }}
+          />
+          <NavLink
+            label="Others"
+            active={location.pathname === "/articles/others"}
+            variant="subtle"
+            color="blue"
+            style={{ backgroundColor: "transparent" }}
+            leftSection={<IconUsers size={14} />}
+            onClick={() => {
+              navigate("/articles/others");
               close();
             }}
           />
