@@ -26,7 +26,7 @@ import {
   useCombobox
 } from "@mantine/core";
 import { useMediaQuery } from "@mantine/hooks";
-import { IconCheck, IconChevronDown, IconMail, IconPencil, IconSearch } from "@tabler/icons-react";
+import { IconCheck, IconChevronDown, IconMail, IconPencil, IconSearch, IconUserFilled } from "@tabler/icons-react";
 import MDEditor from "@uiw/react-md-editor";
 import { renderToStaticMarkup } from "react-dom/server";
 import "@uiw/react-md-editor/markdown-editor.css";
@@ -1527,6 +1527,14 @@ export default function ArticlesPage() {
                       {formatArticleCreatedAt(article.createdAt)}
                     </Text>
                   </Group>
+                  {(article.owner ?? "").trim() !== "" ? (
+                    <Group gap={4} wrap="nowrap" align="center">
+                      <IconUserFilled size={11} color="#868e96" style={{ flexShrink: 0 }} />
+                      <Text size="xs" c="dimmed" style={{ minWidth: 0 }}>
+                        {article.owner}
+                      </Text>
+                    </Group>
+                  ) : null}
                   {previewText ? (
                     <Text size="xs" c="dimmed" lineClamp={3}>
                       {previewText}
