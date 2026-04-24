@@ -602,6 +602,9 @@ export default function ArticlesPage() {
       });
       setFavoriteNewsletterArticleIds(nextArticleIds);
       setIsEditingArticleInFavorite(!articleAlreadyIncluded);
+      setAllNewsletterSummaries((prev) =>
+        prev.map((n) => (n.id === favoriteNewsletterId ? { ...n, articleIds: nextArticleIds } : n))
+      );
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to update favorite newsletter articles");
     } finally {
