@@ -211,6 +211,18 @@ function App() {
             }}
           />
           <NavLink
+            label="Private"
+            active={location.pathname === "/articles/private"}
+            variant="subtle"
+            color="blue"
+            style={{ backgroundColor: "transparent" }}
+            leftSection={<IconLock size={14} />}
+            onClick={() => {
+              navigate("/articles/private");
+              close();
+            }}
+          />
+          <NavLink
             label="Others"
             active={location.pathname === "/articles/others"}
             variant="subtle"
@@ -231,18 +243,6 @@ function App() {
             leftSection={<IconClock size={14} />}
             onClick={() => {
               navigate("/articles/recent");
-              close();
-            }}
-          />
-          <NavLink
-            label="Private"
-            active={location.pathname === "/articles/private"}
-            variant="subtle"
-            color="blue"
-            style={{ backgroundColor: "transparent" }}
-            leftSection={<IconLock size={14} />}
-            onClick={() => {
-              navigate("/articles/private");
               close();
             }}
           />
