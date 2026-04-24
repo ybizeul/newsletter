@@ -1,10 +1,11 @@
 import { type MouseEvent as ReactMouseEvent, useState } from "react";
 import { ActionIcon, Anchor, AppShell, Box, Burger, Center, Group, Loader, Modal, NavLink, ScrollArea, Stack, Text } from "@mantine/core";
 import { useDisclosure } from "@mantine/hooks";
-import { IconAlignBoxCenterTop, IconArticle, IconClock, IconHelpCircle, IconList, IconLock, IconLogout, IconMail, IconStar, IconUser, IconUsers, IconWorld } from "@tabler/icons-react";
+import { IconAlignBoxCenterTop, IconArticle, IconClock, IconHelpCircle, IconList, IconLock, IconLogout, IconMail, IconStar, IconUser, IconAddressBook, IconUsers, IconWorld } from "@tabler/icons-react";
 import { Navigate, Route, Routes, useLocation, useNavigate } from "react-router-dom";
 
 import ArticlesPage from "./pages/ArticlesPage";
+import ContactsPage from "./pages/ContactsPage";
 import HeadersPage from "./pages/HeadersPage";
 import LoginPage from "./pages/LoginPage";
 import NewslettersPage from "./pages/NewslettersPage";
@@ -23,7 +24,7 @@ function getStoredNavbarWidth(): number {
 }
 
 function App() {
-  const { user, loading, oidcEnabled, logout } = useAuth();
+  const { user, loading, oidcEnabled, contactsDisabled, logout } = useAuth();
   const [opened, { toggle, close }] = useDisclosure();
   const [isHelpOpen, setIsHelpOpen] = useState(false);
   const [navbarWidth, setNavbarWidth] = useState(getStoredNavbarWidth);
@@ -278,6 +279,17 @@ function App() {
             close();
           }}
         />
+        {!contactsDisabled ? (
+          <NavLink
+            label="Contacts"
+            active={location.pathname.startsWith("/contacts")}
+            leftSection={<IconAddressBook size={16} />}
+            onClick={() => {
+              navigate("/contacts");
+              close();
+            }}
+          />
+        ) : null}
       </AppShell.Navbar>
 
       <Box
@@ -301,6 +313,7 @@ function App() {
           <Route path="/articles/:smartFilter" element={<ArticlesPage />} />
           <Route path="/newsletters" element={<NewslettersPage />} />
           <Route path="/headers" element={<HeadersPage />} />
+          <Route path="/contacts" element={contactsDisabled ? <Navigate to="/articles" replace /> : <ContactsPage />} />
           <Route path="/newsletters/:id/preview" element={<NewsletterPreviewPage />} />
           <Route path="*" element={<Navigate to="/articles" replace />} />
         </Routes>

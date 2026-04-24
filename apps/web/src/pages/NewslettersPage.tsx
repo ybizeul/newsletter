@@ -10,8 +10,10 @@ import {
   Loader,
   Modal,
   ScrollArea,
+  SegmentedControl,
   Select,
   Stack,
+  TagsInput,
   Text,
   TextInput
 } from "@mantine/core";
@@ -31,13 +33,14 @@ import {
   getNewsletter,
   getRuntimeConfig,
   listArticleSummaries,
+  listContacts,
   listHeaders,
   listNewsletterSummaries,
   scheduleNewsletter,
   sendNewsletterNow,
   updateNewsletter
 } from "../lib/api";
-import type { ArticleSummary, Header, Newsletter, NewsletterSummary } from "../types/domain";
+import type { ArticleSummary, Contact, Header, Newsletter, NewsletterSummary } from "../types/domain";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../lib/auth";
 import { DateTimePicker } from "@mantine/dates";
@@ -56,6 +59,7 @@ type NewslettersDataCache = {
   headers: Header[];
   newsletters: NewsletterSummary[];
   smtpConfigured: boolean;
+  contacts: Contact[];
 };
 
 let cachedNewslettersData: NewslettersDataCache | null = null;
@@ -143,7 +147,7 @@ function toNewsletterSummary(newsletter: Newsletter): NewsletterSummary {
 }
 
 export default function NewslettersPage() {
-  const { oidcEnabled } = useAuth();
+  const { oidcEnabled, contactsDisabled } = useAuth();
   const containerRef = useRef<HTMLDivElement | null>(null);
   const autosaveTimerRef = useRef<number | null>(null);
   const autosaveClearSavedRef = useRef<number | null>(null);
@@ -178,6 +182,10 @@ export default function NewslettersPage() {
   const [articleIds, setArticleIDs] = useState<string[]>([]);
   const [draggedArticleId, setDraggedArticleId] = useState<string | null>(null);
   const [recipientRaw, setRecipientRaw] = useState("first@example.com,second@example.com");
+  const [recipientMode, setRecipientMode] = useState<"emails" | "contacts">("emails");
+  const [contactTags, setContactTags] = useState<string[]>([]);
+  const [contactTagsMode, setContactTagsMode] = useState<"all" | "any">("any");
+  const [contacts, setContacts] = useState<Contact[]>(() => cachedNewslettersData?.contacts ?? []);
   const [scheduledAtInput, setScheduledAtInput] = useState<string | null>(null);
   const [smtpConfigured, setSmtpConfigured] = useState(() => cachedNewslettersData?.smtpConfigured ?? true);
   const [isLoading, setIsLoading] = useState(false);
@@ -225,26 +233,52 @@ export default function NewslettersPage() {
     [availableArticleOptions, articleIds]
   );
 
+  const allContactTags = useMemo(() => {
+    const set = new Set<string>();
+    for (const c of contacts) {
+      for (const t of c.tags ?? []) {
+        set.add(t);
+      }
+    }
+    return Array.from(set).sort();
+  }, [contacts]);
+
+  const resolvedContactCount = useMemo(() => {
+    if (recipientMode !== "contacts" || contactTags.length === 0) return null;
+    const lowerTags = contactTags.map((t) => t.toLowerCase());
+    const matched = contacts.filter((c) => {
+      const cTags = (c.tags ?? []).map((t) => t.toLowerCase());
+      if (contactTagsMode === "all") {
+        return lowerTags.every((tag) => cTags.includes(tag));
+      }
+      return lowerTags.some((tag) => cTags.includes(tag));
+    });
+    return matched.length;
+  }, [recipientMode, contactTags, contactTagsMode, contacts]);
+
   const loadData = async () => {
     setIsLoading(true);
     setError(null);
     try {
-      const [articleItems, headerItems, newsletterItems, runtimeConfig] = await Promise.all([
+      const [articleItems, headerItems, newsletterItems, runtimeConfig, contactItems] = await Promise.all([
         listArticleSummaries(),
         listHeaders(),
         listNewsletterSummaries(),
-        getRuntimeConfig()
+        getRuntimeConfig(),
+        listContacts()
       ]);
       cachedNewslettersData = {
         articles: articleItems,
         headers: headerItems,
         newsletters: newsletterItems,
-        smtpConfigured: runtimeConfig.smtpConfigured
+        smtpConfigured: runtimeConfig.smtpConfigured,
+        contacts: contactItems
       };
       setArticles(articleItems);
       setHeaders(headerItems);
       setNewsletters(newsletterItems.map(withFavoriteFlag));
       setSmtpConfigured(runtimeConfig.smtpConfigured);
+      setContacts(contactItems);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load newsletters");
     } finally {
@@ -261,9 +295,10 @@ export default function NewslettersPage() {
       articles,
       headers,
       newsletters,
-      smtpConfigured
+      smtpConfigured,
+      contacts
     };
-  }, [articles, headers, newsletters, smtpConfigured, hasLoadedNewslettersData]);
+  }, [articles, headers, newsletters, smtpConfigured, contacts, hasLoadedNewslettersData]);
 
   useEffect(() => {
     void loadData();
@@ -302,13 +337,14 @@ export default function NewslettersPage() {
           articles: latestArticles,
           headers,
           newsletters,
-          smtpConfigured
+          smtpConfigured,
+          contacts
         };
       } catch (err) {
         setError(err instanceof Error ? err.message : "Failed to refresh articles");
       }
     })();
-  }, [location.pathname, headers, newsletters, smtpConfigured]);
+  }, [location.pathname, headers, newsletters, smtpConfigured, contacts]);
 
   const resetForm = () => {
     setSelectedNewsletterID(null);
@@ -320,6 +356,9 @@ export default function NewslettersPage() {
     setArticleIDs([]);
     setDraggedArticleId(null);
     setRecipientRaw("first@example.com,second@example.com");
+    setRecipientMode("emails");
+    setContactTags([]);
+    setContactTagsMode("any");
     setScheduledAtInput(null);
     lastSavedDraftRef.current = "";
     setAutosaveStatus("idle");
@@ -338,6 +377,17 @@ export default function NewslettersPage() {
       setContentWidth(fullNewsletter.contentWidth || 680);
       setArticleIDs(fullNewsletter.articleIds);
       setRecipientRaw(fullNewsletter.recipientIds.join(","));
+      if (fullNewsletter.contactTags && fullNewsletter.contactTags.length > 0) {
+        setRecipientMode("contacts");
+        setContactTags(fullNewsletter.contactTags);
+        setContactTagsMode(
+          fullNewsletter.contactTagsMode === "all" ? "all" : "any"
+        );
+      } else {
+        setRecipientMode("emails");
+        setContactTags([]);
+        setContactTagsMode("any");
+      }
       if (fullNewsletter.scheduledAt) {
         setScheduledAtInput(fullNewsletter.scheduledAt);
       } else {
@@ -350,7 +400,9 @@ export default function NewslettersPage() {
         includeIndex: Boolean(fullNewsletter.includeIndex),
         contentWidth: fullNewsletter.contentWidth || 680,
         articleIds: fullNewsletter.articleIds,
-        recipientIds: fullNewsletter.recipientIds
+        recipientIds: fullNewsletter.recipientIds,
+        contactTags: fullNewsletter.contactTags ?? [],
+        contactTagsMode: fullNewsletter.contactTagsMode ?? "any"
       });
       setAutosaveStatus("idle");
       if (isMobile) {
@@ -416,7 +468,9 @@ export default function NewslettersPage() {
     includeIndex,
     contentWidth,
     articleIds,
-    recipientIds: parseRecipients()
+    recipientIds: recipientMode === "emails" ? parseRecipients() : [],
+    contactTags: recipientMode === "contacts" ? contactTags : [],
+    contactTagsMode: recipientMode === "contacts" ? contactTagsMode : "any"
   });
 
   const scheduleAutosaveSavedReset = () => {
@@ -433,7 +487,7 @@ export default function NewslettersPage() {
       setError("Title is required");
       return;
     }
-    if (hasTooManyRecipients) {
+    if (hasTooManyRecipients && recipientMode === "emails") {
       setError(`A maximum of ${MAX_RECIPIENTS} recipients is allowed`);
       return;
     }
@@ -477,7 +531,7 @@ export default function NewslettersPage() {
       return;
     }
 
-    if (hasTooManyRecipients) {
+    if (hasTooManyRecipients && recipientMode === "emails") {
       return;
     }
 
@@ -522,7 +576,7 @@ export default function NewslettersPage() {
         window.clearTimeout(autosaveTimerRef.current);
       }
     };
-  }, [selectedNewsletterId, title, headerId, introMarkdown, includeIndex, contentWidth, articleIds, recipientRaw, hasTooManyRecipients, isSubmitting]);
+  }, [selectedNewsletterId, title, headerId, introMarkdown, includeIndex, contentWidth, articleIds, recipientRaw, recipientMode, contactTags, contactTagsMode, hasTooManyRecipients, isSubmitting]);
 
   useEffect(() => () => {
     if (autosaveTimerRef.current !== null) {
@@ -555,6 +609,10 @@ export default function NewslettersPage() {
   const onSendNow = async () => {
     if (!selectedNewsletterId) {
       setError("Select a newsletter first");
+      return;
+    }
+    if (!contactsDisabled && recipientMode === "contacts" && contactTags.length === 0) {
+      setError("Add at least one tag to send to contacts");
       return;
     }
 
@@ -639,7 +697,9 @@ export default function NewslettersPage() {
         introMarkdown: source.introMarkdown,
         includeIndex: Boolean(source.includeIndex),
         articleIds: source.articleIds,
-        recipientIds: source.recipientIds
+        recipientIds: source.recipientIds,
+        contactTags: source.contactTags ?? [],
+        contactTagsMode: source.contactTagsMode ?? "any"
       });
 
       const createdSummary = withFavoriteFlag(toNewsletterSummary(created));
@@ -1130,14 +1190,53 @@ export default function NewslettersPage() {
             </Stack>
             
           {smtpConfigured ? (
-            <TextInput
-              label="Recipients (emails, comma-separated)"
-              description={`Comma-separated recipient addresses used for send and schedule actions (${parsedRecipients.length}/${MAX_RECIPIENTS}).`}
-              placeholder="first@example.com,second@example.com"
-              value={recipientRaw}
-              onChange={(event) => setRecipientRaw(event.currentTarget.value)}
-              error={hasTooManyRecipients ? `A maximum of ${MAX_RECIPIENTS} recipients is allowed` : undefined}
-            />
+            <Stack gap="xs">
+              {!contactsDisabled ? (
+                <SegmentedControl
+                  value={recipientMode}
+                  onChange={(value) => setRecipientMode(value as "emails" | "contacts")}
+                  data={[
+                    { label: "Email list", value: "emails" },
+                    { label: "Contacts by tag", value: "contacts" }
+                  ]}
+                  size="xs"
+                />
+              ) : null}
+
+              {!contactsDisabled && recipientMode === "contacts" ? (
+                <Stack gap="xs">
+                  <TagsInput
+                    label="Contact tags"
+                    description="Send to all contacts that have these tags."
+                    placeholder="Add a tag and press Enter"
+                    value={contactTags}
+                    onChange={setContactTags}
+                    data={allContactTags}
+                    clearable
+                  />
+                  <Select
+                    label="Match mode"
+                    description='"All" — contact must have every tag. "Any" — contact must have at least one tag.'
+                    data={[
+                      { value: "any", label: "Any tag" },
+                      { value: "all", label: "All tags" }
+                    ]}
+                    value={contactTagsMode}
+                    onChange={(v) => setContactTagsMode((v ?? "any") as "all" | "any")}
+                    allowDeselect={false}
+                  />
+                </Stack>
+              ) : (
+                <TextInput
+                  label="Recipients (emails, comma-separated)"
+                  description={`Comma-separated recipient addresses used for send and schedule actions (${parsedRecipients.length}/${MAX_RECIPIENTS}).`}
+                  placeholder="first@example.com,second@example.com"
+                  value={recipientRaw}
+                  onChange={(event) => setRecipientRaw(event.currentTarget.value)}
+                  error={hasTooManyRecipients ? `A maximum of ${MAX_RECIPIENTS} recipients is allowed` : undefined}
+                />
+              )}
+            </Stack>
           ) : null}
 
           {smtpConfigured ? (
@@ -1170,9 +1269,13 @@ export default function NewslettersPage() {
                   variant="light"
                   leftSection={<IconSend size={16} />}
                   onClick={() => void onSendNow()}
-                  disabled={!selectedNewsletterId}
+                  disabled={
+                    !selectedNewsletterId ||
+                    (recipientMode === "emails" && parsedRecipients.length === 0) ||
+                    (!contactsDisabled && recipientMode === "contacts" && contactTags.length === 0)
+                  }
                 >
-                  Send Now
+                  Send Now{resolvedContactCount !== null ? ` (${resolvedContactCount})` : recipientMode === "emails" && parsedRecipients.length > 0 ? ` (${parsedRecipients.length})` : ""}
                 </Button>
               ) : null}
             </Group>

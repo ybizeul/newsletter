@@ -13,21 +13,23 @@ const (
 )
 
 type Newsletter struct {
-	ID            string           `bson:"_id" json:"id"`
-	CreatorID     string           `bson:"creatorId" json:"creatorId"`
-	Owner         string           `bson:"owner,omitempty" json:"owner,omitempty"`
-	Title         string           `bson:"title" json:"title"`
-	HeaderID      string           `bson:"headerId,omitempty" json:"headerId,omitempty"`
-	IntroMarkdown string           `bson:"introMarkdown" json:"introMarkdown"`
-	IncludeIndex  bool             `bson:"includeIndex" json:"includeIndex"`
-	ArticleIDs    []string         `bson:"articleIds" json:"articleIds"`
-	RecipientIDs  []string         `bson:"recipientIds" json:"recipientIds"`
-	ContentWidth  int              `bson:"contentWidth,omitempty" json:"contentWidth"`
-	IsFavorite    bool             `bson:"isFavorite" json:"isFavorite"`
-	Status        NewsletterStatus `bson:"status" json:"status"`
-	DeliveryError string           `bson:"deliveryError,omitempty" json:"deliveryError,omitempty"`
-	ScheduledAt   *time.Time       `bson:"scheduledAt,omitempty" json:"scheduledAt,omitempty"`
-	SentAt        *time.Time       `bson:"sentAt,omitempty" json:"sentAt,omitempty"`
-	CreatedAt     time.Time        `bson:"createdAt" json:"createdAt"`
-	UpdatedAt     time.Time        `bson:"updatedAt" json:"updatedAt"`
+	ID              string           `bson:"_id" json:"id"`
+	CreatorID       string           `bson:"creatorId" json:"creatorId"`
+	Owner           string           `bson:"owner,omitempty" json:"owner,omitempty"`
+	Title           string           `bson:"title" json:"title"`
+	HeaderID        string           `bson:"headerId,omitempty" json:"headerId,omitempty"`
+	IntroMarkdown   string           `bson:"introMarkdown" json:"introMarkdown"`
+	IncludeIndex    bool             `bson:"includeIndex" json:"includeIndex"`
+	ArticleIDs      []string         `bson:"articleIds" json:"articleIds"`
+	RecipientIDs    []string         `bson:"recipientIds" json:"recipientIds"`
+	ContactTags     []string         `bson:"contactTags,omitempty" json:"contactTags,omitempty"`
+	ContactTagsMode string           `bson:"contactTagsMode,omitempty" json:"contactTagsMode,omitempty"`
+	ContentWidth    int              `bson:"contentWidth,omitempty" json:"contentWidth"`
+	IsFavorite      bool             `bson:"isFavorite" json:"isFavorite"`
+	Status          NewsletterStatus `bson:"status" json:"status"`
+	DeliveryError   string           `bson:"deliveryError,omitempty" json:"deliveryError,omitempty"`
+	ScheduledAt     *time.Time       `bson:"scheduledAt,omitempty" json:"scheduledAt,omitempty"`
+	SentAt          *time.Time       `bson:"sentAt,omitempty" json:"sentAt,omitempty"`
+	CreatedAt       time.Time        `bson:"createdAt" json:"createdAt"`
+	UpdatedAt       time.Time        `bson:"updatedAt" json:"updatedAt"`
 }

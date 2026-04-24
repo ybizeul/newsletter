@@ -1,4 +1,4 @@
-import type { Article, ArticleSummary, Header, ListResponse, Newsletter, NewsletterPreview, NewsletterSummary } from "../types/domain";
+import type { Article, ArticleSummary, Contact, Header, ListResponse, Newsletter, NewsletterPreview, NewsletterSummary } from "../types/domain";
 
 const API_ROOT = "/api";
 
@@ -24,6 +24,8 @@ type CreateNewsletterPayload = {
   includeIndex: boolean;
   articleIds: string[];
   recipientIds: string[];
+  contactTags?: string[];
+  contactTagsMode?: string;
 };
 
 type UpdateNewsletterPayload = {
@@ -34,6 +36,8 @@ type UpdateNewsletterPayload = {
   contentWidth: number;
   articleIds: string[];
   recipientIds: string[];
+  contactTags?: string[];
+  contactTagsMode?: string;
 };
 
 type UpdateArticlePayload = {
@@ -63,6 +67,7 @@ type UpdateHeaderPayload = {
 type RuntimeConfig = {
   smtpConfigured: boolean;
   oidcEnabled: boolean;
+  contactsDisabled: boolean;
 };
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
@@ -233,4 +238,48 @@ export async function renderMarkdown(markdown: string): Promise<string> {
 
 export async function getRuntimeConfig(): Promise<RuntimeConfig> {
   return request<RuntimeConfig>("/runtime-config");
+}
+
+type ContactPayload = {
+  firstName: string;
+  lastName: string;
+  email: string;
+  tags?: string[];
+};
+
+type BulkImportResult = {
+  imported: number;
+  skipped: number;
+};
+
+export async function listContacts(): Promise<Contact[]> {
+  const data = await request<ListResponse<Contact>>("/contacts/");
+  return data.items;
+}
+
+export async function createContact(payload: ContactPayload): Promise<Contact> {
+  return request<Contact>("/contacts/", {
+    method: "POST",
+    body: JSON.stringify(payload)
+  });
+}
+
+export async function updateContact(id: string, payload: ContactPayload): Promise<Contact> {
+  return request<Contact>(`/contacts/${id}`, {
+    method: "PUT",
+    body: JSON.stringify(payload)
+  });
+}
+
+export async function deleteContact(id: string): Promise<void> {
+  await request(`/contacts/${id}`, {
+    method: "DELETE"
+  });
+}
+
+export async function bulkImportContacts(contacts: ContactPayload[]): Promise<BulkImportResult> {
+  return request<BulkImportResult>("/contacts/import", {
+    method: "POST",
+    body: JSON.stringify({ contacts })
+  });
 }

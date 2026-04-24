@@ -9,17 +9,18 @@ import (
 )
 
 type Config struct {
-	Port          string
-	MongoURI      string
-	MongoDatabase string
-	SMTPHost      string
-	SMTPPort      string
-	SMTPFrom      string
-	SMTPUser      string
-	SMTPPass      string
-	SMTPXoauth2   bool
-	DefaultTZ     string
-	ScheduleTick  time.Duration
+	Port             string
+	MongoURI         string
+	MongoDatabase    string
+	SMTPHost         string
+	SMTPPort         string
+	SMTPFrom         string
+	SMTPUser         string
+	SMTPPass         string
+	SMTPXoauth2      bool
+	DefaultTZ        string
+	ScheduleTick     time.Duration
+	ContactsDisabled bool
 
 	OIDCIssuer        string
 	OIDCApplicationID string
@@ -34,17 +35,18 @@ func Load() Config {
 	loadDotEnvFiles()
 
 	return Config{
-		Port:          getEnv("API_PORT", "8080"),
-		MongoURI:      getEnv("MONGO_URI", "mongodb://localhost:27017"),
-		MongoDatabase: getEnv("MONGO_DATABASE", "newsletter"),
-		SMTPHost:      getEnv("SMTP_HOST", ""),
-		SMTPPort:      getEnv("SMTP_PORT", "587"),
-		SMTPFrom:      getEnv("SMTP_FROM", "no-reply@example.com"),
-		SMTPUser:      getEnv("SMTP_USER", ""),
-		SMTPPass:      getEnv("SMTP_PASS", ""),
-		SMTPXoauth2:   getEnvBool("SMTP_XOAUTH2", false),
-		DefaultTZ:     getEnv("DEFAULT_TZ", "UTC"),
-		ScheduleTick:  20 * time.Second,
+		Port:             getEnv("API_PORT", "8080"),
+		MongoURI:         getEnv("MONGO_URI", "mongodb://localhost:27017"),
+		MongoDatabase:    getEnv("MONGO_DATABASE", "newsletter"),
+		SMTPHost:         getEnv("SMTP_HOST", ""),
+		SMTPPort:         getEnv("SMTP_PORT", "587"),
+		SMTPFrom:         getEnv("SMTP_FROM", "no-reply@example.com"),
+		SMTPUser:         getEnv("SMTP_USER", ""),
+		SMTPPass:         getEnv("SMTP_PASS", ""),
+		SMTPXoauth2:      getEnvBool("SMTP_XOAUTH2", false),
+		DefaultTZ:        getEnv("DEFAULT_TZ", "UTC"),
+		ScheduleTick:     20 * time.Second,
+		ContactsDisabled: getEnvBool("DISABLE_CONTACTS", false),
 
 		OIDCIssuer:        getEnv("OIDC_ISSUER", ""),
 		OIDCApplicationID: getEnv("OIDC_APPLICATION_ID", ""),

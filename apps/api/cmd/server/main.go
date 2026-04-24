@@ -130,6 +130,18 @@ func main() {
 				})
 			})
 
+			protected.Route("/contacts", func(contact chi.Router) {
+				contact.Post("/", h.CreateContact)
+				contact.Get("/", h.ListContacts)
+				contact.Post("/import", h.BulkImportContacts)
+				contact.Put("/{id}", func(w http.ResponseWriter, r *http.Request) {
+					h.UpdateContact(w, r, chi.URLParam(r, "id"))
+				})
+				contact.Delete("/{id}", func(w http.ResponseWriter, r *http.Request) {
+					h.DeleteContact(w, r, chi.URLParam(r, "id"))
+				})
+			})
+
 			protected.Post("/render/markdown", h.RenderMarkdown)
 		})
 	})

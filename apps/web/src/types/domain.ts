@@ -53,6 +53,8 @@ export interface Newsletter {
   contentWidth: number;
   articleIds: string[];
   recipientIds: string[];
+  contactTags?: string[];
+  contactTagsMode?: string;
   isFavorite: boolean;
   status: NewsletterStatus;
   deliveryError?: string;
@@ -70,6 +72,8 @@ export interface NewsletterSummary {
   includeIndex: boolean;
   articleIds: string[];
   recipientIds: string[];
+  contactTags?: string[];
+  contactTagsMode?: string;
   isFavorite: boolean;
   status: NewsletterStatus;
   deliveryError?: string;
@@ -87,6 +91,16 @@ export interface Header {
   markdown: string;
   status: HeaderStatus;
   version: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface Contact {
+  id: string;
+  firstName: string;
+  lastName: string;
+  email: string;
+  tags?: string[];
   createdAt: string;
   updatedAt: string;
 }

@@ -10,6 +10,7 @@ interface AuthState {
   user: AuthUser | null;
   loading: boolean;
   oidcEnabled: boolean;
+  contactsDisabled: boolean;
   logout: () => void;
 }
 
@@ -17,6 +18,7 @@ const AuthContext = createContext<AuthState>({
   user: null,
   loading: true,
   oidcEnabled: false,
+  contactsDisabled: false,
   logout: () => {},
 });
 
@@ -28,6 +30,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [loading, setLoading] = useState(true);
   const [oidcEnabled, setOidcEnabled] = useState(false);
+  const [contactsDisabled, setContactsDisabled] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -37,8 +40,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         // Fetch runtime config to determine if OIDC is enabled.
         const cfgRes = await fetch("/api/runtime-config");
         if (cfgRes.ok) {
-          const cfg = (await cfgRes.json()) as { oidcEnabled?: boolean };
+          const cfg = (await cfgRes.json()) as { oidcEnabled?: boolean; contactsDisabled?: boolean };
           if (!cancelled) setOidcEnabled(!!cfg.oidcEnabled);
+          if (!cancelled) setContactsDisabled(!!cfg.contactsDisabled);
 
           if (cfg.oidcEnabled) {
             // Attempt to load current user session.
@@ -68,7 +72,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider value={{ user, loading, oidcEnabled, logout }}>
+    <AuthContext.Provider value={{ user, loading, oidcEnabled, contactsDisabled, logout }}>
       {children}
     </AuthContext.Provider>
   );

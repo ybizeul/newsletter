@@ -39,6 +39,7 @@ type Handler struct {
 	articles    *mongo.Collection
 	headers     *mongo.Collection
 	newsletters *mongo.Collection
+	contacts    *mongo.Collection
 	cfg         config.Config
 }
 
@@ -51,6 +52,7 @@ func NewHandler(db *mongo.Database, cfg config.Config) *Handler {
 		articles:    db.Collection("articles"),
 		headers:     db.Collection("headers"),
 		newsletters: db.Collection("newsletters"),
+		contacts:    db.Collection("contacts"),
 		cfg:         cfg,
 	}
 }
@@ -431,6 +433,309 @@ func normalizeIconZoom(value int) int {
 	return value
 }
 
+func normalizeContactTags(tags []string) []string {
+	if len(tags) == 0 {
+		return nil
+	}
+	normalized := make([]string, 0, len(tags))
+	seen := make(map[string]struct{}, len(tags))
+	for _, raw := range tags {
+		tag := strings.ToLower(strings.TrimSpace(raw))
+		if tag == "" {
+			continue
+		}
+		if _, ok := seen[tag]; ok {
+			continue
+		}
+		seen[tag] = struct{}{}
+		normalized = append(normalized, tag)
+	}
+	if len(normalized) == 0 {
+		return nil
+	}
+	return normalized
+}
+
+func normalizeContactTagsMode(mode string) string {
+	switch strings.ToLower(strings.TrimSpace(mode)) {
+	case "all":
+		return "all"
+	default:
+		return "any"
+	}
+}
+
+// resolveContactRecipients returns deduplicated email addresses for contacts
+// matching the given tags. mode "all" requires every tag; "any" requires at least one.
+// resolveContactRecipients returns contacts scoped to the given owner whose
+// tags match. mode "all" requires every tag; "any" requires at least one.
+func (h *Handler) resolveContactRecipients(ctx context.Context, owner string, tags []string, mode string) ([]model.Contact, error) {
+	normalized := normalizeContactTags(tags)
+	if len(normalized) == 0 {
+		return nil, nil
+	}
+
+	// normalizeContactTags already lowercases tags at write time, so this
+	// query uses the same casing that is stored in the database.
+	var tagFilter bson.M
+	if mode == "all" {
+		tagFilter = bson.M{"tags": bson.M{"$all": normalized}}
+	} else {
+		tagFilter = bson.M{"tags": bson.M{"$in": normalized}}
+	}
+
+	filter := tagFilter
+	if owner != "" {
+		filter = bson.M{"$and": []bson.M{tagFilter, {"owner": owner}}}
+	}
+
+	cursor, err := h.contacts.Find(ctx, filter)
+	if err != nil {
+		return nil, err
+	}
+	defer cursor.Close(ctx)
+
+	var contacts []model.Contact
+	if err := cursor.All(ctx, &contacts); err != nil {
+		return nil, err
+	}
+
+	// Deduplicate by email (keep first occurrence).
+	seen := make(map[string]struct{}, len(contacts))
+	deduped := contacts[:0]
+	for _, c := range contacts {
+		key := strings.ToLower(strings.TrimSpace(c.Email))
+		if key == "" {
+			continue
+		}
+		if _, ok := seen[key]; ok {
+			continue
+		}
+		seen[key] = struct{}{}
+		deduped = append(deduped, c)
+	}
+	return deduped, nil
+}
+
+// applyRenderedSubstitutions replaces #FIRST_NAME and #LAST_NAME in already-rendered
+// content. htmlEscape must be true for HTML output to avoid injecting markup.
+func applyRenderedSubstitutions(content string, contact model.Contact, htmlEscape bool) string {
+	firstName, lastName := contact.FirstName, contact.LastName
+	if htmlEscape {
+		firstName = html.EscapeString(firstName)
+		lastName = html.EscapeString(lastName)
+	}
+	content = strings.ReplaceAll(content, "#FIRST_NAME", firstName)
+	content = strings.ReplaceAll(content, "#LAST_NAME", lastName)
+	return content
+}
+
+// ---- Contacts handlers ----
+
+type contactRequest struct {
+	FirstName string   `json:"firstName"`
+	LastName  string   `json:"lastName"`
+	Email     string   `json:"email"`
+	Tags      []string `json:"tags"`
+}
+
+type bulkImportContactsRequest struct {
+	Contacts []contactRequest `json:"contacts"`
+}
+
+func (h *Handler) CreateContact(w http.ResponseWriter, r *http.Request) {
+	var req contactRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		h.writeError(w, http.StatusBadRequest, "invalid payload")
+		return
+	}
+
+	email := strings.TrimSpace(strings.ToLower(req.Email))
+	if email == "" {
+		h.writeError(w, http.StatusBadRequest, "email is required")
+		return
+	}
+	if _, err := mail.ParseAddress(email); err != nil {
+		h.writeError(w, http.StatusBadRequest, "invalid email address")
+		return
+	}
+
+	owner := resolveOwnerEmail(UserFromContext(r.Context()), "")
+	now := time.Now().UTC()
+	contact := model.Contact{
+		ID:        bson.NewObjectID().Hex(),
+		Owner:     owner,
+		FirstName: strings.TrimSpace(req.FirstName),
+		LastName:  strings.TrimSpace(req.LastName),
+		Email:     email,
+		Tags:      normalizeContactTags(req.Tags),
+		CreatedAt: now,
+		UpdatedAt: now,
+	}
+
+	if _, err := h.contacts.InsertOne(r.Context(), contact); err != nil {
+		if mongo.IsDuplicateKeyError(err) {
+			h.writeError(w, http.StatusConflict, "a contact with this email already exists")
+			return
+		}
+		h.writeError(w, http.StatusInternalServerError, "failed to create contact")
+		return
+	}
+
+	h.writeJSON(w, http.StatusCreated, contact)
+}
+
+func (h *Handler) ListContacts(w http.ResponseWriter, r *http.Request) {
+	owner := resolveOwnerEmail(UserFromContext(r.Context()), "")
+	filter := contactOwnerFilter(owner)
+	cursor, err := h.contacts.Find(r.Context(), filter, options.Find().SetSort(bson.D{{Key: "firstName", Value: 1}, {Key: "lastName", Value: 1}}))
+	if err != nil {
+		h.writeError(w, http.StatusInternalServerError, "failed to list contacts")
+		return
+	}
+	defer cursor.Close(r.Context())
+
+	var contacts []model.Contact
+	if err := cursor.All(r.Context(), &contacts); err != nil {
+		h.writeError(w, http.StatusInternalServerError, "failed to decode contacts")
+		return
+	}
+	if contacts == nil {
+		contacts = []model.Contact{}
+	}
+
+	h.writeJSON(w, http.StatusOK, map[string]any{"items": contacts})
+}
+
+func (h *Handler) UpdateContact(w http.ResponseWriter, r *http.Request, id string) {
+	var req contactRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		h.writeError(w, http.StatusBadRequest, "invalid payload")
+		return
+	}
+
+	email := strings.TrimSpace(strings.ToLower(req.Email))
+	if email == "" {
+		h.writeError(w, http.StatusBadRequest, "email is required")
+		return
+	}
+	if _, err := mail.ParseAddress(email); err != nil {
+		h.writeError(w, http.StatusBadRequest, "invalid email address")
+		return
+	}
+
+	owner := resolveOwnerEmail(UserFromContext(r.Context()), "")
+	filter := bson.M{"_id": id}
+	if owner != "" {
+		filter["owner"] = owner
+	}
+
+	result, err := h.contacts.UpdateOne(r.Context(), filter, bson.M{
+		"$set": bson.M{
+			"firstName": strings.TrimSpace(req.FirstName),
+			"lastName":  strings.TrimSpace(req.LastName),
+			"email":     email,
+			"tags":      normalizeContactTags(req.Tags),
+			"updatedAt": time.Now().UTC(),
+		},
+	})
+	if err != nil {
+		h.writeError(w, http.StatusInternalServerError, "failed to update contact")
+		return
+	}
+	if result.MatchedCount == 0 {
+		h.writeError(w, http.StatusNotFound, "contact not found")
+		return
+	}
+
+	var contact model.Contact
+	if err := h.contacts.FindOne(r.Context(), bson.M{"_id": id}).Decode(&contact); err != nil {
+		h.writeError(w, http.StatusInternalServerError, "failed to fetch updated contact")
+		return
+	}
+
+	h.writeJSON(w, http.StatusOK, contact)
+}
+
+func (h *Handler) DeleteContact(w http.ResponseWriter, r *http.Request, id string) {
+	owner := resolveOwnerEmail(UserFromContext(r.Context()), "")
+	filter := bson.M{"_id": id}
+	if owner != "" {
+		filter["owner"] = owner
+	}
+
+	result, err := h.contacts.DeleteOne(r.Context(), filter)
+	if err != nil {
+		h.writeError(w, http.StatusInternalServerError, "failed to delete contact")
+		return
+	}
+	if result.DeletedCount == 0 {
+		h.writeError(w, http.StatusNotFound, "contact not found")
+		return
+	}
+
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// BulkImportContacts upserts contacts by email. New contacts are inserted;
+// existing ones (matched by email) are updated with the provided fields.
+func (h *Handler) BulkImportContacts(w http.ResponseWriter, r *http.Request) {
+	var req bulkImportContactsRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		h.writeError(w, http.StatusBadRequest, "invalid payload")
+		return
+	}
+
+	if len(req.Contacts) == 0 {
+		h.writeJSON(w, http.StatusOK, map[string]any{"imported": 0, "skipped": 0})
+		return
+	}
+
+	owner := resolveOwnerEmail(UserFromContext(r.Context()), "")
+	now := time.Now().UTC()
+	imported := 0
+	skipped := 0
+
+	for _, c := range req.Contacts {
+		email := strings.TrimSpace(strings.ToLower(c.Email))
+		if email == "" {
+			skipped++
+			continue
+		}
+		if _, err := mail.ParseAddress(email); err != nil {
+			skipped++
+			continue
+		}
+
+		// Upsert scoped to this owner so different users can have the same contact email.
+		filter := bson.M{"email": email, "owner": owner}
+		setOnInsert := bson.M{
+			"_id":       bson.NewObjectID().Hex(),
+			"owner":     owner,
+			"createdAt": now,
+		}
+		update := bson.M{
+			"$set": bson.M{
+				"firstName": strings.TrimSpace(c.FirstName),
+				"lastName":  strings.TrimSpace(c.LastName),
+				"email":     email,
+				"tags":      normalizeContactTags(c.Tags),
+				"updatedAt": now,
+			},
+			"$setOnInsert": setOnInsert,
+		}
+
+		opts := options.UpdateOne().SetUpsert(true)
+		if _, err := h.contacts.UpdateOne(r.Context(), filter, update, opts); err != nil {
+			skipped++
+			continue
+		}
+		imported++
+	}
+
+	h.writeJSON(w, http.StatusOK, map[string]any{"imported": imported, "skipped": skipped})
+}
+
 func normalizeRecipientIDs(recipientIDs []string) ([]string, error) {
 	if len(recipientIDs) == 0 {
 		return []string{}, nil
@@ -633,23 +938,27 @@ func (h *Handler) DeleteHeader(w http.ResponseWriter, r *http.Request, id string
 }
 
 type createNewsletterRequest struct {
-	CreatorID     string   `json:"creatorId"`
-	Title         string   `json:"title"`
-	HeaderID      string   `json:"headerId"`
-	IntroMarkdown string   `json:"introMarkdown"`
-	IncludeIndex  bool     `json:"includeIndex"`
-	ArticleIDs    []string `json:"articleIds"`
-	RecipientIDs  []string `json:"recipientIds"`
+	CreatorID       string   `json:"creatorId"`
+	Title           string   `json:"title"`
+	HeaderID        string   `json:"headerId"`
+	IntroMarkdown   string   `json:"introMarkdown"`
+	IncludeIndex    bool     `json:"includeIndex"`
+	ArticleIDs      []string `json:"articleIds"`
+	RecipientIDs    []string `json:"recipientIds"`
+	ContactTags     []string `json:"contactTags"`
+	ContactTagsMode string   `json:"contactTagsMode"`
 }
 
 type updateNewsletterRequest struct {
-	Title         string   `json:"title"`
-	HeaderID      string   `json:"headerId"`
-	IntroMarkdown string   `json:"introMarkdown"`
-	IncludeIndex  bool     `json:"includeIndex"`
-	ContentWidth  int      `json:"contentWidth"`
-	ArticleIDs    []string `json:"articleIds"`
-	RecipientIDs  []string `json:"recipientIds"`
+	Title           string   `json:"title"`
+	HeaderID        string   `json:"headerId"`
+	IntroMarkdown   string   `json:"introMarkdown"`
+	IncludeIndex    bool     `json:"includeIndex"`
+	ContentWidth    int      `json:"contentWidth"`
+	ArticleIDs      []string `json:"articleIds"`
+	RecipientIDs    []string `json:"recipientIds"`
+	ContactTags     []string `json:"contactTags"`
+	ContactTagsMode string   `json:"contactTagsMode"`
 }
 
 func (h *Handler) CreateNewsletter(w http.ResponseWriter, r *http.Request) {
@@ -676,19 +985,21 @@ func (h *Handler) CreateNewsletter(w http.ResponseWriter, r *http.Request) {
 
 	now := time.Now().UTC()
 	newsletter := model.Newsletter{
-		ID:            bson.NewObjectID().Hex(),
-		CreatorID:     req.CreatorID,
-		Owner:         owner,
-		Title:         req.Title,
-		HeaderID:      strings.TrimSpace(req.HeaderID),
-		IntroMarkdown: req.IntroMarkdown,
-		IncludeIndex:  req.IncludeIndex,
-		ArticleIDs:    req.ArticleIDs,
-		RecipientIDs:  recipientIDs,
-		IsFavorite:    false,
-		Status:        model.NewsletterStatusDraft,
-		CreatedAt:     now,
-		UpdatedAt:     now,
+		ID:              bson.NewObjectID().Hex(),
+		CreatorID:       req.CreatorID,
+		Owner:           owner,
+		Title:           req.Title,
+		HeaderID:        strings.TrimSpace(req.HeaderID),
+		IntroMarkdown:   req.IntroMarkdown,
+		IncludeIndex:    req.IncludeIndex,
+		ArticleIDs:      req.ArticleIDs,
+		RecipientIDs:    recipientIDs,
+		ContactTags:     normalizeContactTags(req.ContactTags),
+		ContactTagsMode: normalizeContactTagsMode(req.ContactTagsMode),
+		IsFavorite:      false,
+		Status:          model.NewsletterStatusDraft,
+		CreatedAt:       now,
+		UpdatedAt:       now,
 	}
 
 	if _, err := h.newsletters.InsertOne(r.Context(), newsletter); err != nil {
@@ -942,14 +1253,16 @@ func (h *Handler) UpdateNewsletter(w http.ResponseWriter, r *http.Request, id st
 
 	update := bson.M{
 		"$set": bson.M{
-			"title":         strings.TrimSpace(req.Title),
-			"headerId":      strings.TrimSpace(req.HeaderID),
-			"introMarkdown": req.IntroMarkdown,
-			"includeIndex":  req.IncludeIndex,
-			"contentWidth":  req.ContentWidth,
-			"articleIds":    req.ArticleIDs,
-			"recipientIds":  recipientIDs,
-			"updatedAt":     time.Now().UTC(),
+			"title":           strings.TrimSpace(req.Title),
+			"headerId":        strings.TrimSpace(req.HeaderID),
+			"introMarkdown":   req.IntroMarkdown,
+			"includeIndex":    req.IncludeIndex,
+			"contentWidth":    req.ContentWidth,
+			"articleIds":      req.ArticleIDs,
+			"recipientIds":    recipientIDs,
+			"contactTags":     normalizeContactTags(req.ContactTags),
+			"contactTagsMode": normalizeContactTagsMode(req.ContactTagsMode),
+			"updatedAt":       time.Now().UTC(),
 		},
 	}
 
@@ -1019,8 +1332,9 @@ func (h *Handler) RenderMarkdown(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) GetRuntimeConfig(w http.ResponseWriter, r *http.Request) {
 	h.writeJSON(w, http.StatusOK, map[string]any{
-		"smtpConfigured": h.cfg.SMTPHost != "" && h.cfg.SMTPFrom != "",
-		"oidcEnabled":    h.cfg.OIDCEnabled(),
+		"smtpConfigured":   h.cfg.SMTPHost != "" && h.cfg.SMTPFrom != "",
+		"oidcEnabled":      h.cfg.OIDCEnabled(),
+		"contactsDisabled": h.cfg.ContactsDisabled,
 	})
 }
 
@@ -1199,6 +1513,9 @@ func (h *Handler) processScheduledNewsletter(ctx context.Context, newsletter mod
 		return err
 	}
 
+	// Render the newsletter template once. #FIRST_NAME / #LAST_NAME placeholders are
+	// left as literal strings in the output and substituted per-recipient below,
+	// avoiding re-running the full markdown pipeline for every contact.
 	htmlBody, textBody, err := h.renderNewsletter(ctx, *loadedNewsletter, articles)
 	if err != nil {
 		return err
@@ -1210,17 +1527,38 @@ func (h *Handler) processScheduledNewsletter(ctx context.Context, newsletter mod
 		senderEmail = u.Email
 	}
 
-	for _, recipient := range loadedNewsletter.RecipientIDs {
-		recipient = strings.TrimSpace(recipient)
-		if recipient == "" {
-			continue
+	if len(loadedNewsletter.ContactTags) > 0 {
+		// Contact mode: resolve recipients, then substitute placeholders in the
+		// already-rendered HTML/text for each contact before sending.
+		contacts, err := h.resolveContactRecipients(ctx, loadedNewsletter.Owner, loadedNewsletter.ContactTags, loadedNewsletter.ContactTagsMode)
+		if err != nil {
+			return fmt.Errorf("failed to resolve contact recipients: %w", err)
 		}
-		log.Printf("smtp send start newsletter_id=%s recipient=%s smtp_host=%s smtp_port=%s", loadedNewsletter.ID, recipient, h.cfg.SMTPHost, h.cfg.SMTPPort)
-		if err := h.sendSMTP(recipient, loadedNewsletter.Title, htmlBody, textBody, accessToken, senderEmail); err != nil {
-			log.Printf("smtp send failed newsletter_id=%s recipient=%s error=%v", loadedNewsletter.ID, recipient, err)
-			return err
+		for _, contact := range contacts {
+			pHTML := applyRenderedSubstitutions(htmlBody, contact, true)
+			pText := applyRenderedSubstitutions(textBody, contact, false)
+			recipient := strings.TrimSpace(contact.Email)
+			log.Printf("smtp send start newsletter_id=%s recipient=%s smtp_host=%s smtp_port=%s", loadedNewsletter.ID, recipient, h.cfg.SMTPHost, h.cfg.SMTPPort)
+			if err := h.sendSMTP(recipient, loadedNewsletter.Title, pHTML, pText, accessToken, senderEmail); err != nil {
+				log.Printf("smtp send failed newsletter_id=%s recipient=%s error=%v", loadedNewsletter.ID, recipient, err)
+				return err
+			}
+			log.Printf("smtp send success newsletter_id=%s recipient=%s", loadedNewsletter.ID, recipient)
 		}
-		log.Printf("smtp send success newsletter_id=%s recipient=%s", loadedNewsletter.ID, recipient)
+	} else {
+		// Email-list mode: broadcast the same rendered output to all recipients.
+		for _, r := range loadedNewsletter.RecipientIDs {
+			recipient := strings.TrimSpace(r)
+			if recipient == "" {
+				continue
+			}
+			log.Printf("smtp send start newsletter_id=%s recipient=%s smtp_host=%s smtp_port=%s", loadedNewsletter.ID, recipient, h.cfg.SMTPHost, h.cfg.SMTPPort)
+			if err := h.sendSMTP(recipient, loadedNewsletter.Title, htmlBody, textBody, accessToken, senderEmail); err != nil {
+				log.Printf("smtp send failed newsletter_id=%s recipient=%s error=%v", loadedNewsletter.ID, recipient, err)
+				return err
+			}
+			log.Printf("smtp send success newsletter_id=%s recipient=%s", loadedNewsletter.ID, recipient)
+		}
 	}
 
 	now := time.Now().UTC()
@@ -1360,6 +1698,17 @@ func newsletterVisibilityFilter(user *User) bson.M {
 			{"owner": owner},
 		},
 	}
+}
+
+// contactOwnerFilter returns a MongoDB filter that restricts contacts to
+// those owned by the given user. When OIDC is disabled (owner is empty)
+// we return an empty filter so all contacts are visible — this mirrors the
+// behaviour of articles/newsletters for single-user (non-OIDC) deployments.
+func contactOwnerFilter(owner string) bson.M {
+	if owner == "" {
+		return bson.M{}
+	}
+	return bson.M{"owner": owner}
 }
 
 func resolveContentWidth(n model.Newsletter) int {
