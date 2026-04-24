@@ -1,7 +1,7 @@
 import { type MouseEvent as ReactMouseEvent, useState } from "react";
 import { ActionIcon, Anchor, AppShell, Box, Burger, Center, Group, Loader, Modal, NavLink, ScrollArea, Stack, Text } from "@mantine/core";
 import { useDisclosure } from "@mantine/hooks";
-import { IconAlignBoxCenterTop, IconArticle, IconHelpCircle, IconLogout, IconMail, IconStar } from "@tabler/icons-react";
+import { IconAlignBoxCenterTop, IconArticle, IconClock, IconHelpCircle, IconList, IconLock, IconLogout, IconMail, IconStar, IconUser } from "@tabler/icons-react";
 import { Navigate, Route, Routes, useLocation, useNavigate } from "react-router-dom";
 
 import ArticlesPage from "./pages/ArticlesPage";
@@ -180,15 +180,62 @@ function App() {
       </Modal>
 
       <AppShell.Navbar p="sm">
-        <NavLink
-          label="Articles"
-          active={location.pathname.startsWith("/articles")}
-          leftSection={<IconArticle size={16} />}
-          onClick={() => {
-            navigate("/articles");
-            close();
-          }}
-        />
+        <Box mb="xs">
+          <Group gap="xs" px="sm" py={6} style={{ borderRadius: 6, background: "transparent" }}>
+            <IconArticle size={16} />
+            <Text size="sm" fw={500}>Articles</Text>
+          </Group>
+          <Box pl="md">
+          <NavLink
+            label="All"
+            active={location.pathname === "/articles" || location.pathname === "/articles/all"}
+            variant="subtle"
+            color="blue"
+            style={{ backgroundColor: "transparent" }}
+            leftSection={<IconList size={14} />}
+            onClick={() => {
+              navigate("/articles/all");
+              close();
+            }}
+          />
+          <NavLink
+            label="Mine"
+            active={location.pathname === "/articles/mine"}
+            variant="subtle"
+            color="blue"
+            style={{ backgroundColor: "transparent" }}
+            leftSection={<IconUser size={14} />}
+            onClick={() => {
+              navigate("/articles/mine");
+              close();
+            }}
+          />
+          <NavLink
+            label="Recent"
+            active={location.pathname === "/articles/recent"}
+            variant="subtle"
+            color="blue"
+            style={{ backgroundColor: "transparent" }}
+            leftSection={<IconClock size={14} />}
+            onClick={() => {
+              navigate("/articles/recent");
+              close();
+            }}
+          />
+          <NavLink
+            label="Private"
+            active={location.pathname === "/articles/private"}
+            variant="subtle"
+            color="blue"
+            style={{ backgroundColor: "transparent" }}
+            leftSection={<IconLock size={14} />}
+            onClick={() => {
+              navigate("/articles/private");
+              close();
+            }}
+          />
+          </Box>
+        </Box>
         <NavLink
           label="Newsletters"
           active={location.pathname.startsWith("/newsletters")}
@@ -226,7 +273,8 @@ function App() {
 
       <AppShell.Main>
         <Routes>
-          <Route path="/articles" element={<ArticlesPage />} />
+          <Route path="/articles" element={<Navigate to="/articles/all" replace />} />
+          <Route path="/articles/:smartFilter" element={<ArticlesPage />} />
           <Route path="/newsletters" element={<NewslettersPage />} />
           <Route path="/headers" element={<HeadersPage />} />
           <Route path="/newsletters/:id/preview" element={<NewsletterPreviewPage />} />

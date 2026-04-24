@@ -29,6 +29,7 @@ import { useMediaQuery } from "@mantine/hooks";
 import { IconCheck, IconChevronDown, IconMail, IconPencil, IconSearch, IconUserFilled } from "@tabler/icons-react";
 import MDEditor from "@uiw/react-md-editor";
 import { renderToStaticMarkup } from "react-dom/server";
+import { useParams } from "react-router-dom";
 import "@uiw/react-md-editor/markdown-editor.css";
 import "@uiw/react-markdown-preview/markdown.css";
 import "../styles/markdown-editor.css";
@@ -46,9 +47,19 @@ const ARTICLES_PANE_WIDTH_STORAGE_KEY = "newsletter.articles.pane.width";
 const FAVORITE_NEWSLETTER_ID_STORAGE_KEY = "newsletter.favorite.id";
 const NEWSLETTER_MAX_CONTENT_WIDTH_PX = 680;
 const ICON_PNG_RASTER_SIZE = 90;
+const RECENT_ARTICLES_WINDOW_MS = 30 * 24 * 60 * 60 * 1000;
 const TAG_COLORS = ["blue", "teal", "cyan", "grape", "indigo", "violet", "lime", "orange", "pink"] as const;
 
 let cachedArticleSummaries: ArticleSummary[] | null = null;
+
+type ArticleSmartFilter = "all" | "mine" | "recent" | "private";
+
+function normalizeArticleSmartFilter(input?: string): ArticleSmartFilter {
+  if (input === "mine" || input === "recent" || input === "private" || input === "all") {
+    return input;
+  }
+  return "all";
+}
 
 function normalizeArticleSummaryVisibility(article: ArticleSummary): ArticleSummary {
   const owner = (article.owner ?? "").trim();
@@ -382,6 +393,8 @@ function toArticleSummary(article: Article): ArticleSummary {
 }
 
 export default function ArticlesPage() {
+  const { smartFilter } = useParams<{ smartFilter?: string }>();
+  const articleSmartFilter = normalizeArticleSmartFilter(smartFilter);
   const { oidcEnabled, user } = useAuth();
   const containerRef = useRef<HTMLDivElement | null>(null);
   const headerRowRef = useRef<HTMLDivElement | null>(null);
@@ -445,6 +458,13 @@ export default function ArticlesPage() {
     () => (editingId ? articles.find((article) => article.id === editingId) ?? null : null),
     [articles, editingId]
   );
+  const articleFilterLabel = articleSmartFilter === "mine"
+    ? "Mine"
+    : articleSmartFilter === "recent"
+      ? "Recent"
+      : articleSmartFilter === "private"
+        ? "Private"
+      : "All";
   const selectedArticleOwner = (selectedArticleSummary?.owner ?? "").trim().toLowerCase();
   const currentUserEmail = (user?.email ?? "").trim().toLowerCase();
   const canEditVisibility =
@@ -1246,19 +1266,34 @@ export default function ArticlesPage() {
   }, [iconSearch, tablerIconMap]);
 
   const filteredArticles = useMemo(() => {
+    let scopedArticles = articles;
+    if (articleSmartFilter === "mine") {
+      scopedArticles = currentUserEmail
+        ? scopedArticles.filter((article) => (article.owner ?? "").trim().toLowerCase() === currentUserEmail)
+        : [];
+    } else if (articleSmartFilter === "recent") {
+      const cutoff = Date.now() - RECENT_ARTICLES_WINDOW_MS;
+      scopedArticles = scopedArticles.filter((article) => {
+        const createdAtMs = new Date(article.createdAt).getTime();
+        return Number.isFinite(createdAtMs) && createdAtMs >= cutoff;
+      });
+    } else if (articleSmartFilter === "private") {
+      scopedArticles = scopedArticles.filter((article) => article.public === false);
+    }
+
     const query = articleSearchQuery.trim().toLowerCase();
     if (!query) {
-      return articles;
+      return scopedArticles;
     }
 
     const hasAnyCriteria =
       articleSearchCriteria.title || articleSearchCriteria.content || articleSearchCriteria.tag;
     if (!hasAnyCriteria) {
-      return articles;
+      return scopedArticles;
     }
 
     const words = query.split(/\s+/).filter(Boolean);
-    return articles.filter((article) => {
+    return scopedArticles.filter((article) => {
       const haystackParts: string[] = [];
       if (articleSearchCriteria.title) {
         haystackParts.push(article.title);
@@ -1273,7 +1308,7 @@ export default function ArticlesPage() {
       const haystack = haystackParts.join(" ").toLowerCase();
       return words.every((word) => haystack.includes(word));
     });
-  }, [articleSearchQuery, articleSearchCriteria, articles]);
+  }, [articleSearchQuery, articleSearchCriteria, articles, articleSmartFilter, currentUserEmail]);
 
   const sortedArticles = useMemo(() => {
     const items = [...filteredArticles];
@@ -1398,7 +1433,7 @@ export default function ArticlesPage() {
       {!isMobile || !isMobileEditorOpen ? (
       <div style={{ overflow: "hidden" }}>
         <Group justify="space-between" p="sm" style={{ borderBottom: "1px solid #e9ecef" }}>
-          <Text fw={600}>Articles ({articles.length})</Text>
+          <Text fw={600}>{articleFilterLabel} ({sortedArticles.length})</Text>
           <Group gap="xs">
             <Button
               variant="light"
@@ -1517,11 +1552,6 @@ export default function ArticlesPage() {
                       {favoriteNewsletterArticleIds.includes(article.id) ? (
                         <IconMail size={12} color="#228be6" style={{ flexShrink: 0 }} />
                       ) : null}
-                      {(article.owner ?? "").trim() !== "" && article.public === false ? (
-                        <Badge size="xs" color="gray" variant="light" style={{ flexShrink: 0 }}>
-                          Private
-                        </Badge>
-                      ) : null}
                     </Group>
                     <Text size="xs" c="dimmed" style={{ flexShrink: 0 }}>
                       {formatArticleCreatedAt(article.createdAt)}
@@ -1540,9 +1570,14 @@ export default function ArticlesPage() {
                       {previewText}
                     </Text>
                   ) : null}
-                  {article.tags && article.tags.length > 0 ? (
+                  {(article.public === false && (article.owner ?? "").trim() !== "") || (article.tags && article.tags.length > 0) ? (
                     <Group gap={4} wrap="wrap">
-                      {article.tags.map((tag) => (
+                      {(article.owner ?? "").trim() !== "" && article.public === false ? (
+                        <Badge size="xs" color="gray" variant="light">
+                          Private
+                        </Badge>
+                      ) : null}
+                      {(article.tags ?? []).map((tag) => (
                         <Badge key={`${article.id}-${tag}`} size="xs" variant="light" color={colorForTag(tag)}>
                           {tag}
                         </Badge>
@@ -1565,7 +1600,7 @@ export default function ArticlesPage() {
               </Text>
             ) : sortedArticles.length === 0 ? (
               <Text c="dimmed" size="sm" p="md">
-                No articles match your search.
+                No articles match your search or selected filters.
               </Text>
             ) : null}
           </Stack>
