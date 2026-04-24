@@ -37,7 +37,7 @@ import { createArticle, deleteArticle, getArticle, getNewsletter, listArticleSum
 import { claimArticle } from "../lib/api";
 import { useAuth } from "../lib/auth";
 import type { TablerIconMap } from "../lib/tablerIconsBrowser";
-import type { Article, ArticleSummary } from "../types/domain";
+import type { Article, ArticleSummary, NewsletterSummary } from "../types/domain";
 
 const FALLBACK_AUTHOR_ID = "demo-user";
 
@@ -453,10 +453,16 @@ export default function ArticlesPage() {
   const [isEditingArticleInFavorite, setIsEditingArticleInFavorite] = useState(false);
   const [isCompactFavoriteAction, setIsCompactFavoriteAction] = useState(false);
   const [isManualNewArticleMode, setIsManualNewArticleMode] = useState(false);
+  const [allNewsletterSummaries, setAllNewsletterSummaries] = useState<NewsletterSummary[]>([]);
 
   const selectedArticleSummary = useMemo(
     () => (editingId ? articles.find((article) => article.id === editingId) ?? null : null),
     [articles, editingId]
+  );
+
+  const usedArticleIds = useMemo(
+    () => new Set(allNewsletterSummaries.flatMap((n) => n.articleIds)),
+    [allNewsletterSummaries]
   );
   const articleFilterLabel = articleSmartFilter === "mine"
     ? "Mine"
@@ -478,9 +484,13 @@ export default function ArticlesPage() {
     setIsLoading(true);
     setError(null);
     try {
-      const items = (await listArticleSummaries()).map(normalizeArticleSummaryVisibility);
+      const [items, newsletters] = await Promise.all([
+        listArticleSummaries().then((a) => a.map(normalizeArticleSummaryVisibility)),
+        listNewsletterSummaries(),
+      ]);
       cachedArticleSummaries = items;
       setArticles(items);
+      setAllNewsletterSummaries(newsletters);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load articles");
     } finally {
@@ -1554,6 +1564,9 @@ export default function ArticlesPage() {
                 <Stack gap={6} style={{ flex: 1 }}>
                   <Group justify="space-between" align="flex-start" wrap="nowrap" gap="xs">
                     <Group gap={6} wrap="nowrap" style={{ flex: 1, minWidth: 0, justifyContent: "flex-start" }}>
+                      {allNewsletterSummaries.length > 0 && !usedArticleIds.has(article.id) ? (
+                        <div style={{ width: 8, height: 8, borderRadius: "50%", backgroundColor: "#228be6", flexShrink: 0 }} />
+                      ) : null}
                       <Text
                         fw={700}
                         size="sm"
