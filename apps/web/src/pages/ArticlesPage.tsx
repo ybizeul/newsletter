@@ -1277,7 +1277,7 @@ export default function ArticlesPage() {
       scopedArticles = scopedArticles.filter((article) => {
         const owner = (article.owner ?? "").trim().toLowerCase();
         if (!owner) {
-          return false;
+          return true;
         }
         return currentUserEmail ? owner !== currentUserEmail : true;
       });
