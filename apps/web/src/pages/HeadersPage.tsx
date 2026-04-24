@@ -37,10 +37,11 @@ import TableHeader from "@tiptap/extension-table-header";
 import TableCell from "@tiptap/extension-table-cell";
 import TextAlign from "@tiptap/extension-text-align";
 import { createHeader, deleteHeader, listHeaders, renderMarkdown, updateHeader } from "../lib/api";
+import { useAuth } from "../lib/auth";
 import type { Header } from "../types/domain";
 import "../styles/header-editor.css";
 
-const DEMO_CREATOR_ID = "demo-user";
+const FALLBACK_CREATOR_ID = "demo-user";
 const HEADERS_PANE_WIDTH_STORAGE_KEY = "newsletter.headers.pane.width";
 
 const HeaderImage = Image.extend({
@@ -448,6 +449,7 @@ function readFileAsDataURL(file: File): Promise<string> {
 }
 
 export default function HeadersPage() {
+  const { oidcEnabled } = useAuth();
   const containerRef = useRef<HTMLDivElement | null>(null);
   const lastTablePosRef = useRef<number | null>(null);
   const autosaveTimerRef = useRef<number | null>(null);
@@ -790,7 +792,7 @@ export default function HeadersPage() {
         setAutosaveStatus("saved");
       } else {
         const created = await createHeader({
-          creatorId: DEMO_CREATOR_ID,
+          creatorId: oidcEnabled ? undefined : FALLBACK_CREATOR_ID,
           title: title.trim(),
           markdown
         });
@@ -907,7 +909,7 @@ export default function HeadersPage() {
 
     try {
       const created = await createHeader({
-        creatorId: DEMO_CREATOR_ID,
+        creatorId: oidcEnabled ? undefined : FALLBACK_CREATOR_ID,
         title: `${source.title} (copy)`,
         markdown: source.markdown
       });

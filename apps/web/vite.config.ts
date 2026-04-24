@@ -1,8 +1,9 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
+import mkcert from 'vite-plugin-mkcert'
 
 export default defineConfig({
-  plugins: [react()],
+  plugins: [react(), mkcert()],
   build: {
     outDir: "../api/internal/webui/dist",
     emptyOutDir: true
@@ -10,10 +11,15 @@ export default defineConfig({
   server: {
     host: "0.0.0.0",
     port: 5173,
+    https: {},
     proxy: {
+      "/callback": {
+        target: "http://localhost:8080",
+        headers: { "X-Forwarded-Proto": "https" }
+      },
       "/api": {
         target: "http://localhost:8080",
-        changeOrigin: true
+        headers: { "X-Forwarded-Proto": "https" }
       }
     }
   }

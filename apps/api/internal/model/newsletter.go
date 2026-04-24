@@ -15,6 +15,7 @@ const (
 type Newsletter struct {
 	ID            string           `bson:"_id" json:"id"`
 	CreatorID     string           `bson:"creatorId" json:"creatorId"`
+	Owner         string           `bson:"owner,omitempty" json:"owner,omitempty"`
 	Title         string           `bson:"title" json:"title"`
 	HeaderID      string           `bson:"headerId,omitempty" json:"headerId,omitempty"`
 	IntroMarkdown string           `bson:"introMarkdown" json:"introMarkdown"`

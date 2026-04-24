@@ -118,6 +118,35 @@ Before using in production, update:
 - Inline env vars in `infra/k8s/api.yaml` (SMTP host/from, Mongo URI, timezone)
 - SMTP credentials in Secret (`SMTP_USER`, `SMTP_PASS`)
 
+## Environment Variables
+
+| Variable | Required | Default | Description |
+|---|---|---|---|
+| `API_PORT` | No | `8080` | HTTP listen port |
+| `MONGO_URI` | No | `mongodb://localhost:27017` | MongoDB connection string |
+| `MONGO_DATABASE` | No | `newsletter` | MongoDB database name |
+| `SMTP_HOST` | No | *(empty — sending disabled)* | SMTP server hostname |
+| `SMTP_PORT` | No | `587` | SMTP server port |
+| `SMTP_FROM` | No | `no-reply@example.com` | Sender email address |
+| `SMTP_USER` | No | *(empty — no auth)* | SMTP username |
+| `SMTP_PASS` | No | *(empty)* | SMTP password |
+| `DEFAULT_TZ` | No | `UTC` | Default timezone for scheduling |
+| `OIDC_ISSUER` | No | *(empty — auth disabled)* | OIDC issuer URL (e.g. `https://auth.example.com`) |
+| `OIDC_APPLICATION_ID` | No | *(empty)* | OIDC / OAuth2 client ID |
+| `OIDC_SECRET` | No | *(empty)* | OIDC / OAuth2 client secret |
+
+### OIDC Authentication
+
+When all three `OIDC_*` variables are set, the platform enables OpenID Connect authentication:
+
+- Users are redirected to the OIDC provider to sign in.
+- The callback URL is `https://<host>/callback` (auto-derived from the request `Host` header). Register this URL with your OIDC provider.
+- After login, a signed session cookie (`newsletter_session`, 24 h TTL) is set.
+- The authenticated user's OIDC `sub` claim is used as `authorId` / `creatorId` on created resources.
+- A user name and logout button appear in the app header.
+
+When the `OIDC_*` variables are **not** set, the app runs without authentication (demo / single-user mode).
+
 ## Notes
 
 - If the web UI changes, rebuild in `apps/web` so new assets are embedded.

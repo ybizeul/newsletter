@@ -57,6 +57,7 @@ func NewHandler(db *mongo.Database, cfg config.Config) *Handler {
 
 type createArticleRequest struct {
 	AuthorID        string   `json:"authorId"`
+	Public          *bool    `json:"public"`
 	Title           string   `json:"title"`
 	Markdown        string   `json:"markdown"`
 	Tags            []string `json:"tags"`
@@ -70,6 +71,8 @@ type createArticleRequest struct {
 
 type articleSummary struct {
 	ID           string              `json:"id"`
+	Owner        string              `json:"owner,omitempty"`
+	Public       bool                `json:"public"`
 	Title        string              `json:"title"`
 	Tags         []string            `json:"tags,omitempty"`
 	TopicIcon    string              `json:"topicIcon,omitempty"`
@@ -84,6 +87,8 @@ type articleSummary struct {
 
 type articleSummarySource struct {
 	ID           string              `bson:"_id"`
+	Owner        string              `bson:"owner,omitempty"`
+	Public       *bool               `bson:"public,omitempty"`
 	Title        string              `bson:"title"`
 	Markdown     string              `bson:"markdown"`
 	Tags         []string            `bson:"tags,omitempty"`
@@ -103,15 +108,26 @@ func (h *Handler) CreateArticle(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if u := UserFromContext(r.Context()); u != nil {
+		req.AuthorID = u.ID
+	}
+	owner := resolveOwnerEmail(UserFromContext(r.Context()), req.AuthorID)
 	if req.AuthorID == "" || req.Title == "" {
 		h.writeError(w, http.StatusBadRequest, "authorId and title are required")
 		return
+	}
+
+	isPublic := true
+	if req.Public != nil {
+		isPublic = *req.Public
 	}
 
 	now := time.Now().UTC()
 	article := model.Article{
 		ID:              bson.NewObjectID().Hex(),
 		AuthorID:        req.AuthorID,
+		Owner:           owner,
+		Public:          isPublic,
 		Title:           req.Title,
 		Markdown:        req.Markdown,
 		Tags:            normalizeArticleTags(req.Tags),
@@ -139,9 +155,12 @@ func (h *Handler) CreateArticle(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) ListArticles(w http.ResponseWriter, r *http.Request) {
 	findOptions := options.Find().SetSort(bson.D{{Key: "createdAt", Value: -1}})
 	view := strings.ToLower(strings.TrimSpace(r.URL.Query().Get("view")))
+	visibilityFilter := articleVisibilityFilter(UserFromContext(r.Context()))
 
 	if view != "full" {
 		findOptions.SetProjection(bson.M{
+			"owner":        1,
+			"public":       1,
 			"title":        1,
 			"markdown":     1,
 			"tags":         1,
@@ -154,7 +173,7 @@ func (h *Handler) ListArticles(w http.ResponseWriter, r *http.Request) {
 			"updatedAt":    1,
 		})
 
-		cursor, err := h.articles.Find(r.Context(), bson.M{}, findOptions)
+		cursor, err := h.articles.Find(r.Context(), visibilityFilter, findOptions)
 		if err != nil {
 			h.writeError(w, http.StatusInternalServerError, "failed to list articles")
 			return
@@ -169,8 +188,15 @@ func (h *Handler) ListArticles(w http.ResponseWriter, r *http.Request) {
 
 		items := make([]articleSummary, 0, len(rawItems))
 		for _, raw := range rawItems {
+			isPublic := true
+			if strings.TrimSpace(raw.Owner) != "" && raw.Public != nil {
+				isPublic = *raw.Public
+			}
+
 			items = append(items, articleSummary{
 				ID:           raw.ID,
+				Owner:        raw.Owner,
+				Public:       isPublic,
 				Title:        raw.Title,
 				Tags:         raw.Tags,
 				TopicIcon:    raw.TopicIcon,
@@ -188,7 +214,7 @@ func (h *Handler) ListArticles(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	cursor, err := h.articles.Find(r.Context(), bson.M{}, findOptions)
+	cursor, err := h.articles.Find(r.Context(), visibilityFilter, findOptions)
 	if err != nil {
 		h.writeError(w, http.StatusInternalServerError, "failed to list articles")
 		return
@@ -203,11 +229,62 @@ func (h *Handler) ListArticles(w http.ResponseWriter, r *http.Request) {
 	if articles == nil {
 		articles = []model.Article{}
 	}
+	for i := range articles {
+		if strings.TrimSpace(articles[i].Owner) == "" {
+			// Legacy records may not have an explicit visibility flag; treat as public until claimed.
+			articles[i].Public = true
+		}
+	}
 
 	h.writeJSON(w, http.StatusOK, map[string]any{"items": articles})
 }
 
 func (h *Handler) GetArticle(w http.ResponseWriter, r *http.Request, id string) {
+	var article model.Article
+	filter := bson.M{"_id": id, "$and": []bson.M{articleVisibilityFilter(UserFromContext(r.Context()))}}
+	if err := h.articles.FindOne(r.Context(), filter).Decode(&article); err != nil {
+		if err == mongo.ErrNoDocuments {
+			h.writeError(w, http.StatusNotFound, "article not found")
+			return
+		}
+		h.writeError(w, http.StatusInternalServerError, "failed to fetch article")
+		return
+	}
+	if strings.TrimSpace(article.Owner) == "" {
+		// Legacy records may not have an explicit visibility flag; treat as public until claimed.
+		article.Public = true
+	}
+
+	h.writeJSON(w, http.StatusOK, article)
+}
+
+func (h *Handler) ClaimArticle(w http.ResponseWriter, r *http.Request, id string) {
+	owner := resolveOwnerEmail(UserFromContext(r.Context()), "")
+	if owner == "" {
+		h.writeError(w, http.StatusBadRequest, "missing user email")
+		return
+	}
+
+	now := time.Now().UTC()
+	claimFilter := bson.M{
+		"_id": id,
+		"$or": []bson.M{
+			{"owner": bson.M{"$exists": false}},
+			{"owner": ""},
+		},
+	}
+
+	result, err := h.articles.UpdateOne(r.Context(), claimFilter, bson.M{
+		"$set": bson.M{
+			"owner":     owner,
+			"updatedAt": now,
+		},
+	})
+	if err != nil {
+		h.writeError(w, http.StatusInternalServerError, "failed to claim article")
+		return
+	}
+
 	var article model.Article
 	if err := h.articles.FindOne(r.Context(), bson.M{"_id": id}).Decode(&article); err != nil {
 		if err == mongo.ErrNoDocuments {
@@ -218,10 +295,16 @@ func (h *Handler) GetArticle(w http.ResponseWriter, r *http.Request, id string) 
 		return
 	}
 
+	if result.MatchedCount == 0 && strings.TrimSpace(strings.ToLower(article.Owner)) != owner {
+		h.writeError(w, http.StatusConflict, "article already claimed")
+		return
+	}
+
 	h.writeJSON(w, http.StatusOK, article)
 }
 
 type updateArticleRequest struct {
+	Public          *bool    `json:"public"`
 	Title           string   `json:"title"`
 	Markdown        string   `json:"markdown"`
 	Tags            []string `json:"tags"`
@@ -240,24 +323,53 @@ func (h *Handler) UpdateArticle(w http.ResponseWriter, r *http.Request, id strin
 		return
 	}
 
+	var existing model.Article
+	if err := h.articles.FindOne(r.Context(), bson.M{"_id": id}).Decode(&existing); err != nil {
+		if err == mongo.ErrNoDocuments {
+			h.writeError(w, http.StatusNotFound, "article not found")
+			return
+		}
+		h.writeError(w, http.StatusInternalServerError, "failed to load article")
+		return
+	}
+
 	if req.Title == "" {
 		h.writeError(w, http.StatusBadRequest, "title is required")
 		return
 	}
 
+	if req.Public != nil {
+		currentOwner := strings.TrimSpace(strings.ToLower(existing.Owner))
+		requester := resolveOwnerEmail(UserFromContext(r.Context()), "")
+		if currentOwner != "" && currentOwner != requester {
+			h.writeError(w, http.StatusForbidden, "only the owner can change article visibility")
+			return
+		}
+	}
+
+	setFields := bson.M{
+		"title":           strings.TrimSpace(req.Title),
+		"markdown":        req.Markdown,
+		"tags":            normalizeArticleTags(req.Tags),
+		"topicIcon":       strings.TrimSpace(req.TopicIcon),
+		"illustration":    strings.TrimSpace(req.Illustration),
+		"iconSource":      strings.TrimSpace(req.IconSource),
+		"iconZoom":        normalizeIconZoom(req.IconZoom),
+		"iconBgColor":     strings.TrimSpace(req.IconBgColor),
+		"iconStrokeColor": strings.TrimSpace(req.IconStrokeColor),
+		"updatedAt":       time.Now().UTC(),
+	}
+	if req.Public != nil {
+		currentOwner := strings.TrimSpace(strings.ToLower(existing.Owner))
+		requester := resolveOwnerEmail(UserFromContext(r.Context()), "")
+		setFields["public"] = *req.Public
+		if currentOwner == "" && requester != "" {
+			setFields["owner"] = requester
+		}
+	}
+
 	update := bson.M{
-		"$set": bson.M{
-			"title":           strings.TrimSpace(req.Title),
-			"markdown":        req.Markdown,
-			"tags":            normalizeArticleTags(req.Tags),
-			"topicIcon":       strings.TrimSpace(req.TopicIcon),
-			"illustration":    strings.TrimSpace(req.Illustration),
-			"iconSource":      strings.TrimSpace(req.IconSource),
-			"iconZoom":        normalizeIconZoom(req.IconZoom),
-			"iconBgColor":     strings.TrimSpace(req.IconBgColor),
-			"iconStrokeColor": strings.TrimSpace(req.IconStrokeColor),
-			"updatedAt":       time.Now().UTC(),
-		},
+		"$set": setFields,
 		"$inc": bson.M{"version": 1},
 	}
 
@@ -408,6 +520,9 @@ func (h *Handler) CreateHeader(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if u := UserFromContext(r.Context()); u != nil {
+		req.CreatorID = u.ID
+	}
 	if strings.TrimSpace(req.CreatorID) == "" || strings.TrimSpace(req.Title) == "" {
 		h.writeError(w, http.StatusBadRequest, "creatorId and title are required")
 		return
@@ -538,6 +653,10 @@ func (h *Handler) CreateNewsletter(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if u := UserFromContext(r.Context()); u != nil {
+		req.CreatorID = u.ID
+	}
+	owner := resolveOwnerEmail(UserFromContext(r.Context()), req.CreatorID)
 	if req.CreatorID == "" || req.Title == "" {
 		h.writeError(w, http.StatusBadRequest, "creatorId and title are required")
 		return
@@ -553,6 +672,7 @@ func (h *Handler) CreateNewsletter(w http.ResponseWriter, r *http.Request) {
 	newsletter := model.Newsletter{
 		ID:            bson.NewObjectID().Hex(),
 		CreatorID:     req.CreatorID,
+		Owner:         owner,
 		Title:         req.Title,
 		HeaderID:      strings.TrimSpace(req.HeaderID),
 		IntroMarkdown: req.IntroMarkdown,
@@ -578,6 +698,7 @@ func (h *Handler) ListNewsletters(w http.ResponseWriter, r *http.Request) {
 
 	if strings.EqualFold(strings.TrimSpace(r.URL.Query().Get("view")), "summary") {
 		findOptions.SetProjection(bson.M{
+			"owner":         1,
 			"title":         1,
 			"headerId":      1,
 			"introMarkdown": 1,
@@ -595,6 +716,7 @@ func (h *Handler) ListNewsletters(w http.ResponseWriter, r *http.Request) {
 
 		type newsletterSummarySource struct {
 			ID            string                 `bson:"_id"`
+			Owner         string                 `bson:"owner,omitempty"`
 			Title         string                 `bson:"title"`
 			HeaderID      string                 `bson:"headerId,omitempty"`
 			IntroMarkdown string                 `bson:"introMarkdown"`
@@ -612,6 +734,7 @@ func (h *Handler) ListNewsletters(w http.ResponseWriter, r *http.Request) {
 
 		type newsletterSummary struct {
 			ID            string                 `json:"id"`
+			Owner         string                 `json:"owner,omitempty"`
 			Title         string                 `json:"title"`
 			HeaderID      string                 `json:"headerId,omitempty"`
 			IncludeIndex  bool                   `json:"includeIndex"`
@@ -644,6 +767,7 @@ func (h *Handler) ListNewsletters(w http.ResponseWriter, r *http.Request) {
 		for _, raw := range rawItems {
 			items = append(items, newsletterSummary{
 				ID:            raw.ID,
+				Owner:         raw.Owner,
 				Title:         raw.Title,
 				HeaderID:      raw.HeaderID,
 				IncludeIndex:  raw.IncludeIndex,
@@ -691,6 +815,51 @@ func (h *Handler) GetNewsletter(w http.ResponseWriter, r *http.Request, id strin
 			return
 		}
 		h.writeError(w, http.StatusInternalServerError, "failed to fetch newsletter")
+		return
+	}
+
+	h.writeJSON(w, http.StatusOK, newsletter)
+}
+
+func (h *Handler) ClaimNewsletter(w http.ResponseWriter, r *http.Request, id string) {
+	owner := resolveOwnerEmail(UserFromContext(r.Context()), "")
+	if owner == "" {
+		h.writeError(w, http.StatusBadRequest, "missing user email")
+		return
+	}
+
+	now := time.Now().UTC()
+	claimFilter := bson.M{
+		"_id": id,
+		"$or": []bson.M{
+			{"owner": bson.M{"$exists": false}},
+			{"owner": ""},
+		},
+	}
+
+	result, err := h.newsletters.UpdateOne(r.Context(), claimFilter, bson.M{
+		"$set": bson.M{
+			"owner":     owner,
+			"updatedAt": now,
+		},
+	})
+	if err != nil {
+		h.writeError(w, http.StatusInternalServerError, "failed to claim newsletter")
+		return
+	}
+
+	var newsletter model.Newsletter
+	if err := h.newsletters.FindOne(r.Context(), bson.M{"_id": id}).Decode(&newsletter); err != nil {
+		if err == mongo.ErrNoDocuments {
+			h.writeError(w, http.StatusNotFound, "newsletter not found")
+			return
+		}
+		h.writeError(w, http.StatusInternalServerError, "failed to fetch newsletter")
+		return
+	}
+
+	if result.MatchedCount == 0 && strings.TrimSpace(strings.ToLower(newsletter.Owner)) != owner {
+		h.writeError(w, http.StatusConflict, "newsletter already claimed")
 		return
 	}
 
@@ -844,6 +1013,7 @@ func (h *Handler) RenderMarkdown(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) GetRuntimeConfig(w http.ResponseWriter, r *http.Request) {
 	h.writeJSON(w, http.StatusOK, map[string]any{
 		"smtpConfigured": h.cfg.SMTPHost != "" && h.cfg.SMTPFrom != "",
+		"oidcEnabled":    h.cfg.OIDCEnabled(),
 	})
 }
 
@@ -1122,6 +1292,41 @@ func (h *Handler) updateArticleUsageStats(ctx context.Context, articleIDs []stri
 		},
 	})
 	return err
+}
+
+func resolveOwnerEmail(user *User, fallback string) string {
+	if user != nil {
+		email := strings.TrimSpace(strings.ToLower(user.Email))
+		if email != "" {
+			return email
+		}
+	}
+
+	return strings.TrimSpace(strings.ToLower(fallback))
+}
+
+func articleVisibilityFilter(user *User) bson.M {
+	base := bson.M{"public": bson.M{"$ne": false}}
+	unowned := bson.M{
+		"$or": []bson.M{
+			{"owner": bson.M{"$exists": false}},
+			{"owner": ""},
+		},
+	}
+	owner := resolveOwnerEmail(user, "")
+	if owner == "" {
+		return bson.M{
+			"$or": []bson.M{base, unowned},
+		}
+	}
+
+	return bson.M{
+		"$or": []bson.M{
+			base,
+			unowned,
+			{"owner": owner},
+		},
+	}
 }
 
 func resolveContentWidth(n model.Newsletter) int {

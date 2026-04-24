@@ -19,6 +19,14 @@ type Config struct {
 	SMTPPass      string
 	DefaultTZ     string
 	ScheduleTick  time.Duration
+
+	OIDCIssuer        string
+	OIDCApplicationID string
+	OIDCSecret        string
+}
+
+func (c Config) OIDCEnabled() bool {
+	return c.OIDCIssuer != "" && c.OIDCApplicationID != "" && c.OIDCSecret != ""
 }
 
 func Load() Config {
@@ -35,6 +43,10 @@ func Load() Config {
 		SMTPPass:      getEnv("SMTP_PASS", ""),
 		DefaultTZ:     getEnv("DEFAULT_TZ", "UTC"),
 		ScheduleTick:  20 * time.Second,
+
+		OIDCIssuer:        getEnv("OIDC_ISSUER", ""),
+		OIDCApplicationID: getEnv("OIDC_APPLICATION_ID", ""),
+		OIDCSecret:        getEnv("OIDC_SECRET", ""),
 	}
 }
 

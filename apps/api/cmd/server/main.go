@@ -34,6 +34,11 @@ func main() {
 		_ = mongoClient.Disconnect(context.Background())
 	}()
 
+	auth, err := httpapi.NewOIDCAuth(cfg)
+	if err != nil {
+		log.Fatalf("failed to initialise oidc: %v", err)
+	}
+
 	h := httpapi.NewHandler(mongoClient.Database(cfg.MongoDatabase), cfg)
 	webHandler := webui.Handler()
 	go startScheduler(h, cfg.ScheduleTick)
@@ -51,60 +56,81 @@ func main() {
 		_, _ = w.Write([]byte(`{"status":"ok"}`))
 	})
 
+	// OIDC callback at top level (registered with identity provider as /callback)
+	r.Get("/callback", auth.HandleCallback)
+
 	r.Route("/api", func(api chi.Router) {
-		api.Route("/articles", func(article chi.Router) {
-			article.Post("/", h.CreateArticle)
-			article.Get("/", h.ListArticles)
-			article.Get("/{id}", func(w http.ResponseWriter, r *http.Request) {
-				h.GetArticle(w, r, chi.URLParam(r, "id"))
-			})
-			article.Put("/{id}", func(w http.ResponseWriter, r *http.Request) {
-				h.UpdateArticle(w, r, chi.URLParam(r, "id"))
-			})
-			article.Delete("/{id}", func(w http.ResponseWriter, r *http.Request) {
-				h.DeleteArticle(w, r, chi.URLParam(r, "id"))
-			})
-		})
+		// OIDC auth routes (outside auth middleware)
+		api.Get("/auth/login", auth.HandleLogin)
+		api.Post("/auth/logout", auth.HandleLogout)
+		api.Get("/auth/me", auth.HandleMe)
 
-		api.Route("/headers", func(header chi.Router) {
-			header.Post("/", h.CreateHeader)
-			header.Get("/", h.ListHeaders)
-			header.Put("/{id}", func(w http.ResponseWriter, r *http.Request) {
-				h.UpdateHeader(w, r, chi.URLParam(r, "id"))
-			})
-			header.Delete("/{id}", func(w http.ResponseWriter, r *http.Request) {
-				h.DeleteHeader(w, r, chi.URLParam(r, "id"))
-			})
-		})
-
-		api.Route("/newsletters", func(newsletter chi.Router) {
-			newsletter.Post("/", h.CreateNewsletter)
-			newsletter.Get("/", h.ListNewsletters)
-			newsletter.Get("/{id}", func(w http.ResponseWriter, r *http.Request) {
-				h.GetNewsletter(w, r, chi.URLParam(r, "id"))
-			})
-			newsletter.Put("/{id}", func(w http.ResponseWriter, r *http.Request) {
-				h.UpdateNewsletter(w, r, chi.URLParam(r, "id"))
-			})
-			newsletter.Get("/{id}/preview", func(w http.ResponseWriter, r *http.Request) {
-				h.GetNewsletterPreview(w, r, chi.URLParam(r, "id"))
-			})
-			newsletter.Post("/{id}/favorite", func(w http.ResponseWriter, r *http.Request) {
-				h.SetNewsletterFavorite(w, r, chi.URLParam(r, "id"))
-			})
-			newsletter.Post("/{id}/send-now", func(w http.ResponseWriter, r *http.Request) {
-				h.SendNewsletterNow(w, r, chi.URLParam(r, "id"))
-			})
-			newsletter.Post("/{id}/schedule", func(w http.ResponseWriter, r *http.Request) {
-				h.ScheduleNewsletter(w, r, chi.URLParam(r, "id"))
-			})
-			newsletter.Delete("/{id}", func(w http.ResponseWriter, r *http.Request) {
-				h.DeleteNewsletter(w, r, chi.URLParam(r, "id"))
-			})
-		})
-
-		api.Post("/render/markdown", h.RenderMarkdown)
+		// runtime-config is outside the auth middleware so the frontend can
+		// determine whether OIDC is enabled before authenticating.
 		api.Get("/runtime-config", h.GetRuntimeConfig)
+
+		api.Group(func(protected chi.Router) {
+			protected.Use(auth.Middleware)
+
+			protected.Route("/articles", func(article chi.Router) {
+				article.Post("/", h.CreateArticle)
+				article.Get("/", h.ListArticles)
+				article.Get("/{id}", func(w http.ResponseWriter, r *http.Request) {
+					h.GetArticle(w, r, chi.URLParam(r, "id"))
+				})
+				article.Post("/{id}/claim", func(w http.ResponseWriter, r *http.Request) {
+					h.ClaimArticle(w, r, chi.URLParam(r, "id"))
+				})
+				article.Put("/{id}", func(w http.ResponseWriter, r *http.Request) {
+					h.UpdateArticle(w, r, chi.URLParam(r, "id"))
+				})
+				article.Delete("/{id}", func(w http.ResponseWriter, r *http.Request) {
+					h.DeleteArticle(w, r, chi.URLParam(r, "id"))
+				})
+			})
+
+			protected.Route("/headers", func(header chi.Router) {
+				header.Post("/", h.CreateHeader)
+				header.Get("/", h.ListHeaders)
+				header.Put("/{id}", func(w http.ResponseWriter, r *http.Request) {
+					h.UpdateHeader(w, r, chi.URLParam(r, "id"))
+				})
+				header.Delete("/{id}", func(w http.ResponseWriter, r *http.Request) {
+					h.DeleteHeader(w, r, chi.URLParam(r, "id"))
+				})
+			})
+
+			protected.Route("/newsletters", func(newsletter chi.Router) {
+				newsletter.Post("/", h.CreateNewsletter)
+				newsletter.Get("/", h.ListNewsletters)
+				newsletter.Get("/{id}", func(w http.ResponseWriter, r *http.Request) {
+					h.GetNewsletter(w, r, chi.URLParam(r, "id"))
+				})
+				newsletter.Post("/{id}/claim", func(w http.ResponseWriter, r *http.Request) {
+					h.ClaimNewsletter(w, r, chi.URLParam(r, "id"))
+				})
+				newsletter.Put("/{id}", func(w http.ResponseWriter, r *http.Request) {
+					h.UpdateNewsletter(w, r, chi.URLParam(r, "id"))
+				})
+				newsletter.Get("/{id}/preview", func(w http.ResponseWriter, r *http.Request) {
+					h.GetNewsletterPreview(w, r, chi.URLParam(r, "id"))
+				})
+				newsletter.Post("/{id}/favorite", func(w http.ResponseWriter, r *http.Request) {
+					h.SetNewsletterFavorite(w, r, chi.URLParam(r, "id"))
+				})
+				newsletter.Post("/{id}/send-now", func(w http.ResponseWriter, r *http.Request) {
+					h.SendNewsletterNow(w, r, chi.URLParam(r, "id"))
+				})
+				newsletter.Post("/{id}/schedule", func(w http.ResponseWriter, r *http.Request) {
+					h.ScheduleNewsletter(w, r, chi.URLParam(r, "id"))
+				})
+				newsletter.Delete("/{id}", func(w http.ResponseWriter, r *http.Request) {
+					h.DeleteNewsletter(w, r, chi.URLParam(r, "id"))
+				})
+			})
+
+			protected.Post("/render/markdown", h.RenderMarkdown)
+		})
 	})
 
 	r.NotFound(func(w http.ResponseWriter, r *http.Request) {

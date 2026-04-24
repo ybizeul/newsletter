@@ -5,6 +5,8 @@ export type HeaderStatus = "draft" | "published" | "archived";
 export interface Article {
   id: string;
   authorId: string;
+  owner?: string;
+  public: boolean;
   title: string;
   markdown: string;
   tags?: string[];
@@ -24,6 +26,8 @@ export interface Article {
 
 export interface ArticleSummary {
   id: string;
+  owner?: string;
+  public: boolean;
   title: string;
   tags?: string[];
   topicIcon?: string;
@@ -41,6 +45,7 @@ export type NewsletterStatus = "draft" | "scheduled" | "sending" | "sent" | "fai
 export interface Newsletter {
   id: string;
   creatorId: string;
+  owner?: string;
   title: string;
   headerId?: string;
   introMarkdown: string;
@@ -59,6 +64,7 @@ export interface Newsletter {
 
 export interface NewsletterSummary {
   id: string;
+  owner?: string;
   title: string;
   headerId?: string;
   includeIndex: boolean;

@@ -1,13 +1,15 @@
 import { type MouseEvent as ReactMouseEvent, useState } from "react";
-import { ActionIcon, Anchor, AppShell, Box, Burger, Group, Modal, NavLink, ScrollArea, Stack, Text } from "@mantine/core";
+import { ActionIcon, Anchor, AppShell, Box, Burger, Center, Group, Loader, Modal, NavLink, ScrollArea, Stack, Text } from "@mantine/core";
 import { useDisclosure } from "@mantine/hooks";
-import { IconAlignBoxCenterTop, IconArticle, IconHelpCircle, IconMail, IconStar } from "@tabler/icons-react";
+import { IconAlignBoxCenterTop, IconArticle, IconHelpCircle, IconLogout, IconMail, IconStar } from "@tabler/icons-react";
 import { Navigate, Route, Routes, useLocation, useNavigate } from "react-router-dom";
 
 import ArticlesPage from "./pages/ArticlesPage";
 import HeadersPage from "./pages/HeadersPage";
+import LoginPage from "./pages/LoginPage";
 import NewslettersPage from "./pages/NewslettersPage";
 import NewsletterPreviewPage from "./pages/NewsletterPreviewPage";
+import { AuthProvider, useAuth } from "./lib/auth";
 
 const NAVBAR_WIDTH_STORAGE_KEY = "newsletter.navbar.width";
 
@@ -21,6 +23,7 @@ function getStoredNavbarWidth(): number {
 }
 
 function App() {
+  const { user, loading, oidcEnabled, logout } = useAuth();
   const [opened, { toggle, close }] = useDisclosure();
   const [isHelpOpen, setIsHelpOpen] = useState(false);
   const [navbarWidth, setNavbarWidth] = useState(getStoredNavbarWidth);
@@ -46,6 +49,18 @@ function App() {
     window.addEventListener("mousemove", onMouseMove);
     window.addEventListener("mouseup", onMouseUp);
   };
+
+  if (loading) {
+    return (
+      <Center h="100vh">
+        <Loader />
+      </Center>
+    );
+  }
+
+  if (oidcEnabled && !user) {
+    return <LoginPage />;
+  }
 
   return (
     <AppShell
@@ -75,6 +90,16 @@ function App() {
           >
             <IconHelpCircle size={18} />
           </ActionIcon>
+          {oidcEnabled && user && (
+            <Group gap="xs" wrap="nowrap">
+              <Text size="sm" c="dimmed" truncate style={{ maxWidth: 160 }}>
+                {user.name || user.email}
+              </Text>
+              <ActionIcon variant="subtle" color="gray" size="lg" aria-label="Logout" title="Logout" onClick={logout}>
+                <IconLogout size={18} />
+              </ActionIcon>
+            </Group>
+          )}
         </Group>
       </AppShell.Header>
 
@@ -212,4 +237,10 @@ function App() {
   );
 }
 
-export default App;
+export default function AppWithAuth() {
+  return (
+    <AuthProvider>
+      <App />
+    </AuthProvider>
+  );
+}

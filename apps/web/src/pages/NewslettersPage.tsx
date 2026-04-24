@@ -25,6 +25,7 @@ import {
   IconX
 } from "@tabler/icons-react";
 import {
+  claimNewsletter,
   createNewsletter,
   deleteNewsletter,
   getNewsletter,
@@ -38,13 +39,14 @@ import {
 } from "../lib/api";
 import type { ArticleSummary, Header, Newsletter, NewsletterSummary } from "../types/domain";
 import { useLocation, useNavigate } from "react-router-dom";
+import { useAuth } from "../lib/auth";
 import { DateTimePicker } from "@mantine/dates";
 import MDEditor from "@uiw/react-md-editor";
 import "@uiw/react-md-editor/markdown-editor.css";
 import "@uiw/react-markdown-preview/markdown.css";
 import "../styles/markdown-editor.css";
 
-const DEMO_CREATOR_ID = "demo-user";
+const FALLBACK_CREATOR_ID = "demo-user";
 const NEWSLETTERS_PANE_WIDTH_STORAGE_KEY = "newsletter.newsletters.pane.width";
 const FAVORITE_NEWSLETTER_ID_STORAGE_KEY = "newsletter.favorite.id";
 const MAX_RECIPIENTS = 3;
@@ -123,6 +125,7 @@ function cutByChars(input: string, maxChars: number): string {
 function toNewsletterSummary(newsletter: Newsletter): NewsletterSummary {
   return {
     id: newsletter.id,
+    owner: newsletter.owner,
     title: newsletter.title,
     headerId: newsletter.headerId,
     includeIndex: newsletter.includeIndex,
@@ -140,6 +143,7 @@ function toNewsletterSummary(newsletter: Newsletter): NewsletterSummary {
 }
 
 export default function NewslettersPage() {
+  const { oidcEnabled } = useAuth();
   const containerRef = useRef<HTMLDivElement | null>(null);
   const autosaveTimerRef = useRef<number | null>(null);
   const autosaveClearSavedRef = useRef<number | null>(null);
@@ -179,6 +183,7 @@ export default function NewslettersPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isDuplicatingNewsletter, setIsDuplicatingNewsletter] = useState(false);
+  const [isClaimingNewsletter, setIsClaimingNewsletter] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [deleteNewsletterId, setDeleteNewsletterId] = useState<string | null>(null);
   const [hasLoadedNewslettersData, setHasLoadedNewslettersData] = useState(() => cachedNewslettersData !== null);
@@ -449,7 +454,7 @@ export default function NewslettersPage() {
         scheduleAutosaveSavedReset();
       } else {
         const created = await createNewsletter({
-          creatorId: DEMO_CREATOR_ID,
+          creatorId: oidcEnabled ? undefined : FALLBACK_CREATOR_ID,
           ...payload
         });
         setNewsletters((current) => [withFavoriteFlag(toNewsletterSummary(created)), ...current]);
@@ -628,7 +633,7 @@ export default function NewslettersPage() {
     try {
       const source = await getNewsletter(selectedNewsletterId);
       const created = await createNewsletter({
-        creatorId: DEMO_CREATOR_ID,
+        creatorId: oidcEnabled ? undefined : FALLBACK_CREATOR_ID,
         title: `${source.title} (copy)`,
         headerId: source.headerId ?? "",
         introMarkdown: source.introMarkdown,
@@ -644,6 +649,27 @@ export default function NewslettersPage() {
       setError(err instanceof Error ? err.message : "Failed to duplicate newsletter");
     } finally {
       setIsDuplicatingNewsletter(false);
+    }
+  };
+
+  const onClaimNewsletter = async () => {
+    if (!selectedNewsletterId) {
+      return;
+    }
+
+    setIsClaimingNewsletter(true);
+    setError(null);
+    try {
+      const claimed = await claimNewsletter(selectedNewsletterId);
+      setNewsletters((current) =>
+        current.map((newsletter) =>
+          newsletter.id === selectedNewsletterId ? withFavoriteFlag(toNewsletterSummary(claimed)) : newsletter
+        )
+      );
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to claim newsletter");
+    } finally {
+      setIsClaimingNewsletter(false);
     }
   };
 
@@ -887,6 +913,17 @@ export default function NewslettersPage() {
                 >
                   Duplicate
                 </Button>
+                {oidcEnabled && !selectedNewsletter?.owner ? (
+                  <Button
+                    variant="light"
+                    color="blue"
+                    size="xs"
+                    onClick={() => void onClaimNewsletter()}
+                    loading={isClaimingNewsletter}
+                  >
+                    Claim
+                  </Button>
+                ) : null}
                 <Button color="red" variant="light" size="xs" onClick={() => requestDeleteNewsletter(selectedNewsletterId)}>
                   Delete
                 </Button>

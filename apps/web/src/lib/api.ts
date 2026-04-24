@@ -3,7 +3,8 @@ import type { Article, ArticleSummary, Header, ListResponse, Newsletter, Newslet
 const API_ROOT = "/api";
 
 type CreateArticlePayload = {
-  authorId: string;
+  authorId?: string;
+  public?: boolean;
   title: string;
   markdown: string;
   tags?: string[];
@@ -16,7 +17,7 @@ type CreateArticlePayload = {
 };
 
 type CreateNewsletterPayload = {
-  creatorId: string;
+  creatorId?: string;
   title: string;
   headerId?: string;
   introMarkdown: string;
@@ -36,6 +37,7 @@ type UpdateNewsletterPayload = {
 };
 
 type UpdateArticlePayload = {
+  public?: boolean;
   title: string;
   markdown: string;
   tags?: string[];
@@ -48,7 +50,7 @@ type UpdateArticlePayload = {
 };
 
 type CreateHeaderPayload = {
-  creatorId: string;
+  creatorId?: string;
   title: string;
   markdown: string;
 };
@@ -60,6 +62,7 @@ type UpdateHeaderPayload = {
 
 type RuntimeConfig = {
   smtpConfigured: boolean;
+  oidcEnabled: boolean;
 };
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
@@ -105,6 +108,12 @@ export async function getArticle(id: string): Promise<Article> {
   return request<Article>(`/articles/${id}`);
 }
 
+export async function claimArticle(id: string): Promise<Article> {
+  return request<Article>(`/articles/${id}/claim`, {
+    method: "POST"
+  });
+}
+
 export async function createArticle(payload: CreateArticlePayload): Promise<Article> {
   return request<Article>("/articles/", {
     method: "POST",
@@ -137,6 +146,12 @@ export async function listNewsletterSummaries(): Promise<NewsletterSummary[]> {
 
 export async function getNewsletter(id: string): Promise<Newsletter> {
   return request<Newsletter>(`/newsletters/${id}`);
+}
+
+export async function claimNewsletter(id: string): Promise<Newsletter> {
+  return request<Newsletter>(`/newsletters/${id}/claim`, {
+    method: "POST"
+  });
 }
 
 export async function listHeaders(): Promise<Header[]> {

@@ -19,6 +19,7 @@ import {
   Slider,
   SimpleGrid,
   Stack,
+  Checkbox,
   Text,
   TextInput,
   UnstyledButton,
@@ -32,10 +33,12 @@ import "@uiw/react-md-editor/markdown-editor.css";
 import "@uiw/react-markdown-preview/markdown.css";
 import "../styles/markdown-editor.css";
 import { createArticle, deleteArticle, getArticle, getNewsletter, listArticleSummaries, listNewsletterSummaries, updateArticle, updateNewsletter } from "../lib/api";
+import { claimArticle } from "../lib/api";
+import { useAuth } from "../lib/auth";
 import type { TablerIconMap } from "../lib/tablerIconsBrowser";
 import type { Article, ArticleSummary } from "../types/domain";
 
-const DEMO_AUTHOR_ID = "demo-user";
+const FALLBACK_AUTHOR_ID = "demo-user";
 
 const DEFAULT_TOPIC_ICON_BG = "#228be6";
 const DEFAULT_TOPIC_ICON_STROKE = "#ffffff";
@@ -46,6 +49,14 @@ const ICON_PNG_RASTER_SIZE = 90;
 const TAG_COLORS = ["blue", "teal", "cyan", "grape", "indigo", "violet", "lime", "orange", "pink"] as const;
 
 let cachedArticleSummaries: ArticleSummary[] | null = null;
+
+function normalizeArticleSummaryVisibility(article: ArticleSummary): ArticleSummary {
+  const owner = (article.owner ?? "").trim();
+  return {
+    ...article,
+    public: owner === "" ? true : article.public !== false
+  };
+}
 
 function getStoredArticlesPaneWidth(): number {
   const raw = window.localStorage.getItem(ARTICLES_PANE_WIDTH_STORAGE_KEY);
@@ -355,6 +366,8 @@ function cutByChars(input: string, maxChars: number): string {
 function toArticleSummary(article: Article): ArticleSummary {
   return {
     id: article.id,
+    owner: article.owner,
+    public: article.public !== false,
     title: article.title,
     tags: article.tags,
     topicIcon: article.topicIcon,
@@ -369,6 +382,7 @@ function toArticleSummary(article: Article): ArticleSummary {
 }
 
 export default function ArticlesPage() {
+  const { oidcEnabled, user } = useAuth();
   const containerRef = useRef<HTMLDivElement | null>(null);
   const headerRowRef = useRef<HTMLDivElement | null>(null);
   const headerLeftRef = useRef<HTMLDivElement | null>(null);
@@ -382,10 +396,13 @@ export default function ArticlesPage() {
   const [leftPaneWidth, setLeftPaneWidth] = useState(getStoredArticlesPaneWidth);
   const isMobile = useMediaQuery("(max-width: 48em)");
   const [isMobileEditorOpen, setIsMobileEditorOpen] = useState(false);
-  const [articles, setArticles] = useState<ArticleSummary[]>(() => cachedArticleSummaries ?? []);
+  const [articles, setArticles] = useState<ArticleSummary[]>(
+    () => (cachedArticleSummaries ?? []).map(normalizeArticleSummaryVisibility)
+  );
   const [selectedArticleId, setSelectedArticleID] = useState<string | null>(null);
   const [title, setTitle] = useState("");
   const [markdown, setMarkdown] = useState("");
+  const [isPublic, setIsPublic] = useState(true);
   const [tags, setTags] = useState<string[]>([]);
   const [topicIcon, setTopicIcon] = useState("");
   const [customIconImageDataUrl, setCustomIconImageDataUrl] = useState("");
@@ -410,6 +427,7 @@ export default function ArticlesPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isDuplicatingArticle, setIsDuplicatingArticle] = useState(false);
+  const [isClaimingArticle, setIsClaimingArticle] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [deleteArticleId, setDeleteArticleId] = useState<string | null>(null);
   const [hasLoadedArticles, setHasLoadedArticles] = useState(() => cachedArticleSummaries !== null);
@@ -423,11 +441,20 @@ export default function ArticlesPage() {
   const [isCompactFavoriteAction, setIsCompactFavoriteAction] = useState(false);
   const [isManualNewArticleMode, setIsManualNewArticleMode] = useState(false);
 
+  const selectedArticleSummary = useMemo(
+    () => (editingId ? articles.find((article) => article.id === editingId) ?? null : null),
+    [articles, editingId]
+  );
+  const selectedArticleOwner = (selectedArticleSummary?.owner ?? "").trim().toLowerCase();
+  const currentUserEmail = (user?.email ?? "").trim().toLowerCase();
+  const canEditVisibility =
+    !editingId || selectedArticleOwner === "" || (currentUserEmail !== "" && selectedArticleOwner === currentUserEmail);
+
   const loadArticles = async () => {
     setIsLoading(true);
     setError(null);
     try {
-      const items = await listArticleSummaries();
+      const items = (await listArticleSummaries()).map(normalizeArticleSummaryVisibility);
       cachedArticleSummaries = items;
       setArticles(items);
     } catch (err) {
@@ -567,6 +594,7 @@ export default function ArticlesPage() {
   const resetForm = () => {
     setTitle("");
     setMarkdown("");
+    setIsPublic(true);
     setTags([]);
     setTopicIcon("");
     setCustomIconImageDataUrl("");
@@ -614,9 +642,11 @@ export default function ArticlesPage() {
     setError(null);
     try {
       const fullArticle = await getArticle(article.id);
+      const fullSummary = toArticleSummary(fullArticle);
       setEditingID(fullArticle.id);
       setSelectedArticleID(fullArticle.id);
       setTitle(fullArticle.title);
+      setIsPublic(fullArticle.public !== false);
       setTags(fullArticle.tags ?? []);
       const normalized = normalizeMarkdownForEditor(fullArticle.markdown);
       setMarkdown(normalized.normalized);
@@ -632,9 +662,13 @@ export default function ArticlesPage() {
       setTopicIconBgColor(fullArticle.iconBgColor || extractTopicIconBackgroundColor(iconStyleSource));
       setTopicIconStrokeColor(fullArticle.iconStrokeColor || extractTopicIconStrokeColor(iconStyleSource));
       setTopicIconIllustration(fullArticle.illustration ?? "");
+      setArticles((current) =>
+        current.map((item) => (item.id === fullSummary.id ? fullSummary : item))
+      );
       lastSavedDraftRef.current = JSON.stringify({
         title: fullArticle.title,
         markdown: fullArticle.markdown,
+        public: fullArticle.public !== false,
         tags: fullArticle.tags ?? [],
         topicIcon: fullArticle.topicIcon ?? "",
         illustration: fullArticle.illustration ?? "",
@@ -651,6 +685,18 @@ export default function ArticlesPage() {
       setError(err instanceof Error ? err.message : "Failed to load article details");
     }
   };
+
+  useEffect(() => {
+    if (!editingId) {
+      return;
+    }
+
+    setArticles((current) =>
+      current.map((article) =>
+        article.id === editingId ? { ...article, public: isPublic } : article
+      )
+    );
+  }, [editingId, isPublic]);
 
   const resolvedTopicIconName = useMemo(() => resolveTablerIconName(tablerIconMap, topicIcon), [tablerIconMap, topicIcon]);
 
@@ -890,6 +936,7 @@ export default function ArticlesPage() {
   const buildArticleDraftPayload = () => ({
     title: title.trim(),
     markdown: resolvePastedImageTokens(markdown.trim()),
+    public: isPublic,
     tags,
     topicIcon: topicIcon.trim(),
     illustration: topicIconIllustration,
@@ -924,7 +971,7 @@ export default function ArticlesPage() {
         setAutosaveStatus("saved");
       } else {
         const created = await createArticle({
-          authorId: DEMO_AUTHOR_ID,
+          authorId: oidcEnabled ? undefined : FALLBACK_AUTHOR_ID,
           ...payload
         });
 
@@ -988,7 +1035,7 @@ export default function ArticlesPage() {
         window.clearTimeout(autosaveTimerRef.current);
       }
     };
-  }, [editingId, title, markdown, tags, topicIcon, topicIconIllustration, pastedImageMap]);
+  }, [editingId, title, markdown, isPublic, tags, topicIcon, topicIconIllustration, pastedImageMap]);
 
   useEffect(() => () => {
     if (autosaveTimerRef.current !== null) {
@@ -1042,7 +1089,8 @@ export default function ArticlesPage() {
     try {
       const source = await getArticle(editingId);
       const created = await createArticle({
-        authorId: DEMO_AUTHOR_ID,
+        authorId: oidcEnabled ? undefined : FALLBACK_AUTHOR_ID,
+        public: source.public !== false,
         title: `${source.title} (copy)`,
         markdown: source.markdown,
         tags: source.tags ?? [],
@@ -1061,6 +1109,25 @@ export default function ArticlesPage() {
       setError(err instanceof Error ? err.message : "Failed to duplicate article");
     } finally {
       setIsDuplicatingArticle(false);
+    }
+  };
+
+  const onClaimArticle = async () => {
+    if (!editingId) {
+      return;
+    }
+
+    setIsClaimingArticle(true);
+    setError(null);
+    try {
+      const claimed = await claimArticle(editingId);
+      setArticles((current) =>
+        current.map((article) => (article.id === editingId ? toArticleSummary(claimed) : article))
+      );
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to claim article");
+    } finally {
+      setIsClaimingArticle(false);
     }
   };
 
@@ -1450,6 +1517,11 @@ export default function ArticlesPage() {
                       {favoriteNewsletterArticleIds.includes(article.id) ? (
                         <IconMail size={12} color="#228be6" style={{ flexShrink: 0 }} />
                       ) : null}
+                      {(article.owner ?? "").trim() !== "" && article.public === false ? (
+                        <Badge size="xs" color="gray" variant="light" style={{ flexShrink: 0 }}>
+                          Private
+                        </Badge>
+                      ) : null}
                     </Group>
                     <Text size="xs" c="dimmed" style={{ flexShrink: 0 }}>
                       {formatArticleCreatedAt(article.createdAt)}
@@ -1587,6 +1659,17 @@ export default function ArticlesPage() {
                 >
                   Duplicate
                 </Button>
+                {oidcEnabled && !articles.find((article) => article.id === editingId)?.owner ? (
+                  <Button
+                    variant="light"
+                    color="blue"
+                    size="xs"
+                    onClick={() => void onClaimArticle()}
+                    loading={isClaimingArticle}
+                  >
+                    Claim
+                  </Button>
+                ) : null}
                 <Button color="red" variant="light" size="xs" onClick={() => requestDeleteArticle(editingId)}>
                   Delete
                 </Button>
@@ -1659,6 +1742,15 @@ export default function ArticlesPage() {
               onChange={(event) => setTitle(event.currentTarget.value)}
             />
           </Group>
+
+          {canEditVisibility ? (
+            <Checkbox
+              checked={isPublic}
+              onChange={(event) => setIsPublic(event.currentTarget.checked)}
+              label={isPublic ? "Public article" : "Private article"}
+              description="Private articles are visible only to their owner."
+            />
+          ) : null}
 
           <Combobox
             store={tagCombobox}

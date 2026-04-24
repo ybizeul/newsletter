@@ -13,6 +13,8 @@ const (
 type Article struct {
 	ID              string        `bson:"_id" json:"id"`
 	AuthorID        string        `bson:"authorId" json:"authorId"`
+	Owner           string        `bson:"owner,omitempty" json:"owner,omitempty"`
+	Public          bool          `bson:"public" json:"public"`
 	Title           string        `bson:"title" json:"title"`
 	Markdown        string        `bson:"markdown" json:"markdown"`
 	Tags            []string      `bson:"tags,omitempty" json:"tags,omitempty"`
