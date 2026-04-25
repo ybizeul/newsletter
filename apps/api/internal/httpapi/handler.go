@@ -134,6 +134,7 @@ func (h *Handler) CreateArticle(w http.ResponseWriter, r *http.Request) {
 		Public:          isPublic,
 		Title:           req.Title,
 		Markdown:        req.Markdown,
+		ContentHTML:     req.ContentHTML,
 		Tags:            normalizeArticleTags(req.Tags),
 		TopicIcon:       req.TopicIcon,
 		Illustration:    req.Illustration,
