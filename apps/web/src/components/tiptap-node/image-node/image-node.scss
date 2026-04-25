@@ -3,14 +3,16 @@
     max-width: 100%;
     height: auto;
     display: block;
+    margin: 4px auto;
   }
 
   p > img {
-    display: inline-block;
+    display: block;
+    margin: 4px auto;
   }
 
   > img:not([data-type="emoji"] img) {
-    margin: 4px;
+    margin: 4px auto;
     outline: 0.125rem solid transparent;
   }
 
