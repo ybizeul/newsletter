@@ -437,7 +437,7 @@ export default function NewslettersPage() {
       lastSavedDraftRef.current = JSON.stringify({
         title: fullNewsletter.title.trim(),
         headerId: fullNewsletter.headerId ?? "",
-        introHTML: introContentHTML,
+        introHTML: htmlContent,
         includeIndex: Boolean(fullNewsletter.includeIndex),
         contentWidth: fullNewsletter.contentWidth || 680,
         articleIds: fullNewsletter.articleIds,
