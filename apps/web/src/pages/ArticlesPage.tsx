@@ -1216,7 +1216,18 @@ export default function ArticlesPage() {
             return;
           }
 
-          const targetWidth = Math.min(sourceWidth, NEWSLETTER_MAX_CONTENT_WIDTH_PX);
+          // Only downscale — never enlarge. Skip canvas entirely if image fits.
+          const token = `img_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+
+          if (sourceWidth <= NEWSLETTER_MAX_CONTENT_WIDTH_PX) {
+            setPastedImageMap((current) => ({ ...current, [token]: sourceDataURL }));
+            setMarkdown((current) =>
+              insertAtCursor(target, current, `\n![Pasted image](paste://${token})\n`)
+            );
+            return;
+          }
+
+          const targetWidth = NEWSLETTER_MAX_CONTENT_WIDTH_PX;
           const targetHeight = Math.max(1, Math.round((sourceHeight * targetWidth) / sourceWidth));
 
           const canvas = document.createElement("canvas");
@@ -1229,11 +1240,9 @@ export default function ArticlesPage() {
             return;
           }
 
-          // Fit down to newsletter width while preserving aspect ratio.
           ctx.drawImage(img, 0, 0, targetWidth, targetHeight);
 
           const jpegDataURL = canvas.toDataURL("image/jpeg", 0.8);
-          const token = `img_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
           setPastedImageMap((current) => ({ ...current, [token]: jpegDataURL }));
           setMarkdown((current) =>
             insertAtCursor(target, current, `\n![Pasted image](paste://${token})\n`)
@@ -1991,7 +2000,7 @@ export default function ArticlesPage() {
                         <img
                           src={resolvedSrc}
                           alt={alt ?? "inline"}
-                          style={{ maxWidth: "100%", height: "auto", borderRadius: 8 }}
+                          style={{ maxWidth: NEWSLETTER_MAX_CONTENT_WIDTH_PX, height: "auto", borderRadius: 8, display: "block", margin: "0 auto" }}
                         />
                       );
                     }
