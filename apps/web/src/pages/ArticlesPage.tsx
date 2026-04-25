@@ -53,20 +53,19 @@ const TAG_COLORS = ["blue", "teal", "cyan", "grape", "indigo", "violet", "lime",
 
 let cachedArticleSummaries: ArticleSummary[] | null = null;
 
-type ArticleSmartFilter = "all" | "mine" | "others" | "recent" | "private" | "public";
+type ArticleSmartFilter = "all" | "mine" | "recent" | "private" | "public";
 
 function normalizeArticleSmartFilter(input?: string): ArticleSmartFilter {
-  if (input === "mine" || input === "others" || input === "recent" || input === "private" || input === "public" || input === "all") {
+  if (input === "mine" || input === "recent" || input === "private" || input === "public" || input === "all") {
     return input;
   }
   return "all";
 }
 
 function normalizeArticleSummaryVisibility(article: ArticleSummary): ArticleSummary {
-  const owner = (article.owner ?? "").trim();
   return {
     ...article,
-    public: owner === "" ? true : article.public !== false
+    public: article.public !== false
   };
 }
 
@@ -478,8 +477,6 @@ export default function ArticlesPage() {
   }, [allNewsletterSummaries]);
   const articleFilterLabel = articleSmartFilter === "mine"
     ? "Mine"
-    : articleSmartFilter === "others"
-      ? "Others"
     : articleSmartFilter === "recent"
       ? "Recent"
       : articleSmartFilter === "private"
@@ -1300,14 +1297,6 @@ export default function ArticlesPage() {
       scopedArticles = currentUserEmail
         ? scopedArticles.filter((article) => (article.owner ?? "").trim().toLowerCase() === currentUserEmail)
         : [];
-    } else if (articleSmartFilter === "others") {
-      scopedArticles = scopedArticles.filter((article) => {
-        const owner = (article.owner ?? "").trim().toLowerCase();
-        if (!owner) {
-          return true;
-        }
-        return currentUserEmail ? owner !== currentUserEmail : true;
-      });
     } else if (articleSmartFilter === "recent") {
       const cutoff = Date.now() - RECENT_ARTICLES_WINDOW_MS;
       scopedArticles = scopedArticles.filter((article) => {

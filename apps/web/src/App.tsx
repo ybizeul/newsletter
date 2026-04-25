@@ -1,7 +1,7 @@
 import { type MouseEvent as ReactMouseEvent, useState } from "react";
 import { ActionIcon, Anchor, AppShell, Box, Burger, Center, Group, Loader, Modal, NavLink, ScrollArea, Stack, Text } from "@mantine/core";
 import { useDisclosure } from "@mantine/hooks";
-import { IconAlignBoxCenterTop, IconArticle, IconClock, IconHelpCircle, IconList, IconLock, IconLogout, IconMail, IconStar, IconUser, IconAddressBook, IconUsers, IconWorld } from "@tabler/icons-react";
+import { IconAlignBoxCenterTop, IconArticle, IconClock, IconHelpCircle, IconList, IconLock, IconLogout, IconMail, IconStar, IconUser, IconAddressBook, IconWorld } from "@tabler/icons-react";
 import { Navigate, Route, Routes, useLocation, useNavigate } from "react-router-dom";
 
 import ArticlesPage from "./pages/ArticlesPage";
@@ -230,6 +230,7 @@ function App() {
               close();
             }}
           />
+          {oidcEnabled && (
           <NavLink
             label="Public"
             active={location.pathname === "/articles/public"}
@@ -242,18 +243,7 @@ function App() {
               close();
             }}
           />
-          <NavLink
-            label="Others"
-            active={location.pathname === "/articles/others"}
-            variant="subtle"
-            color="blue"
-            style={{ backgroundColor: "transparent" }}
-            leftSection={<IconUsers size={14} />}
-            onClick={() => {
-              navigate("/articles/others");
-              close();
-            }}
-          />
+          )}
           <NavLink
             label="Recent"
             active={location.pathname === "/articles/recent"}
@@ -317,6 +307,7 @@ function App() {
       <AppShell.Main>
         <Routes>
           <Route path="/articles" element={<Navigate to="/articles/all" replace />} />
+          <Route path="/articles/public" element={oidcEnabled ? <ArticlesPage /> : <Navigate to="/articles/all" replace />} />
           <Route path="/articles/:smartFilter" element={<ArticlesPage />} />
           <Route path="/newsletters" element={<NewslettersPage />} />
           <Route path="/headers" element={<HeadersPage />} />
