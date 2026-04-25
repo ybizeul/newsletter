@@ -1984,6 +1984,38 @@ func enforceImageFullWidth(input string) string {
 	result = pImgRe.ReplaceAllString(result,
 		`<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;"><tr><td align="center" style="text-align:center;padding:4px 0;border:0;">$1</td></tr></table>`)
 
+	// Wrap any remaining standalone <img> tags not already inside a <td> (e.g. TipTap block images).
+	// Apple Mail ignores margin:auto so we need table-based centering for every image.
+	standaloneImgRe := regexp.MustCompile(`(?i)<img\b[^>]*>`)
+	wrapPrefix := `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;"><tr><td align="center" style="text-align:center;padding:4px 0;border:0;">`
+	wrapSuffix := `</td></tr></table>`
+	matches := standaloneImgRe.FindAllStringIndex(result, -1)
+	if len(matches) > 0 {
+		var buf strings.Builder
+		prev := 0
+		for _, loc := range matches {
+			between := result[prev:loc[0]]
+			imgTag := result[loc[0]:loc[1]]
+			// Check whether this <img> is already inside a <td> (from table-wrapping above or user tables).
+			fullBefore := result[:loc[0]]
+			lastTdOpen := strings.LastIndex(fullBefore, "<td")
+			lastTdClose := strings.LastIndex(fullBefore, "</td")
+			alreadyWrapped := lastTdOpen >= 0 && lastTdOpen > lastTdClose
+
+			buf.WriteString(between)
+			if alreadyWrapped {
+				buf.WriteString(imgTag)
+			} else {
+				buf.WriteString(wrapPrefix)
+				buf.WriteString(imgTag)
+				buf.WriteString(wrapSuffix)
+			}
+			prev = loc[1]
+		}
+		buf.WriteString(result[prev:])
+		result = buf.String()
+	}
+
 	return result
 }
 
