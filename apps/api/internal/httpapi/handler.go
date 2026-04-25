@@ -845,10 +845,12 @@ func (h *Handler) CreateHeader(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	owner := resolveOwnerEmail(UserFromContext(r.Context()), req.CreatorID)
 	now := time.Now().UTC()
 	header := model.Header{
 		ID:        bson.NewObjectID().Hex(),
 		CreatorID: strings.TrimSpace(req.CreatorID),
+		Owner:     owner,
 		Title:     strings.TrimSpace(req.Title),
 		Markdown:  req.Markdown,
 		Status:    model.HeaderStatusDraft,
@@ -866,7 +868,7 @@ func (h *Handler) CreateHeader(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) ListHeaders(w http.ResponseWriter, r *http.Request) {
-	cursor, err := h.headers.Find(r.Context(), bson.M{})
+	cursor, err := h.headers.Find(r.Context(), headerOwnerFilter(UserFromContext(r.Context())))
 	if err != nil {
 		h.writeError(w, http.StatusInternalServerError, "failed to list headers")
 		return
@@ -910,7 +912,9 @@ func (h *Handler) UpdateHeader(w http.ResponseWriter, r *http.Request, id string
 		"$inc": bson.M{"version": 1},
 	}
 
-	result, err := h.headers.UpdateByID(r.Context(), id, update)
+	ownerFilter := headerOwnerFilter(UserFromContext(r.Context()))
+	ownerFilter["_id"] = id
+	result, err := h.headers.UpdateOne(r.Context(), ownerFilter, update)
 	if err != nil {
 		h.writeError(w, http.StatusInternalServerError, "failed to update header")
 		return
@@ -930,7 +934,9 @@ func (h *Handler) UpdateHeader(w http.ResponseWriter, r *http.Request, id string
 }
 
 func (h *Handler) DeleteHeader(w http.ResponseWriter, r *http.Request, id string) {
-	result, err := h.headers.DeleteOne(r.Context(), bson.M{"_id": id})
+	delFilter := headerOwnerFilter(UserFromContext(r.Context()))
+	delFilter["_id"] = id
+	result, err := h.headers.DeleteOne(r.Context(), delFilter)
 	if err != nil {
 		h.writeError(w, http.StatusInternalServerError, "failed to delete header")
 		return
@@ -1693,6 +1699,26 @@ func articleVisibilityFilter(user *User) bson.M {
 }
 
 func newsletterVisibilityFilter(user *User) bson.M {
+	owner := resolveOwnerEmail(user, "")
+	if owner == "" {
+		return bson.M{
+			"$or": []bson.M{
+				{"owner": bson.M{"$exists": false}},
+				{"owner": ""},
+			},
+		}
+	}
+
+	return bson.M{
+		"$or": []bson.M{
+			{"owner": bson.M{"$exists": false}},
+			{"owner": ""},
+			{"owner": owner},
+		},
+	}
+}
+
+func headerOwnerFilter(user *User) bson.M {
 	owner := resolveOwnerEmail(user, "")
 	if owner == "" {
 		return bson.M{

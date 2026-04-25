@@ -13,6 +13,7 @@ const (
 type Header struct {
 	ID        string       `bson:"_id" json:"id"`
 	CreatorID string       `bson:"creatorId" json:"creatorId"`
+	Owner     string       `bson:"owner,omitempty" json:"owner,omitempty"`
 	Title     string       `bson:"title" json:"title"`
 	Markdown  string       `bson:"markdown" json:"markdown"`
 	Status    HeaderStatus `bson:"status" json:"status"`
