@@ -1817,7 +1817,7 @@ func (h *Handler) renderNewsletter(ctx context.Context, newsletter model.Newslet
 			body.WriteString("<table role=\"presentation\" cellpadding=\"0\" cellspacing=\"0\" width=\"100%\" style=\"border-collapse:collapse;margin:0 0 8px;table-layout:fixed\"><tr><td style=\"vertical-align:middle;word-break:break-word;overflow-wrap:anywhere;font-size:20px;line-height:26px;color:#111111;mso-line-height-rule:exactly;\"><b style=\"font-weight:700;mso-bidi-font-weight:bold;\">" + html.EscapeString(article.Title) + "</b></td></tr></table>\n")
 		}
 		if illustration != "" && !hasIconIllustration {
-			body.WriteString("<p style=\"margin:12px 0\"><img src=\"" + html.EscapeString(illustration) + "\" alt=\"" + html.EscapeString(article.Title) + "\" style=\"max-width:100%;width:100%;height:auto;display:block;margin:0 auto;float:none;border-radius:8px\" /></p>\n")
+			body.WriteString("<p style=\"margin:12px 0\"><img src=\"" + html.EscapeString(illustration) + "\" alt=\"" + html.EscapeString(article.Title) + "\" style=\"max-width:100%;width:auto;height:auto;display:block;margin:0 auto;float:none;border-radius:8px\" /></p>\n")
 		}
 		body.WriteString(articleHTML + "\n")
 		body.WriteString("</div>\n")
@@ -1911,19 +1911,11 @@ func enforceImageFullWidth(input string) string {
 			if styleValue != "" && !strings.HasSuffix(styleValue, ";") {
 				styleValue += ";"
 			}
-			styleValue += "max-width:100%;width:100%;height:auto;display:block;margin:0 auto;float:none;"
-			updated := styleRe.ReplaceAllString(tag, `style="`+styleValue+`"`)
-			if !regexp.MustCompile(`(?i)\swidth\s*=`).MatchString(updated) {
-				updated = strings.Replace(updated, ">", ` width="100%">`, 1)
-			}
-			return updated
+			styleValue += "max-width:100%;width:auto;height:auto;display:block;margin:0 auto;float:none;"
+			return styleRe.ReplaceAllString(tag, `style="`+styleValue+`"`)
 		}
 
-		updated := strings.Replace(tag, "<img", `<img style="max-width:100%;width:100%;height:auto;display:block;margin:0 auto;float:none;"`, 1)
-		if !regexp.MustCompile(`(?i)\swidth\s*=`).MatchString(updated) {
-			updated = strings.Replace(updated, ">", ` width="100%">`, 1)
-		}
-		return updated
+		return strings.Replace(tag, "<img", `<img style="max-width:100%;width:auto;height:auto;display:block;margin:0 auto;float:none;"`, 1)
 	})
 }
 
