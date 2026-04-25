@@ -22,11 +22,12 @@ import {
   Checkbox,
   Text,
   TextInput,
+  Tooltip,
   UnstyledButton,
   useCombobox
 } from "@mantine/core";
 import { useMediaQuery } from "@mantine/hooks";
-import { IconCheck, IconChevronDown, IconMail, IconPencil, IconSearch, IconUserFilled } from "@tabler/icons-react";
+import { IconCheck, IconChevronDown, IconMail, IconPencil, IconPointFilled, IconSearch, IconUserFilled } from "@tabler/icons-react";
 import MDEditor from "@uiw/react-md-editor";
 import { renderToStaticMarkup } from "react-dom/server";
 import { useParams } from "react-router-dom";
@@ -427,6 +428,7 @@ export default function ArticlesPage() {
   const [tablerIconMap, setTablerIconMap] = useState<TablerIconMap | null>(null);
   const [isIconLibraryLoading, setIsIconLibraryLoading] = useState(false);
   const [articleSearchQuery, setArticleSearchQuery] = useState("");
+  const [showOnlyUnused, setShowOnlyUnused] = useState(false);
   const [articleSearchCriteria, setArticleSearchCriteria] = useState({
     title: true,
     content: true,
@@ -1282,7 +1284,7 @@ export default function ArticlesPage() {
       .slice(0, 300);
   }, [iconSearch, tablerIconMap]);
 
-  const filteredArticles = useMemo(() => {
+  const preFilteredArticles = useMemo(() => {
     let scopedArticles = articles;
     if (articleSmartFilter === "mine") {
       scopedArticles = currentUserEmail
@@ -1340,6 +1342,13 @@ export default function ArticlesPage() {
       return words.every((word) => haystack.includes(word));
     });
   }, [articleSearchQuery, articleSearchCriteria, articles, articleSmartFilter, currentUserEmail]);
+
+  const filteredArticles = useMemo(() => {
+    if (!showOnlyUnused || allNewsletterSummaries.length === 0) {
+      return preFilteredArticles;
+    }
+    return preFilteredArticles.filter((article) => !usedArticleIds.has(article.id));
+  }, [preFilteredArticles, showOnlyUnused, usedArticleIds, allNewsletterSummaries.length]);
 
   const sortedArticles = useMemo(() => {
     const items = [...filteredArticles];
@@ -1482,9 +1491,10 @@ export default function ArticlesPage() {
           </Group>
         </Group>
 
-        <div style={{ padding: 10, borderBottom: "1px solid #e9ecef" }}>
+        <div style={{ padding: 10, borderBottom: "1px solid #e9ecef", display: "flex", alignItems: "center", gap: 6 }}>
           <TextInput
             radius="xl"
+            style={{ flex: 1 }}
             leftSection={<IconSearch size={14} />}
             rightSectionWidth={44}
             rightSection={
@@ -1545,6 +1555,20 @@ export default function ArticlesPage() {
             value={articleSearchQuery}
             onChange={(event) => setArticleSearchQuery(event.currentTarget.value)}
           />
+          {allNewsletterSummaries.length > 0 && (
+            <Tooltip label={showOnlyUnused ? "Show all articles" : "Show unused only"} position="bottom" withArrow>
+              <ActionIcon
+                variant={showOnlyUnused ? "filled" : "subtle"}
+                color={showOnlyUnused ? "blue" : "gray"}
+                size="sm"
+                aria-label="Toggle unused articles filter"
+                onClick={() => setShowOnlyUnused((v) => !v)}
+                style={{ flexShrink: 0 }}
+              >
+                <IconPointFilled size={12} />
+              </ActionIcon>
+            </Tooltip>
+          )}
         </div>
 
         <ScrollArea h="calc(100% - 110px)" offsetScrollbars>

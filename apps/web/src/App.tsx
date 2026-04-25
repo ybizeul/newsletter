@@ -138,32 +138,28 @@ function App() {
           <ScrollArea h={360} offsetScrollbars>
             <Stack gap="lg" pr="xs">
               <Box id="help-articles">
-                <Text fw={700} size="sm" mb={4}>1. Write and share articles</Text>
+                <Text fw={700} size="sm" mb={4}>Write and share articles</Text>
                 <Text size="sm">Create articles in the Articles page, write in Markdown, add optional tags, and maintain reusable content blocks for future newsletters.</Text>
               </Box>
-
-              <Box id="help-newsletters">
-                <Text fw={700} size="sm" mb={4}>2. Create newsletters with selected articles</Text>
-                <Text size="sm">In the Newsletters page, compose your intro, select a header, add and reorder articles, then preview or send. Autosave keeps your newsletter edits up to date.</Text>
-              </Box>
-
               <Box id="help-headers">
-                <Text fw={700} size="sm" mb={4}>3. Create custom headers for specific audiences</Text>
+                <Text fw={700} size="sm" mb={4}>Create custom headers for specific audiences</Text>
                 <Text size="sm">Use reusable headers to tailor branding, tone, or campaign context for each audience segment without rewriting each newsletter from scratch.</Text>
               </Box>
-
+              <Box id="help-newsletters">
+                <Text fw={700} size="sm" mb={4}>Create newsletters with selected articles</Text>
+                <Text size="sm">In the Newsletters page, compose your intro, select a header, add and reorder articles, then preview or send. Autosave keeps your newsletter edits up to date.</Text>
+              </Box>
               <Box id="help-find">
-                <Text fw={700} size="sm" mb={4}>4. Use tags, filters, and search to find content quickly</Text>
+                <Text fw={700} size="sm" mb={4}>Use tags, filters, and search to find content quickly</Text>
                 <Text size="sm">Tag articles by topic, then filter and search in the list to locate relevant content fast when building a newsletter edition.</Text>
               </Box>
 
               <Box id="help-favorite">
-                <Text fw={700} size="sm" mb={4}>5. Favorite one newsletter for rapid curation</Text>
+                <Text fw={700} size="sm" mb={4}>Favorite one newsletter for rapid curation</Text>
                 <Text size="sm">Set one newsletter as favorite, then use the article editor action to add or remove the current article from that newsletter in one click.</Text>
               </Box>
-
               <Box id="help-clues">
-                <Text fw={700} size="sm" mb={4}>6. Understand visual clues</Text>
+                <Text fw={700} size="sm" mb={4}>Understand visual clues</Text>
                 <Stack gap={6}>
                   <Group gap={6} wrap="nowrap">
                     <IconStar size={14} fill="#fcc419" color="#f59f00" />
@@ -173,7 +169,18 @@ function App() {
                     <IconMail size={14} color="#228be6" />
                     <Text size="sm">Blue envelope: marks articles already included in the favorite newsletter.</Text>
                   </Group>
+                  <Group gap={6} wrap="nowrap" align="center">
+                    <div style={{ width: 8, height: 8, borderRadius: "50%", backgroundColor: "#228be6", flexShrink: 0 }} />
+                    <Text size="sm">Blue dot: marks articles not yet used in any newsletter.</Text>
+                  </Group>
                 </Stack>
+              </Box>
+              <Box id="help-workflow">
+                <Text fw={700} size="sm" mb={4}>Standard workflow</Text>
+                <Text size="sm">1. Create a newsletter, and mrk is as favorite using the yellow star</Text>
+                <Text size="sm">2. Browse articles using the smart lists on the left to easily identify relevant content</Text>
+                <Text size="sm">3. The blue dot helps you identify articles that's not in any newsletters</Text>
+                <Text size="sm">4. It helps to display only unused articles with the toggle next to the search field</Text>
               </Box>
             </Stack>
           </ScrollArea>
