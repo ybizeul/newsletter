@@ -14,6 +14,8 @@ import {
 } from "@tiptap/react"
 
 export const MAX_FILE_SIZE = 5 * 1024 * 1024 // 5MB
+export const IMAGE_MAX_DIMENSION = 800
+export const IMAGE_JPEG_QUALITY = 0.8
 
 export const MAC_SYMBOLS: Record<string, string> = {
   mod: "⌘",
@@ -352,6 +354,42 @@ export function selectionWithinConvertibleTypes(
 }
 
 /**
+ * Reads a File as a data URL, then draws it onto a canvas to produce a
+ * JPEG data URL capped at IMAGE_MAX_DIMENSION px and IMAGE_JPEG_QUALITY.
+ */
+export function processImageFile(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onerror = () => reject(new Error("Failed to read image"))
+    reader.onload = () => {
+      const img = new window.Image()
+      img.onerror = () => reject(new Error("Failed to decode image"))
+      img.onload = () => {
+        let { width, height } = img
+        const max = IMAGE_MAX_DIMENSION
+        if (width > max || height > max) {
+          if (width >= height) {
+            height = Math.round(height * (max / width))
+            width = max
+          } else {
+            width = Math.round(width * (max / height))
+            height = max
+          }
+        }
+        const canvas = document.createElement("canvas")
+        canvas.width = width
+        canvas.height = height
+        const ctx = canvas.getContext("2d")!
+        ctx.drawImage(img, 0, 0, width, height)
+        resolve(canvas.toDataURL("image/jpeg", IMAGE_JPEG_QUALITY))
+      }
+      img.src = reader.result as string
+    }
+    reader.readAsDataURL(file)
+  })
+}
+
+/**
  * Handles image upload with progress tracking and abort capability
  * @param file The file to upload
  * @param onProgress Optional callback for tracking upload progress
@@ -367,15 +405,9 @@ export const handleImageUpload = async (
   if (file.size > MAX_FILE_SIZE) {
     throw new Error(`File size exceeds maximum allowed (${MAX_FILE_SIZE / (1024 * 1024)}MB)`)
   }
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader()
-    reader.onload = () => {
-      onProgress?.({ progress: 100 })
-      resolve(reader.result as string)
-    }
-    reader.onerror = () => reject(new Error("Failed to read image"))
-    reader.readAsDataURL(file)
-  })
+  const url = await processImageFile(file)
+  onProgress?.({ progress: 100 })
+  return url
 }
 
 type ProtocolOptions = {

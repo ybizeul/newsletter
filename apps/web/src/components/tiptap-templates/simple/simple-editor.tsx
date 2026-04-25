@@ -76,7 +76,7 @@ import { useCursorVisibility } from "@/hooks/use-cursor-visibility"
 // (ThemeToggle removed — app uses Mantine theme)
 
 // --- Lib ---
-import { handleImageUpload, MAX_FILE_SIZE } from "@/lib/tiptap-utils"
+import { handleImageUpload, MAX_FILE_SIZE, processImageFile } from "@/lib/tiptap-utils"
 
 // --- Styles ---
 import "@/components/tiptap-templates/simple/simple-editor.scss"
@@ -219,6 +219,54 @@ export function SimpleEditor({
         autocapitalize: "off",
         "aria-label": "Main content area, start typing to enter text.",
         class: "simple-editor",
+      },
+      handlePaste(view, event) {
+        const items = Array.from(event.clipboardData?.items ?? [])
+        const imageFiles = items
+          .filter((item) => item.type.startsWith("image/"))
+          .map((item) => item.getAsFile())
+          .filter((file): file is File => file !== null)
+
+        if (imageFiles.length === 0) return false
+
+        event.preventDefault()
+
+        for (const file of imageFiles) {
+          processImageFile(file).then((src) => {
+            view.dispatch(
+              view.state.tr.replaceSelectionWith(
+                view.state.schema.nodes.image.create({ src })
+              )
+            )
+          })
+        }
+
+        return true
+      },
+      handleDrop(view, event) {
+        const files = Array.from(event.dataTransfer?.files ?? [])
+        const imageFiles = files.filter((file) =>
+          file.type.startsWith("image/")
+        )
+
+        if (imageFiles.length === 0) return false
+
+        event.preventDefault()
+
+        const pos =
+          view.posAtCoords({
+            left: event.clientX,
+            top: event.clientY,
+          })?.pos ?? view.state.selection.from
+
+        for (const file of imageFiles) {
+          processImageFile(file).then((src) => {
+            const node = view.state.schema.nodes.image.create({ src })
+            view.dispatch(view.state.tr.insert(pos, node))
+          })
+        }
+
+        return true
       },
     },
     extensions: [
