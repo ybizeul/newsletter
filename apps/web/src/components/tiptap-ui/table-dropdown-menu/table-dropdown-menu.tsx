@@ -68,7 +68,7 @@ function setCellAlignment(editor: Editor, name: string, value: string) {
 
 function getTableHeaderState(editor: Editor) {
   const { state } = editor
-  const { selection, doc } = state
+  const { selection } = state
   const $anchor = selection.$anchor
 
   // Walk up to find the table node

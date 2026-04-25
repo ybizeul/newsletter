@@ -201,7 +201,7 @@ export default function NewslettersPage() {
   );
   const [title, setTitle] = useState("");
   const [headerId, setHeaderId] = useState<string | null>(null);
-  const [introMarkdown, setIntroMarkdown] = useState("");
+  const [, setIntroMarkdown] = useState("");
   const [introContentHTML, setIntroContentHTML] = useState("");
   const [introEditorKey, setIntroEditorKey] = useState("");
   const [includeIndex, setIncludeIndex] = useState(false);

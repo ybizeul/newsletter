@@ -81,8 +81,6 @@ import { handleImageUpload, MAX_FILE_SIZE } from "@/lib/tiptap-utils"
 // --- Styles ---
 import "@/components/tiptap-templates/simple/simple-editor.scss"
 
-import content from "@/components/tiptap-templates/simple/data/content.json"
-
 const MainToolbarContent = ({
   onHighlighterClick,
   onLinkClick,
@@ -206,7 +204,7 @@ export function SimpleEditor({
   onContentChange?: (html: string) => void
 }) {
   const isMobile = useIsBreakpoint()
-  const { height } = useWindowSize()
+  const { height: _height } = useWindowSize()
   const [mobileView, setMobileView] = useState<"main" | "highlighter" | "link">(
     "main"
   )
@@ -290,7 +288,7 @@ export function SimpleEditor({
     return () => { editor.off("update", handler) }
   }, [editor, onContentChange])
 
-  const rect = useCursorVisibility({
+  const _rect = useCursorVisibility({
     editor,
     overlayHeight: toolbarRef.current?.getBoundingClientRect().height ?? 0,
   })
