@@ -1955,7 +1955,7 @@ func enforceImageFullWidth(input string) string {
 	// Apple Mail ignores margin:auto on block images; align="center" + text-align is reliable.
 	pImgRe := regexp.MustCompile(`(?is)<p\b[^>]*>\s*(<img\b[^>]*>)\s*</p>`)
 	result = pImgRe.ReplaceAllString(result,
-		`<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;"><tr><td align="center" style="text-align:center;padding:4px 0;">$1</td></tr></table>`)
+		`<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;"><tr><td align="center" style="text-align:center;padding:4px 0;border:0;">$1</td></tr></table>`)
 
 	return result
 }
