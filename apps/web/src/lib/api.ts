@@ -7,6 +7,7 @@ type CreateArticlePayload = {
   public?: boolean;
   title: string;
   markdown: string;
+  contentHTML?: string;
   tags?: string[];
   topicIcon?: string;
   illustration?: string;
@@ -21,6 +22,7 @@ type CreateNewsletterPayload = {
   title: string;
   headerId?: string;
   introMarkdown: string;
+  introHTML?: string;
   includeIndex: boolean;
   articleIds: string[];
   recipientIds: string[];
@@ -32,6 +34,7 @@ type UpdateNewsletterPayload = {
   title: string;
   headerId?: string;
   introMarkdown: string;
+  introHTML?: string;
   includeIndex: boolean;
   contentWidth: number;
   articleIds: string[];
@@ -44,6 +47,7 @@ type UpdateArticlePayload = {
   public?: boolean;
   title: string;
   markdown: string;
+  contentHTML?: string;
   tags?: string[];
   topicIcon?: string;
   illustration?: string;

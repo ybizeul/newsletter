@@ -9,6 +9,7 @@ export interface Article {
   public: boolean;
   title: string;
   markdown: string;
+  contentHTML?: string;
   tags?: string[];
   topicIcon?: string;
   illustration?: string;
@@ -49,6 +50,7 @@ export interface Newsletter {
   title: string;
   headerId?: string;
   introMarkdown: string;
+  introHTML?: string;
   includeIndex: boolean;
   contentWidth: number;
   articleIds: string[];

@@ -38,16 +38,14 @@ import {
   listNewsletterSummaries,
   scheduleNewsletter,
   sendNewsletterNow,
-  updateNewsletter
+  updateNewsletter,
+  renderMarkdown
 } from "../lib/api";
 import type { ArticleSummary, Contact, Header, Newsletter, NewsletterSummary } from "../types/domain";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../lib/auth";
 import { DateTimePicker } from "@mantine/dates";
-import MDEditor from "@uiw/react-md-editor";
-import "@uiw/react-md-editor/markdown-editor.css";
-import "@uiw/react-markdown-preview/markdown.css";
-import "../styles/markdown-editor.css";
+import { SimpleEditor } from "@/components/tiptap-templates/simple/simple-editor";
 
 const FALLBACK_CREATOR_ID = "demo-user";
 const NEWSLETTERS_PANE_WIDTH_STORAGE_KEY = "newsletter.newsletters.pane.width";
@@ -126,7 +124,34 @@ function cutByChars(input: string, maxChars: number): string {
   return `${clean.slice(0, maxChars).trimEnd()}...`;
 }
 
+function htmlPreviewText(input: string, maxLines = 3): string {
+  const withBreaks = input
+    .replace(/<\/(p|div|h[1-6]|li|tr|blockquote)>/gi, "\n")
+    .replace(/<br\s*\/?>/gi, "\n");
+  const plain = withBreaks
+    .replace(/<[^>]+>/g, " ")
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&nbsp;/g, " ")
+    .replace(/\r/g, "");
+
+  const lines = plain
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .slice(0, maxLines)
+    .map((line) => line.replace(/\s+/g, " "));
+
+  return lines.join(" ");
+}
+
 function toNewsletterSummary(newsletter: Newsletter): NewsletterSummary {
+  const previewSource = newsletter.introHTML?.trim()
+    ? htmlPreviewText(newsletter.introHTML)
+    : markdownPreview(newsletter.introMarkdown);
   return {
     id: newsletter.id,
     owner: newsletter.owner,
@@ -142,7 +167,7 @@ function toNewsletterSummary(newsletter: Newsletter): NewsletterSummary {
     sentAt: newsletter.sentAt,
     createdAt: newsletter.createdAt,
     updatedAt: newsletter.updatedAt,
-    preview: cutByChars(markdownPreview(newsletter.introMarkdown), 180)
+    preview: cutByChars(previewSource, 180)
   };
 }
 
@@ -177,6 +202,8 @@ export default function NewslettersPage() {
   const [title, setTitle] = useState("");
   const [headerId, setHeaderId] = useState<string | null>(null);
   const [introMarkdown, setIntroMarkdown] = useState("");
+  const [introContentHTML, setIntroContentHTML] = useState("");
+  const [introEditorKey, setIntroEditorKey] = useState("");
   const [includeIndex, setIncludeIndex] = useState(false);
   const [contentWidth, setContentWidth] = useState(680);
   const [articleIds, setArticleIDs] = useState<string[]>([]);
@@ -350,6 +377,8 @@ export default function NewslettersPage() {
     setSelectedNewsletterID(null);
     setTitle("");
     setHeaderId(null);
+    setIntroContentHTML("");
+    setIntroEditorKey("");
     setIntroMarkdown("");
     setIncludeIndex(false);
     setContentWidth(680);
@@ -373,6 +402,18 @@ export default function NewslettersPage() {
       setTitle(fullNewsletter.title);
       setHeaderId(fullNewsletter.headerId ?? null);
       setIntroMarkdown(fullNewsletter.introMarkdown);
+      {
+        let htmlContent: string;
+        if (fullNewsletter.introHTML?.trim()) {
+          htmlContent = fullNewsletter.introHTML;
+        } else if (fullNewsletter.introMarkdown?.trim()) {
+          try { htmlContent = await renderMarkdown(fullNewsletter.introMarkdown); } catch { htmlContent = "<p></p>"; }
+        } else {
+          htmlContent = "<p></p>";
+        }
+        setIntroContentHTML(htmlContent || "");
+        setIntroEditorKey(fullNewsletter.id);
+      }
       setIncludeIndex(Boolean(fullNewsletter.includeIndex));
       setContentWidth(fullNewsletter.contentWidth || 680);
       setArticleIDs(fullNewsletter.articleIds);
@@ -396,7 +437,7 @@ export default function NewslettersPage() {
       lastSavedDraftRef.current = JSON.stringify({
         title: fullNewsletter.title.trim(),
         headerId: fullNewsletter.headerId ?? "",
-        introMarkdown: fullNewsletter.introMarkdown.trim(),
+        introHTML: introContentHTML,
         includeIndex: Boolean(fullNewsletter.includeIndex),
         contentWidth: fullNewsletter.contentWidth || 680,
         articleIds: fullNewsletter.articleIds,
@@ -464,7 +505,8 @@ export default function NewslettersPage() {
   const buildNewsletterDraftPayload = () => ({
     title: title.trim(),
     headerId: headerId ?? "",
-    introMarkdown: introMarkdown.trim(),
+    introMarkdown: "",
+    introHTML: introContentHTML,
     includeIndex,
     contentWidth,
     articleIds,
@@ -576,7 +618,7 @@ export default function NewslettersPage() {
         window.clearTimeout(autosaveTimerRef.current);
       }
     };
-  }, [selectedNewsletterId, title, headerId, introMarkdown, includeIndex, contentWidth, articleIds, recipientRaw, recipientMode, contactTags, contactTagsMode, hasTooManyRecipients, isSubmitting]);
+  }, [selectedNewsletterId, title, headerId, introContentHTML, includeIndex, contentWidth, articleIds, recipientRaw, recipientMode, contactTags, contactTagsMode, hasTooManyRecipients, isSubmitting]);
 
   useEffect(() => () => {
     if (autosaveTimerRef.current !== null) {
@@ -694,7 +736,8 @@ export default function NewslettersPage() {
         creatorId: oidcEnabled ? undefined : FALLBACK_CREATOR_ID,
         title: `${source.title} (copy)`,
         headerId: source.headerId ?? "",
-        introMarkdown: source.introMarkdown,
+        introMarkdown: "",
+        introHTML: source.introHTML ?? "",
         includeIndex: Boolean(source.includeIndex),
         articleIds: source.articleIds,
         recipientIds: source.recipientIds,
@@ -1012,27 +1055,14 @@ export default function NewslettersPage() {
           />
 
           <Input.Wrapper
-            label="Introduction (Markdown)"
+            label="Introduction"
             description="Write the opening section shown before the selected articles."
           >
-            <div data-color-mode="light">
-              <MDEditor
-                className="markdown-editor-monospace"
-                value={introMarkdown}
-                onChange={(value) => setIntroMarkdown(value ?? "")}
-                preview={isMobile ? "edit" : "live"}
-                height={350}
-                textareaProps={{
-                  placeholder: "Welcome to this edition...",
-                  style: {
-                    fontFamily:
-                      "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, Liberation Mono, Courier New, monospace",
-                    fontSize: 14,
-                    lineHeight: 1.6
-                  }
-                }}
-              />
-            </div>
+            <SimpleEditor
+              key={introEditorKey}
+              initialContent={introContentHTML || undefined}
+              onContentChange={setIntroContentHTML}
+            />
           </Input.Wrapper>
 
           <Checkbox

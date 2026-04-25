@@ -1,11 +1,8 @@
 import { type MouseEvent as ReactMouseEvent, useEffect, useRef, useState } from "react";
 import {
-  ActionIcon,
-  Badge,
   Button,
   Group,
   Loader,
-  Menu,
   Modal,
   ScrollArea,
   Stack,
@@ -13,345 +10,23 @@ import {
   TextInput
 } from "@mantine/core";
 import { useMediaQuery } from "@mantine/hooks";
-import {
-  IconAlignCenter,
-  IconAlignLeft,
-  IconAlignRight,
-  IconChevronDown,
-  IconBold,
-  IconH1,
-  IconItalic,
-  IconTable,
-  IconTablePlus,
-  IconUnderline
-} from "@tabler/icons-react";
-import { EditorContent, useEditor } from "@tiptap/react";
-import { Extension } from "@tiptap/core";
-import StarterKit from "@tiptap/starter-kit";
-import Underline from "@tiptap/extension-underline";
-import Image from "@tiptap/extension-image";
-import { TextStyle } from "@tiptap/extension-text-style";
-import { Table } from "@tiptap/extension-table";
-import TableRow from "@tiptap/extension-table-row";
-import TableHeader from "@tiptap/extension-table-header";
-import TableCell from "@tiptap/extension-table-cell";
-import TextAlign from "@tiptap/extension-text-align";
 import { createHeader, deleteHeader, listHeaders, renderMarkdown, updateHeader } from "../lib/api";
 import { useAuth } from "../lib/auth";
 import type { Header } from "../types/domain";
-import "../styles/header-editor.css";
+import { SimpleEditor } from "@/components/tiptap-templates/simple/simple-editor";
 
 const FALLBACK_CREATOR_ID = "demo-user";
 const HEADERS_PANE_WIDTH_STORAGE_KEY = "newsletter.headers.pane.width";
 
-const HeaderImage = Image.extend({
-  addAttributes() {
-    return {
-      ...this.parent?.(),
-      style: {
-        default: "width:auto;max-width:none;height:auto;display:block;margin:8px auto;"
-      }
-    };
-  }
-}).configure({
-  allowBase64: true
-});
 
-const FontSize = Extension.create({
-  name: "fontSize",
-  addGlobalAttributes() {
-    return [
-      {
-        types: ["textStyle"],
-        attributes: {
-          fontSize: {
-            default: null,
-            parseHTML: (element) => element.style.fontSize || null,
-            renderHTML: (attributes) => {
-              if (!attributes.fontSize) {
-                return {};
-              }
-              return { style: `font-size: ${attributes.fontSize}` };
-            }
-          }
-        }
-      }
-    ];
-  }
-});
 
-const FontFamily = Extension.create({
-  name: "fontFamily",
-  addGlobalAttributes() {
-    return [
-      {
-        types: ["textStyle"],
-        attributes: {
-          fontFamily: {
-            default: null,
-            parseHTML: (element) => element.style.fontFamily || null,
-            renderHTML: (attributes) => {
-              if (!attributes.fontFamily) {
-                return {};
-              }
-              return { style: `font-family: ${attributes.fontFamily}` };
-            }
-          }
-        }
-      }
-    ];
-  }
-});
 
-function mergeCellAlignmentStyle(
-  baseStyle: string,
-  attributes: { textAlign?: string | null; verticalAlign?: string | null }
-): string {
-  const stripped = baseStyle
-    .replace(/(?:^|;)\s*text-align\s*:\s*[^;]+;?/gi, "")
-    .replace(/(?:^|;)\s*vertical-align\s*:\s*[^;]+;?/gi, "")
-    .trim();
 
-  const rules: string[] = [];
-  if (stripped) {
-    rules.push(stripped.endsWith(";") ? stripped : `${stripped};`);
-  }
-  if (attributes.textAlign) {
-    rules.push(`text-align:${attributes.textAlign};`);
-  }
-  if (attributes.verticalAlign) {
-    rules.push(`vertical-align:${attributes.verticalAlign};`);
-  }
 
-  return rules.join("");
-}
 
-function normalizeHeaderTableCellHorizontalAlignment(inputHTML: string): string {
-  if (!inputHTML.trim()) {
-    return inputHTML;
-  }
 
-  const parser = new DOMParser();
-  const doc = parser.parseFromString(`<div id="__root">${inputHTML}</div>`, "text/html");
-  const root = doc.getElementById("__root");
-  if (!root) {
-    return inputHTML;
-  }
 
-  const inferFromImage = (img: HTMLImageElement): "left" | "center" | "right" | null => {
-    const floatValue = img.style.float?.trim().toLowerCase();
-    if (floatValue === "right") {
-      return "right";
-    }
-    if (floatValue === "left") {
-      return "left";
-    }
 
-    const marginLeft = img.style.marginLeft?.trim().toLowerCase();
-    const marginRight = img.style.marginRight?.trim().toLowerCase();
-    const marginInlineStart = img.style.marginInlineStart?.trim().toLowerCase();
-    const marginInlineEnd = img.style.marginInlineEnd?.trim().toLowerCase();
-
-    if (marginInlineStart === "auto" && marginInlineEnd === "auto") {
-      return "center";
-    }
-    if (marginInlineStart === "auto") {
-      return "right";
-    }
-    if (marginInlineEnd === "auto") {
-      return "left";
-    }
-
-    if (marginLeft === "auto" && marginRight === "auto") {
-      return "center";
-    }
-    if (marginLeft === "auto") {
-      return "right";
-    }
-    if (marginRight === "auto") {
-      return "left";
-    }
-
-    const marginParts = img.style.margin
-      .trim()
-      .toLowerCase()
-      .split(/\s+/)
-      .filter(Boolean);
-
-    if (marginParts.length === 2 || marginParts.length === 3) {
-      if (marginParts[1] === "auto") {
-        return "center";
-      }
-    }
-    if (marginParts.length >= 4) {
-      const right = marginParts[1];
-      const left = marginParts[3];
-      if (left === "auto" && right !== "auto") {
-        return "right";
-      }
-      if (right === "auto" && left !== "auto") {
-        return "left";
-      }
-      if (left === "auto" && right === "auto") {
-        return "center";
-      }
-    }
-
-    return null;
-  };
-
-  const inferForCell = (cell: HTMLTableCellElement): "left" | "center" | "right" | null => {
-    const current = (cell.style.textAlign || cell.getAttribute("align") || "").trim().toLowerCase();
-    if (current === "left" || current === "center" || current === "right") {
-      return current;
-    }
-
-    const innerWithAlign = Array.from(cell.querySelectorAll<HTMLElement>("[style], [align]"));
-    for (let i = innerWithAlign.length - 1; i >= 0; i -= 1) {
-      const node = innerWithAlign[i];
-      const alignValue = (node.style.textAlign || node.getAttribute("align") || "").trim().toLowerCase();
-      if (alignValue === "left" || alignValue === "center" || alignValue === "right") {
-        return alignValue;
-      }
-    }
-
-    const images = Array.from(cell.querySelectorAll<HTMLImageElement>("img"));
-    for (let i = images.length - 1; i >= 0; i -= 1) {
-      const inferred = inferFromImage(images[i]);
-      if (inferred) {
-        return inferred;
-      }
-    }
-
-    return null;
-  };
-
-  const cells = Array.from(root.querySelectorAll<HTMLTableCellElement>("th, td"));
-  cells.forEach((cell) => {
-    const inferred = inferForCell(cell);
-    if (!inferred) {
-      return;
-    }
-    cell.style.textAlign = inferred;
-    cell.setAttribute("align", inferred);
-  });
-
-  return root.innerHTML;
-}
-
-const FONT_FAMILY_OPTIONS: Array<{ label: string; value: string }> = [
-  { label: "Arial", value: "Arial, Helvetica, sans-serif" },
-  { label: "Verdana", value: "Verdana, Geneva, sans-serif" },
-  { label: "Trebuchet", value: "'Trebuchet MS', Helvetica, sans-serif" },
-  { label: "Georgia", value: "Georgia, 'Times New Roman', serif" },
-  { label: "Times", value: "'Times New Roman', Times, serif" },
-  { label: "Courier", value: "'Courier New', Courier, monospace" }
-];
-
-const HeaderTable = Table.extend({
-  addAttributes() {
-    return {
-      ...this.parent?.(),
-      style: {
-        default: "width:100%;border-collapse:collapse;table-layout:fixed;--header-cell-border:1px solid #ced4da;",
-        parseHTML: (element: HTMLElement) => {
-          const rawStyle = (element.getAttribute("style") ?? "").trim();
-          if (!rawStyle) {
-            return "width:100%;border-collapse:collapse;table-layout:fixed;--header-cell-border:1px solid #ced4da;";
-          }
-          return rawStyle.endsWith(";") ? rawStyle : `${rawStyle};`;
-        }
-      },
-      hideBorders: {
-        default: false,
-        parseHTML: (element: HTMLElement) => {
-          if (element.getAttribute("data-hide-borders") === "true") {
-            return true;
-          }
-          const style = (element.getAttribute("style") ?? "").toLowerCase();
-          return /--header-cell-border\s*:\s*0(?:\b|;)/.test(style) ||
-            /\bborder\s*:\s*(?:0|none|0px(?:\s+none)?(?:\s+transparent)?)\b/.test(style);
-        },
-        renderHTML: (attributes: { hideBorders?: boolean }) => {
-          if (!attributes.hideBorders) {
-            return {};
-          }
-          return { "data-hide-borders": "true" };
-        }
-      }
-    };
-  }
-});
-
-const HeaderTableHeader = TableHeader.extend({
-  addAttributes() {
-    return {
-      ...this.parent?.(),
-      textAlign: {
-        default: null,
-        parseHTML: (element) => element.style.textAlign || element.getAttribute("align") || null,
-        renderHTML: () => ({})
-      },
-      verticalAlign: {
-        default: null,
-        parseHTML: (element) => element.style.verticalAlign || element.getAttribute("valign") || null,
-        renderHTML: () => ({})
-      }
-    };
-  },
-  renderHTML({ node, HTMLAttributes }) {
-    const baseStyle = typeof HTMLAttributes.style === "string" ? HTMLAttributes.style : "";
-    const textAlign = typeof node.attrs.textAlign === "string" ? node.attrs.textAlign : null;
-    const verticalAlign = typeof node.attrs.verticalAlign === "string" ? node.attrs.verticalAlign : null;
-    const mergedStyle = mergeCellAlignmentStyle(baseStyle, { textAlign, verticalAlign });
-
-    return [
-      "th",
-      {
-        ...HTMLAttributes,
-        ...(textAlign ? { align: textAlign } : {}),
-        ...(verticalAlign ? { valign: verticalAlign } : {}),
-        ...(mergedStyle ? { style: mergedStyle } : {})
-      },
-      0
-    ];
-  }
-});
-
-const HeaderTableCell = TableCell.extend({
-  addAttributes() {
-    return {
-      ...this.parent?.(),
-      textAlign: {
-        default: null,
-        parseHTML: (element) => element.style.textAlign || element.getAttribute("align") || null,
-        renderHTML: () => ({})
-      },
-      verticalAlign: {
-        default: null,
-        parseHTML: (element) => element.style.verticalAlign || element.getAttribute("valign") || null,
-        renderHTML: () => ({})
-      }
-    };
-  },
-  renderHTML({ node, HTMLAttributes }) {
-    const baseStyle = typeof HTMLAttributes.style === "string" ? HTMLAttributes.style : "";
-    const textAlign = typeof node.attrs.textAlign === "string" ? node.attrs.textAlign : null;
-    const verticalAlign = typeof node.attrs.verticalAlign === "string" ? node.attrs.verticalAlign : null;
-    const mergedStyle = mergeCellAlignmentStyle(baseStyle, { textAlign, verticalAlign });
-
-    return [
-      "td",
-      {
-        ...HTMLAttributes,
-        ...(textAlign ? { align: textAlign } : {}),
-        ...(verticalAlign ? { valign: verticalAlign } : {}),
-        ...(mergedStyle ? { style: mergedStyle } : {})
-      },
-      0
-    ];
-  }
-});
 
 function getStoredHeadersPaneWidth(): number {
   const raw = window.localStorage.getItem(HEADERS_PANE_WIDTH_STORAGE_KEY);
@@ -410,48 +85,11 @@ function looksLikeHTML(input: string): boolean {
   return /<\/?[a-z][\s\S]*>/i.test(input);
 }
 
-function hasHiddenBorderMarker(styleValue: string): boolean {
-  const lowered = styleValue.toLowerCase();
-  return /--header-cell-border\s*:\s*0(?:\b|;)/.test(lowered) ||
-    /\bborder\s*:\s*(?:0|none|0px(?:\s+none)?(?:\s+transparent)?)\b/.test(lowered);
-}
 
-function withHeaderCellBorderStyle(currentStyle: string | null | undefined, hidden: boolean): string {
-  const base = (currentStyle ?? "").trim();
-  const cleaned = base
-    .replace(/(?:^|;)\s*width\s*:\s*[^;]+;?/gi, "")
-    .replace(/(?:^|;)\s*max-width\s*:\s*[^;]+;?/gi, "")
-    .replace(/(?:^|;)\s*min-width\s*:\s*[^;]+;?/gi, "")
-    .replace(/(?:^|;)\s*table-layout\s*:\s*[^;]+;?/gi, "")
-    .replace(/--header-cell-border\s*:\s*[^;]+;?/gi, "")
-    .replace(/border\s*:\s*(?:0|none|0px(?:\s+none)?(?:\s+transparent)?|1px\s+solid\s+#ced4da)\s*;?/gi, "")
-    .trim();
-  const normalized = cleaned.length > 0 ? (cleaned.endsWith(";") ? cleaned : `${cleaned};`) : "";
-  const borderValue = hidden ? "0" : "1px solid #ced4da";
-  const tableBorder = hidden ? "0" : "1px solid #ced4da";
-  return `width:100%;max-width:100%;table-layout:fixed;${normalized}--header-cell-border:${borderValue};border:${tableBorder};`;
-}
-
-function readFileAsDataURL(file: File): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => {
-      const result = typeof reader.result === "string" ? reader.result : "";
-      if (!result) {
-        reject(new Error("Unable to read image"));
-        return;
-      }
-      resolve(result);
-    };
-    reader.onerror = () => reject(new Error("Unable to read image"));
-    reader.readAsDataURL(file);
-  });
-}
 
 export default function HeadersPage() {
   const { oidcEnabled } = useAuth();
   const containerRef = useRef<HTMLDivElement | null>(null);
-  const lastTablePosRef = useRef<number | null>(null);
   const autosaveTimerRef = useRef<number | null>(null);
   const autosaveClearSavedRef = useRef<number | null>(null);
   const lastSavedDraftRef = useRef<string>("");
@@ -461,59 +99,15 @@ export default function HeadersPage() {
   const [headers, setHeaders] = useState<Header[]>([]);
   const [selectedHeaderId, setSelectedHeaderID] = useState<string | null>(null);
   const [title, setTitle] = useState("");
-  const [editorContentVersion, setEditorContentVersion] = useState(0);
+  const [headerContentHTML, setHeaderContentHTML] = useState("");
+  const [headerEditorKey, setHeaderEditorKey] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isDuplicatingHeader, setIsDuplicatingHeader] = useState(false);
   const [autosaveStatus, setAutosaveStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const [error, setError] = useState<string | null>(null);
   const [deleteHeaderId, setDeleteHeaderId] = useState<string | null>(null);
-  const [tableDeletionAction, setTableDeletionAction] = useState<"row" | "column" | "table" | null>(null);
   const [isManualNewHeaderMode, setIsManualNewHeaderMode] = useState(false);
-
-  const editor = useEditor({
-    extensions: [
-      StarterKit,
-      Underline,
-      HeaderImage,
-      TextStyle,
-      FontSize,
-      FontFamily,
-      TextAlign.configure({ types: ["heading", "paragraph"] }),
-      HeaderTable.configure({ resizable: true }),
-      TableRow,
-      HeaderTableHeader,
-      HeaderTableCell
-    ],
-    content: "<p></p>",
-    editorProps: {
-      handlePaste: (_view, event) => {
-        const fileItems = Array.from(event.clipboardData?.items ?? []).filter(
-          (item) => item.kind === "file" && item.type.startsWith("image/")
-        );
-
-        if (fileItems.length === 0) {
-          return false;
-        }
-
-        const file = fileItems[0].getAsFile();
-        if (!file) {
-          return false;
-        }
-
-        event.preventDefault();
-        void readFileAsDataURL(file)
-          .then((dataURL) => {
-            editor?.chain().focus().setImage({ src: dataURL }).run();
-          })
-          .catch(() => {
-            setError("Failed to paste image");
-          });
-
-        return true;
-      }
-    }
-  });
 
   const loadHeaders = async () => {
     setIsLoading(true);
@@ -532,207 +126,45 @@ export default function HeadersPage() {
     void loadHeaders();
   }, []);
 
-  useEffect(() => {
-    if (!editor) {
-      return;
-    }
-
-    const updateCurrentTablePos = () => {
-      const { $from } = editor.state.selection;
-      let tablePos: number | null = null;
-
-      for (let depth = $from.depth; depth > 0; depth -= 1) {
-        if ($from.node(depth).type.name === "table") {
-          tablePos = $from.before(depth);
-          break;
-        }
-      }
-
-      // Keep the last valid table position so menu interactions do not drop context.
-      if (tablePos !== null) {
-        lastTablePosRef.current = tablePos;
-      }
-    };
-
-    updateCurrentTablePos();
-    editor.on("selectionUpdate", updateCurrentTablePos);
-
-    return () => {
-      editor.off("selectionUpdate", updateCurrentTablePos);
-    };
-  }, [editor]);
-
-  useEffect(() => {
-    if (!editor) {
-      return;
-    }
-
-    const onUpdate = () => {
-      setEditorContentVersion((current) => current + 1);
-    };
-
-    editor.on("update", onUpdate);
-    return () => {
-      editor.off("update", onUpdate);
-    };
-  }, [editor]);
-
   const resetForm = () => {
     setSelectedHeaderID(null);
     setTitle("");
-    lastTablePosRef.current = null;
-    editor?.commands.setContent("<p></p>");
+    setHeaderContentHTML("");
+    setHeaderEditorKey("");
     lastSavedDraftRef.current = "";
     setAutosaveStatus("idle");
   };
-
-  const normalizeEditorTableBorders = () => {
-    if (!editor) {
-      return;
-    }
-
-    const domTables = Array.from(editor.view.dom.querySelectorAll("table"));
-    const tablePositions: number[] = [];
-    editor.state.doc.descendants((node, pos) => {
-      if (node.type.name === "table") {
-        tablePositions.push(pos);
-      }
-    });
-
-    const transaction = editor.state.tr;
-    tablePositions.forEach((pos, index) => {
-      const tableNode = editor.state.doc.nodeAt(pos);
-      if (!tableNode || tableNode.type.name !== "table") {
-        return;
-      }
-
-      const domTable = domTables[index] ?? null;
-      const nodeStyle = String(tableNode.attrs.style ?? "");
-      const domStyle = domTable?.getAttribute("style") ?? "";
-      const hidden =
-        Boolean(tableNode.attrs.hideBorders) ||
-        domTable?.getAttribute("data-hide-borders") === "true" ||
-        hasHiddenBorderMarker(nodeStyle) ||
-        hasHiddenBorderMarker(domStyle);
-
-      transaction.setNodeMarkup(pos, undefined, {
-        ...tableNode.attrs,
-        style: withHeaderCellBorderStyle(nodeStyle || domStyle, hidden),
-        hideBorders: hidden
-      });
-
-      if (domTable) {
-        domTable.setAttribute("style", withHeaderCellBorderStyle(domStyle || nodeStyle, hidden));
-        if (hidden) {
-          domTable.setAttribute("data-hide-borders", "true");
-        } else {
-          domTable.removeAttribute("data-hide-borders");
-        }
-      }
-    });
-
-    if (transaction.docChanged) {
-      editor.view.dispatch(transaction);
-    }
-  };
-
-  const enforceEditorTableWidthBounds = () => {
-    if (!editor) {
-      return;
-    }
-
-    const domTables = Array.from(editor.view.dom.querySelectorAll("table"));
-    domTables.forEach((table) => {
-      // Keep visual table bounds pinned to newsletter width while resizing columns.
-      table.style.setProperty("width", "100%", "important");
-      table.style.setProperty("min-width", "100%", "important");
-      table.style.setProperty("max-width", "100%", "important");
-      table.style.setProperty("table-layout", "fixed", "important");
-
-      const cols = Array.from(table.querySelectorAll<HTMLTableColElement>("colgroup col"));
-      if (cols.length === 0) {
-        return;
-      }
-
-      const widths = cols.map((col) => {
-        const styleWidth = parseFloat(col.style.width || "");
-        if (Number.isFinite(styleWidth) && styleWidth > 0) {
-          return styleWidth;
-        }
-
-        const attrWidth = parseFloat(col.getAttribute("width") ?? "");
-        return Number.isFinite(attrWidth) && attrWidth > 0 ? attrWidth : 0;
-      });
-
-      if (widths.some((width) => width <= 0)) {
-        return;
-      }
-
-      const totalWidth = widths.reduce((sum, width) => sum + width, 0);
-      const tableMaxWidth = table.parentElement?.clientWidth ?? table.clientWidth;
-      if (tableMaxWidth <= 0 || totalWidth <= tableMaxWidth) {
-        return;
-      }
-
-      const scale = tableMaxWidth / totalWidth;
-      cols.forEach((col, index) => {
-        const nextWidth = Math.max(24, Math.round(widths[index] * scale));
-        col.style.width = `${nextWidth}px`;
-        col.style.minWidth = `${nextWidth}px`;
-        col.setAttribute("width", String(nextWidth));
-      });
-    });
-  };
-
-  useEffect(() => {
-    if (!editor) {
-      return;
-    }
-
-    const syncTableBounds = () => {
-      requestAnimationFrame(enforceEditorTableWidthBounds);
-    };
-
-    syncTableBounds();
-    editor.on("create", syncTableBounds);
-    editor.on("update", syncTableBounds);
-
-    return () => {
-      editor.off("create", syncTableBounds);
-      editor.off("update", syncTableBounds);
-    };
-  }, [editor]);
 
   const onSelectHeader = async (header: Header) => {
     setIsManualNewHeaderMode(false);
     setSelectedHeaderID(header.id);
     setTitle(header.title);
-    lastTablePosRef.current = null;
 
     const rawContent = header.markdown ?? "";
     if (looksLikeHTML(rawContent)) {
-      editor?.commands.setContent(rawContent || "<p></p>");
+      setHeaderContentHTML(rawContent);
+      setHeaderEditorKey(header.id);
       lastSavedDraftRef.current = JSON.stringify({ title: header.title.trim(), markdown: rawContent });
       setAutosaveStatus("idle");
       if (isMobile) {
         setIsMobileEditorOpen(true);
       }
-      requestAnimationFrame(normalizeEditorTableBorders);
       return;
     }
 
     try {
       const html = await renderMarkdown(rawContent);
-      editor?.commands.setContent(html || "<p></p>");
-      lastSavedDraftRef.current = JSON.stringify({ title: header.title.trim(), markdown: html || "<p></p>" });
+      setHeaderContentHTML(html || "");
+      setHeaderEditorKey(header.id);
+      lastSavedDraftRef.current = JSON.stringify({ title: header.title.trim(), markdown: html || "" });
       setAutosaveStatus("idle");
       if (isMobile) {
         setIsMobileEditorOpen(true);
       }
-      requestAnimationFrame(normalizeEditorTableBorders);
     } catch {
-      editor?.commands.setContent("<p></p>");
-      lastSavedDraftRef.current = JSON.stringify({ title: header.title.trim(), markdown: "<p></p>" });
+      setHeaderContentHTML("");
+      setHeaderEditorKey(header.id);
+      lastSavedDraftRef.current = JSON.stringify({ title: header.title.trim(), markdown: "" });
       setAutosaveStatus("idle");
       if (isMobile) {
         setIsMobileEditorOpen(true);
@@ -775,9 +207,7 @@ export default function HeadersPage() {
       return;
     }
 
-    normalizeEditorTableBorders();
-    const rawHTML = editor?.getHTML() ?? "";
-    const markdown = normalizeHeaderTableCellHorizontalAlignment(rawHTML);
+    const markdown = headerContentHTML;
     setError(null);
     setIsSubmitting(true);
 
@@ -811,7 +241,7 @@ export default function HeadersPage() {
   };
 
   useEffect(() => {
-    if (!editor || !selectedHeaderId || isSubmitting) {
+    if (!selectedHeaderId || isSubmitting) {
       return;
     }
 
@@ -820,7 +250,7 @@ export default function HeadersPage() {
       return;
     }
 
-    const markdown = normalizeHeaderTableCellHorizontalAlignment(editor.getHTML() ?? "");
+    const markdown = headerContentHTML;
     const serializedPayload = JSON.stringify({ title: trimmedTitle, markdown });
     if (serializedPayload === lastSavedDraftRef.current) {
       return;
@@ -857,7 +287,7 @@ export default function HeadersPage() {
         window.clearTimeout(autosaveTimerRef.current);
       }
     };
-  }, [editor, selectedHeaderId, title, editorContentVersion, isSubmitting]);
+  }, [selectedHeaderId, title, headerContentHTML, isSubmitting]);
 
   useEffect(() => () => {
     if (autosaveTimerRef.current !== null) {
@@ -920,186 +350,6 @@ export default function HeadersPage() {
       setError(err instanceof Error ? err.message : "Failed to duplicate header");
     } finally {
       setIsDuplicatingHeader(false);
-    }
-  };
-
-  const requestDeleteTableElement = (action: "row" | "column" | "table") => {
-    setTableDeletionAction(action);
-  };
-
-  const confirmDeleteTableElement = () => {
-    if (!tableDeletionAction || !editor) {
-      return;
-    }
-
-    const chain = editor.chain().focus();
-    const deleted =
-      tableDeletionAction === "row"
-        ? chain.deleteRow().run()
-        : tableDeletionAction === "column"
-          ? chain.deleteColumn().run()
-          : chain.deleteTable().run();
-
-    if (!deleted) {
-      setError("Place the cursor inside a table first");
-      return;
-    }
-
-    setTableDeletionAction(null);
-  };
-
-  const setImageAlign = (align: "left" | "center" | "right") => {
-    const styleByAlign = {
-      left: "width:auto;max-width:none;height:auto;display:block;margin:8px auto 8px 0;",
-      center: "width:auto;max-width:none;height:auto;display:block;margin:8px auto;",
-      right: "width:auto;max-width:none;height:auto;display:block;margin:8px 0 8px auto;"
-    } as const;
-    editor?.chain().focus().updateAttributes("image", { style: styleByAlign[align] }).run();
-  };
-
-  const fontSizeLabel = () => {
-    const attrs = editor?.getAttributes("textStyle");
-    const raw = typeof attrs?.fontSize === "string" ? attrs.fontSize : "";
-    return raw || "Font";
-  };
-
-  const setFontSize = (size: string | null) => {
-    const chain = editor?.chain().focus();
-    if (!chain) {
-      return;
-    }
-    if (!size) {
-      chain.setMark("textStyle", { fontSize: null }).removeEmptyTextStyle().run();
-      return;
-    }
-    chain.setMark("textStyle", { fontSize: size }).run();
-  };
-
-  const fontFamilyLabel = () => {
-    const attrs = editor?.getAttributes("textStyle");
-    const raw = typeof attrs?.fontFamily === "string" ? attrs.fontFamily : "";
-    if (!raw) {
-      return "Text font";
-    }
-    const found = FONT_FAMILY_OPTIONS.find((option) => option.value === raw);
-    return found?.label ?? "Text font";
-  };
-
-  const setFontFamily = (family: string | null) => {
-    const chain = editor?.chain().focus();
-    if (!chain) {
-      return;
-    }
-    if (!family) {
-      chain.setMark("textStyle", { fontFamily: null }).removeEmptyTextStyle().run();
-      return;
-    }
-    chain.setMark("textStyle", { fontFamily: family }).run();
-  };
-
-  const setTableBordersHidden = (hidden: boolean) => {
-    if (!editor) {
-      return;
-    }
-
-    const syncVisibleTableBorders = () => {
-      const tables = editor.view.dom.querySelectorAll("table");
-      tables.forEach((table) => {
-        const nextStyle = withHeaderCellBorderStyle(table.getAttribute("style"), hidden);
-        table.setAttribute("style", nextStyle);
-        if (hidden) {
-          table.setAttribute("data-hide-borders", "true");
-        } else {
-          table.removeAttribute("data-hide-borders");
-        }
-      });
-    };
-
-    const findSelectedTablePos = (): number | null => {
-      const { $from } = editor.state.selection;
-      for (let depth = $from.depth; depth > 0; depth -= 1) {
-        if ($from.node(depth).type.name === "table") {
-          return $from.before(depth);
-        }
-      }
-      return null;
-    };
-
-    const tablePositions: number[] = [];
-    editor.state.doc.descendants((node, pos) => {
-      if (node.type.name === "table") {
-        tablePositions.push(pos);
-      }
-    });
-
-    if (tablePositions.length === 0) {
-      setError("Insert a table first");
-      return;
-    }
-
-    const selectedPos = findSelectedTablePos();
-    if (selectedPos !== null) {
-      lastTablePosRef.current = selectedPos;
-    }
-
-    const transaction = editor.state.tr;
-    tablePositions.forEach((pos) => {
-      const tableNode = editor.state.doc.nodeAt(pos);
-      if (!tableNode || tableNode.type.name !== "table") {
-        return;
-      }
-      transaction.setNodeMarkup(pos, undefined, {
-        ...tableNode.attrs,
-        style: withHeaderCellBorderStyle((tableNode.attrs.style as string | undefined) ?? "", hidden),
-        hideBorders: hidden
-      });
-    });
-
-    editor.view.dispatch(transaction);
-    syncVisibleTableBorders();
-  };
-
-  const currentTableBordersLabel = () => {
-    if (!editor) {
-      return "Shown";
-    }
-
-    const fromSelection = (() => {
-      const { $from } = editor.state.selection;
-      for (let depth = $from.depth; depth > 0; depth -= 1) {
-        if ($from.node(depth).type.name === "table") {
-          const pos = $from.before(depth);
-          const node = editor.state.doc.nodeAt(pos);
-          return Boolean(node?.attrs?.hideBorders);
-        }
-      }
-      return null;
-    })();
-
-    if (fromSelection !== null) {
-      return fromSelection ? "Hidden" : "Shown";
-    }
-
-    const fallbackPos = lastTablePosRef.current;
-    if (fallbackPos === null) {
-      return "Shown";
-    }
-
-    const node = editor.state.doc.nodeAt(fallbackPos);
-    return Boolean(node?.attrs?.hideBorders) ? "Hidden" : "Shown";
-  };
-
-  const setCellVerticalAlign = (align: "top" | "middle" | "bottom") => {
-    const ok = editor?.chain().focus().setCellAttribute("verticalAlign", align).run();
-    if (!ok) {
-      setError("Place the cursor inside a table cell first");
-    }
-  };
-
-  const setCellHorizontalAlign = (align: "left" | "center" | "right") => {
-    const ok = editor?.chain().focus().setCellAttribute("textAlign", align).run();
-    if (!ok) {
-      setError("Place the cursor inside a table cell first");
     }
   };
 
@@ -1284,196 +534,11 @@ export default function HeadersPage() {
             <Text fw={500} size="sm">
               Header Content
             </Text>
-            <div className="header-editor-shell">
-              <div className="header-editor-toolbar">
-                <ActionIcon
-                  variant={editor?.isActive("bold") ? "filled" : "light"}
-                  onClick={() => editor?.chain().focus().toggleBold().run()}
-                  title="Bold"
-                >
-                  <IconBold size={16} />
-                </ActionIcon>
-                <ActionIcon
-                  variant={editor?.isActive("italic") ? "filled" : "light"}
-                  onClick={() => editor?.chain().focus().toggleItalic().run()}
-                  title="Italic"
-                >
-                  <IconItalic size={16} />
-                </ActionIcon>
-                <ActionIcon
-                  variant={editor?.isActive("underline") ? "filled" : "light"}
-                  onClick={() => editor?.chain().focus().toggleUnderline().run()}
-                  title="Underline"
-                >
-                  <IconUnderline size={16} />
-                </ActionIcon>
-                <ActionIcon
-                  variant={editor?.isActive("heading", { level: 1 }) ? "filled" : "light"}
-                  onClick={() => editor?.chain().focus().toggleHeading({ level: 1 }).run()}
-                  title="Heading"
-                >
-                  <IconH1 size={16} />
-                </ActionIcon>
-                <Menu shadow="md" width={220} position="bottom-start">
-                  <Menu.Target>
-                    <Button
-                      variant="light"
-                      size="compact-sm"
-                      rightSection={<IconChevronDown size={14} />}
-                      leftSection={<IconTable size={14} />}
-                    >
-                      Table
-                    </Button>
-                  </Menu.Target>
-                  <Menu.Dropdown>
-                    <Menu.Label>
-                      <Group justify="space-between" wrap="nowrap" gap={8}>
-                        <Text size="xs" c="dimmed">
-                          Borders
-                        </Text>
-                        <Badge size="xs" variant="light" color={currentTableBordersLabel() === "Hidden" ? "orange" : "blue"}>
-                          {currentTableBordersLabel()}
-                        </Badge>
-                      </Group>
-                    </Menu.Label>
-                    <Menu.Item
-                      leftSection={<IconTablePlus size={14} />}
-                      onClick={() => editor?.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run()}
-                    >
-                      Insert table
-                    </Menu.Item>
-                    <Menu.Divider />
-                    <Menu.Item onClick={() => editor?.chain().focus().addRowBefore().run()}>Add row above</Menu.Item>
-                    <Menu.Item onClick={() => editor?.chain().focus().addRowAfter().run()}>Add row below</Menu.Item>
-                    <Menu.Item color="red" onClick={() => requestDeleteTableElement("row")}>Delete row</Menu.Item>
-                    <Menu.Divider />
-                    <Menu.Item onClick={() => editor?.chain().focus().addColumnBefore().run()}>Add column left</Menu.Item>
-                    <Menu.Item onClick={() => editor?.chain().focus().addColumnAfter().run()}>Add column right</Menu.Item>
-                    <Menu.Item color="red" onClick={() => requestDeleteTableElement("column")}>Delete column</Menu.Item>
-                    <Menu.Divider />
-                    <Menu.Item onClick={() => editor?.chain().focus().mergeCells().run()}>Merge cells</Menu.Item>
-                    <Menu.Item onClick={() => editor?.chain().focus().splitCell().run()}>Split cell</Menu.Item>
-                    <Menu.Divider />
-                    <Menu.Item onClick={() => setCellVerticalAlign("top")}>Cell align top</Menu.Item>
-                    <Menu.Item onClick={() => setCellVerticalAlign("middle")}>Cell align middle</Menu.Item>
-                    <Menu.Item onClick={() => setCellVerticalAlign("bottom")}>Cell align bottom</Menu.Item>
-                    <Menu.Divider />
-                    <Menu.Item onClick={() => setCellHorizontalAlign("left")}>Cell text left</Menu.Item>
-                    <Menu.Item onClick={() => setCellHorizontalAlign("center")}>Cell text center</Menu.Item>
-                    <Menu.Item onClick={() => setCellHorizontalAlign("right")}>Cell text right</Menu.Item>
-                    <Menu.Divider />
-                    <Menu.Item onClick={() => setTableBordersHidden(true)}>Hide borders</Menu.Item>
-                    <Menu.Item onClick={() => setTableBordersHidden(false)}>Show borders</Menu.Item>
-                    <Menu.Divider />
-                    <Menu.Item color="red" onClick={() => requestDeleteTableElement("table")}>
-                      Delete table
-                    </Menu.Item>
-                  </Menu.Dropdown>
-                </Menu>
-                <Menu shadow="md" width={140} position="bottom-start">
-                  <Menu.Target>
-                    <Button variant="light" size="compact-sm" rightSection={<IconChevronDown size={14} />}>
-                      {fontSizeLabel()}
-                    </Button>
-                  </Menu.Target>
-                  <Menu.Dropdown>
-                    <Menu.Item onClick={() => setFontSize("12px")}>12px</Menu.Item>
-                    <Menu.Item onClick={() => setFontSize("14px")}>14px</Menu.Item>
-                    <Menu.Item onClick={() => setFontSize("16px")}>16px</Menu.Item>
-                    <Menu.Item onClick={() => setFontSize("18px")}>18px</Menu.Item>
-                    <Menu.Item onClick={() => setFontSize("20px")}>20px</Menu.Item>
-                    <Menu.Item onClick={() => setFontSize("24px")}>24px</Menu.Item>
-                    <Menu.Item onClick={() => setFontSize("30px")}>30px</Menu.Item>
-                    <Menu.Item onClick={() => setFontSize("36px")}>36px</Menu.Item>
-                    <Menu.Divider />
-                    <Menu.Item onClick={() => setFontSize(null)}>Reset size</Menu.Item>
-                  </Menu.Dropdown>
-                </Menu>
-                <Menu shadow="md" width={180} position="bottom-start">
-                  <Menu.Target>
-                    <Button variant="light" size="compact-sm" rightSection={<IconChevronDown size={14} />}>
-                      {fontFamilyLabel()}
-                    </Button>
-                  </Menu.Target>
-                  <Menu.Dropdown>
-                    {FONT_FAMILY_OPTIONS.map((option) => (
-                      <Menu.Item key={option.value} onClick={() => setFontFamily(option.value)}>
-                        {option.label}
-                      </Menu.Item>
-                    ))}
-                    <Menu.Divider />
-                    <Menu.Item onClick={() => setFontFamily(null)}>Reset font</Menu.Item>
-                  </Menu.Dropdown>
-                </Menu>
-                <div
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 6,
-                    padding: "2px 6px",
-                    borderLeft: "1px solid #dee2e6"
-                  }}
-                >
-                  <Text size="xs" c="dimmed">
-                    Text
-                  </Text>
-                  <Group gap={4} wrap="nowrap">
-                    <ActionIcon
-                      variant={editor?.isActive({ textAlign: "left" }) ? "filled" : "light"}
-                      onClick={() => editor?.chain().focus().setTextAlign("left").run()}
-                      title="Text align left"
-                    >
-                      <IconAlignLeft size={16} />
-                    </ActionIcon>
-                    <ActionIcon
-                      variant={editor?.isActive({ textAlign: "center" }) ? "filled" : "light"}
-                      onClick={() => editor?.chain().focus().setTextAlign("center").run()}
-                      title="Text align center"
-                    >
-                      <IconAlignCenter size={16} />
-                    </ActionIcon>
-                    <ActionIcon
-                      variant={editor?.isActive({ textAlign: "right" }) ? "filled" : "light"}
-                      onClick={() => editor?.chain().focus().setTextAlign("right").run()}
-                      title="Text align right"
-                    >
-                      <IconAlignRight size={16} />
-                    </ActionIcon>
-                  </Group>
-                </div>
-                <div
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 6,
-                    padding: "2px 6px",
-                    borderLeft: "1px solid #dee2e6"
-                  }}
-                >
-                  <Text size="xs" c="dimmed">
-                    Image
-                  </Text>
-                  <Group gap={4} wrap="nowrap">
-                    <ActionIcon variant="light" onClick={() => setImageAlign("left")} title="Image align left">
-                      <IconAlignLeft size={16} />
-                    </ActionIcon>
-                    <ActionIcon variant="light" onClick={() => setImageAlign("center")} title="Image align center">
-                      <IconAlignCenter size={16} />
-                    </ActionIcon>
-                    <ActionIcon variant="light" onClick={() => setImageAlign("right")} title="Image align right">
-                      <IconAlignRight size={16} />
-                    </ActionIcon>
-                  </Group>
-                </div>
-              </div>
-
-              <div className="header-editor-content">
-                <EditorContent editor={editor} />
-              </div>
-            </div>
-            <Text size="xs" c="dimmed">
-              Use the toolbar to style text, edit table structure (rows, columns, merge/split), and align text or images inside your header.
-            </Text>
+            <SimpleEditor
+              key={headerEditorKey}
+              initialContent={headerContentHTML || undefined}
+              onContentChange={setHeaderContentHTML}
+            />
           </Stack>
 
           <Group justify="space-between">
@@ -1508,31 +573,6 @@ export default function HeadersPage() {
             </Button>
             <Button color="red" onClick={() => void confirmDeleteHeader()}>
               Delete header
-            </Button>
-          </Group>
-        </Stack>
-      </Modal>
-
-      <Modal
-        opened={Boolean(tableDeletionAction)}
-        onClose={() => setTableDeletionAction(null)}
-        title="Confirm table change"
-        centered
-      >
-        <Stack>
-          <Text size="sm">
-            {tableDeletionAction === "row"
-              ? "Delete the selected table row?"
-              : tableDeletionAction === "column"
-                ? "Delete the selected table column?"
-                : "Delete the current table?"}
-          </Text>
-          <Group justify="flex-end">
-            <Button variant="default" onClick={() => setTableDeletionAction(null)}>
-              Cancel
-            </Button>
-            <Button color="red" onClick={confirmDeleteTableElement}>
-              Confirm
             </Button>
           </Group>
         </Stack>

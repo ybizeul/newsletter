@@ -1,4 +1,4 @@
-import { type ClipboardEvent, type MouseEvent as ReactMouseEvent, useEffect, useMemo, useRef, useState } from "react";
+import { type MouseEvent as ReactMouseEvent, type ClipboardEvent as ReactClipboardEvent, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActionIcon,
   Badge,
@@ -28,13 +28,10 @@ import {
 } from "@mantine/core";
 import { useMediaQuery } from "@mantine/hooks";
 import { IconCheck, IconChevronDown, IconMail, IconPencil, IconPointFilled, IconSearch, IconUserFilled } from "@tabler/icons-react";
-import MDEditor from "@uiw/react-md-editor";
+import { SimpleEditor } from "@/components/tiptap-templates/simple/simple-editor";
 import { renderToStaticMarkup } from "react-dom/server";
 import { useParams } from "react-router-dom";
-import "@uiw/react-md-editor/markdown-editor.css";
-import "@uiw/react-markdown-preview/markdown.css";
-import "../styles/markdown-editor.css";
-import { createArticle, deleteArticle, getArticle, getNewsletter, listArticleSummaries, listNewsletterSummaries, updateArticle, updateNewsletter } from "../lib/api";
+import { createArticle, deleteArticle, getArticle, getNewsletter, listArticleSummaries, listNewsletterSummaries, renderMarkdown, updateArticle, updateNewsletter } from "../lib/api";
 import { claimArticle } from "../lib/api";
 import { useAuth } from "../lib/auth";
 import type { TablerIconMap } from "../lib/tablerIconsBrowser";
@@ -46,7 +43,6 @@ const DEFAULT_TOPIC_ICON_BG = "#228be6";
 const DEFAULT_TOPIC_ICON_STROKE = "#ffffff";
 const ARTICLES_PANE_WIDTH_STORAGE_KEY = "newsletter.articles.pane.width";
 const FAVORITE_NEWSLETTER_ID_STORAGE_KEY = "newsletter.favorite.id";
-const NEWSLETTER_MAX_CONTENT_WIDTH_PX = 680;
 const ICON_PNG_RASTER_SIZE = 90;
 const RECENT_ARTICLES_WINDOW_MS = 30 * 24 * 60 * 60 * 1000;
 const TAG_COLORS = ["blue", "teal", "cyan", "grape", "indigo", "violet", "lime", "orange", "pink"] as const;
@@ -137,7 +133,7 @@ function buildTopicIconIllustration(iconMap: TablerIconMap | null, iconName: str
 
 async function rasterizeSvgDataUrlToPngDataUrl(svgDataUrl: string): Promise<string> {
   return await new Promise<string>((resolve, reject) => {
-    const img = new Image();
+    const img = new window.Image();
     img.onload = () => {
       const canvas = document.createElement("canvas");
       const sourceWidth = img.naturalWidth || 40;
@@ -374,7 +370,34 @@ function cutByChars(input: string, maxChars: number): string {
   return `${clean.slice(0, maxChars).trimEnd()}...`;
 }
 
+function htmlPreviewText(input: string, maxLines = 3): string {
+  const withBreaks = input
+    .replace(/<\/(p|div|h[1-6]|li|tr|blockquote)>/gi, "\n")
+    .replace(/<br\s*\/?>/gi, "\n");
+  const plain = withBreaks
+    .replace(/<[^>]+>/g, " ")
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&nbsp;/g, " ")
+    .replace(/\r/g, "");
+
+  const lines = plain
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .slice(0, maxLines)
+    .map((line) => line.replace(/\s+/g, " "));
+
+  return lines.join(" ");
+}
+
 function toArticleSummary(article: Article): ArticleSummary {
+  const previewSource = article.contentHTML?.trim()
+    ? htmlPreviewText(article.contentHTML)
+    : markdownPreview(article.markdown);
   return {
     id: article.id,
     owner: article.owner,
@@ -388,7 +411,7 @@ function toArticleSummary(article: Article): ArticleSummary {
     status: article.status,
     createdAt: article.createdAt,
     updatedAt: article.updatedAt,
-    preview: cutByChars(markdownPreview(article.markdown), 180)
+    preview: cutByChars(previewSource, 180)
   };
 }
 
@@ -414,7 +437,8 @@ export default function ArticlesPage() {
   );
   const [selectedArticleId, setSelectedArticleID] = useState<string | null>(null);
   const [title, setTitle] = useState("");
-  const [markdown, setMarkdown] = useState("");
+  const [articleContentHTML, setArticleContentHTML] = useState("");
+  const [articleEditorKey, setArticleEditorKey] = useState("");
   const [isPublic, setIsPublic] = useState(true);
   const [tags, setTags] = useState<string[]>([]);
   const [topicIcon, setTopicIcon] = useState("");
@@ -436,7 +460,6 @@ export default function ArticlesPage() {
   const [articleSortMode, setArticleSortMode] = useState<"recent" | "last-used" | "most-sent">("recent");
   const [iconSearch, setIconSearch] = useState("");
   const [tagSearch, setTagSearch] = useState("");
-  const [pastedImageMap, setPastedImageMap] = useState<Record<string, string>>({});
   const [editingId, setEditingID] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -639,7 +662,8 @@ export default function ArticlesPage() {
 
   const resetForm = () => {
     setTitle("");
-    setMarkdown("");
+    setArticleContentHTML("");
+    setArticleEditorKey("");
     setIsPublic(true);
     setTags([]);
     setTopicIcon("");
@@ -648,39 +672,10 @@ export default function ArticlesPage() {
     setTopicIconBgColor(DEFAULT_TOPIC_ICON_BG);
     setTopicIconStrokeColor(DEFAULT_TOPIC_ICON_STROKE);
     setTopicIconIllustration("");
-    setPastedImageMap({});
     setEditingID(null);
     setSelectedArticleID(null);
     lastSavedDraftRef.current = "";
     setAutosaveStatus("idle");
-  };
-
-  const resolvePastedImageTokens = (input: string): string =>
-    input.replace(/paste:\/\/([a-zA-Z0-9_-]+)/g, (_, token) => pastedImageMap[token] ?? "");
-
-  const normalizeMarkdownForEditor = (
-    input: string
-  ): { normalized: string; imageMap: Record<string, string> } => {
-    const imageMap: Record<string, string> = {};
-
-    const normalized = input.replace(/!\[([^\]]*)\]\((data:image\/[^)]+)\)/g, (_, alt, dataUrl) => {
-      const token = `img_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-      imageMap[token] = dataUrl;
-      return `![${alt}](paste://${token})`;
-    });
-
-    return { normalized, imageMap };
-  };
-
-  const resolveImageSource = (src: string | undefined) => {
-    if (!src) {
-      return "";
-    }
-    if (src.startsWith("paste://")) {
-      const token = src.slice("paste://".length);
-      return pastedImageMap[token] ?? "";
-    }
-    return src;
   };
 
   const onEdit = async (article: ArticleSummary) => {
@@ -694,9 +689,22 @@ export default function ArticlesPage() {
       setTitle(fullArticle.title);
       setIsPublic(fullArticle.public !== false);
       setTags(fullArticle.tags ?? []);
-      const normalized = normalizeMarkdownForEditor(fullArticle.markdown);
-      setMarkdown(normalized.normalized);
-      setPastedImageMap(normalized.imageMap);
+
+      let htmlContent: string;
+      if (fullArticle.contentHTML?.trim()) {
+        htmlContent = fullArticle.contentHTML;
+      } else if (fullArticle.markdown?.trim()) {
+        try {
+          htmlContent = await renderMarkdown(fullArticle.markdown);
+        } catch {
+          htmlContent = "<p></p>";
+        }
+      } else {
+        htmlContent = "<p></p>";
+      }
+      setArticleContentHTML(htmlContent || "");
+      setArticleEditorKey(fullArticle.id);
+
       setTopicIcon(fullArticle.topicIcon ?? "");
       setCustomIconImageDataUrl(
         fullArticle.topicIcon
@@ -713,7 +721,7 @@ export default function ArticlesPage() {
       );
       lastSavedDraftRef.current = JSON.stringify({
         title: fullArticle.title,
-        markdown: fullArticle.markdown,
+        contentHTML: htmlContent,
         public: fullArticle.public !== false,
         tags: fullArticle.tags ?? [],
         topicIcon: fullArticle.topicIcon ?? "",
@@ -782,7 +790,7 @@ export default function ArticlesPage() {
     };
   }, [customIconImageDataUrl, topicIcon, generatedTopicIconSource]);
 
-  const onPasteTopicIconImage = (event: ClipboardEvent<HTMLDivElement>) => {
+  const onPasteTopicIconImage = (event: ReactClipboardEvent<HTMLDivElement>) => {
     const applySvgMarkup = (svgMarkup: string) => {
       setError(null);
       setTopicIcon("");
@@ -791,7 +799,7 @@ export default function ArticlesPage() {
     };
 
     const clipboardData = event.clipboardData;
-    const items = Array.from(clipboardData.items);
+    const items = Array.from(clipboardData.items) as DataTransferItem[];
 
     // Prefer textual clipboard payloads first: many tools provide SVG text plus a raster preview image.
     const syncTextPayload = [
@@ -981,7 +989,8 @@ export default function ArticlesPage() {
 
   const buildArticleDraftPayload = () => ({
     title: title.trim(),
-    markdown: resolvePastedImageTokens(markdown.trim()),
+    markdown: "",
+    contentHTML: articleContentHTML,
     public: isPublic,
     tags,
     topicIcon: topicIcon.trim(),
@@ -1081,7 +1090,7 @@ export default function ArticlesPage() {
         window.clearTimeout(autosaveTimerRef.current);
       }
     };
-  }, [editingId, title, markdown, isPublic, tags, topicIcon, topicIconIllustration, pastedImageMap]);
+  }, [editingId, title, articleContentHTML, isPublic, tags, topicIcon, topicIconIllustration]);
 
   useEffect(() => () => {
     if (autosaveTimerRef.current !== null) {
@@ -1139,6 +1148,7 @@ export default function ArticlesPage() {
         public: source.public !== false,
         title: `${source.title} (copy)`,
         markdown: source.markdown,
+        contentHTML: source.contentHTML ?? "",
         tags: source.tags ?? [],
         topicIcon: source.topicIcon ?? "",
         illustration: source.illustration ?? "",
@@ -1174,116 +1184,6 @@ export default function ArticlesPage() {
       setError(err instanceof Error ? err.message : "Failed to claim article");
     } finally {
       setIsClaimingArticle(false);
-    }
-  };
-
-  const insertAtCursor = (
-    target: HTMLTextAreaElement,
-    currentText: string,
-    insertion: string
-  ): string => {
-    const start = target.selectionStart ?? currentText.length;
-    const end = target.selectionEnd ?? currentText.length;
-    const next = currentText.slice(0, start) + insertion + currentText.slice(end);
-
-    requestAnimationFrame(() => {
-      const pos = start + insertion.length;
-      target.selectionStart = pos;
-      target.selectionEnd = pos;
-    });
-
-    return next;
-  };
-
-  const insertImageMarkdownFromFile = (target: HTMLTextAreaElement, file: File) => {
-    if (!file.type.startsWith("image/")) {
-      setError("Only image files are supported");
-      return;
-    }
-
-    const reader = new FileReader();
-    reader.onload = () => {
-      if (typeof reader.result === "string") {
-        const sourceDataURL = reader.result;
-        const img = new Image();
-
-        img.onload = () => {
-          const sourceWidth = img.naturalWidth;
-          const sourceHeight = img.naturalHeight;
-
-          if (!Number.isFinite(sourceWidth) || !Number.isFinite(sourceHeight) || sourceWidth <= 0 || sourceHeight <= 0) {
-            setError("Failed to process pasted image");
-            return;
-          }
-
-          // Only downscale — never enlarge. Skip canvas entirely if image fits.
-          const token = `img_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-
-          if (sourceWidth <= NEWSLETTER_MAX_CONTENT_WIDTH_PX) {
-            setPastedImageMap((current) => ({ ...current, [token]: sourceDataURL }));
-            setMarkdown((current) =>
-              insertAtCursor(target, current, `\n![Pasted image](paste://${token})\n`)
-            );
-            return;
-          }
-
-          const targetWidth = NEWSLETTER_MAX_CONTENT_WIDTH_PX;
-          const targetHeight = Math.max(1, Math.round((sourceHeight * targetWidth) / sourceWidth));
-
-          const canvas = document.createElement("canvas");
-          canvas.width = targetWidth;
-          canvas.height = targetHeight;
-
-          const ctx = canvas.getContext("2d");
-          if (!ctx) {
-            setError("Failed to process pasted image");
-            return;
-          }
-
-          ctx.drawImage(img, 0, 0, targetWidth, targetHeight);
-
-          const jpegDataURL = canvas.toDataURL("image/jpeg", 0.8);
-          setPastedImageMap((current) => ({ ...current, [token]: jpegDataURL }));
-          setMarkdown((current) =>
-            insertAtCursor(target, current, `\n![Pasted image](paste://${token})\n`)
-          );
-        };
-
-        img.onerror = () => {
-          setError("Failed to process pasted image");
-        };
-
-        img.src = sourceDataURL;
-      }
-    };
-    reader.onerror = () => {
-      setError("Failed to read image file");
-    };
-    reader.readAsDataURL(file);
-  };
-
-  const onPasteMarkdown = (event: ClipboardEvent<HTMLTextAreaElement>) => {
-    const items = event.clipboardData.items;
-
-    for (const item of items) {
-      if (item.type.startsWith("image/")) {
-        event.preventDefault();
-        const file = item.getAsFile();
-        if (file) {
-          setError(null);
-          insertImageMarkdownFromFile(event.currentTarget, file);
-          return;
-        }
-      }
-    }
-
-    const pastedText = event.clipboardData.getData("text/plain").trim();
-    if (/(https?:\/\/\S+\.(?:png|jpe?g|gif|webp|svg))/i.test(pastedText)) {
-      event.preventDefault();
-      setError(null);
-      setMarkdown((current) =>
-        insertAtCursor(event.currentTarget, current, `\n![Pasted image](${pastedText})\n`)
-      );
     }
   };
 
@@ -1986,43 +1886,13 @@ export default function ArticlesPage() {
 
           <Input.Wrapper
             label="Content"
-            description="Compose the article body. Pasted images are embedded inline."
+            description="Compose the article body. Paste images to embed inline."
           >
-            <div data-color-mode="light">
-              <MDEditor
-                className="markdown-editor-monospace"
-                value={markdown}
-                onChange={(value) => setMarkdown(value ?? "")}
-                preview={isMobile ? "edit" : "live"}
-                height={350}
-                textareaProps={{
-                  placeholder: "Write your article content (paste image inline)",
-                  onPaste: onPasteMarkdown,
-                  style: {
-                    fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, Liberation Mono, Courier New, monospace",
-                    fontSize: 14,
-                    lineHeight: 1.6
-                  }
-                }}
-                previewOptions={{
-                  components: {
-                    img: ({ src, alt }) => {
-                      const resolvedSrc = resolveImageSource(src);
-                      if (!resolvedSrc) {
-                        return null;
-                      }
-                      return (
-                        <img
-                          src={resolvedSrc}
-                          alt={alt ?? "inline"}
-                          style={{ maxWidth: NEWSLETTER_MAX_CONTENT_WIDTH_PX, height: "auto", borderRadius: 8, display: "block", margin: "0 auto" }}
-                        />
-                      );
-                    }
-                  }
-                }}
-              />
-            </div>
+            <SimpleEditor
+              key={articleEditorKey}
+              initialContent={articleContentHTML || undefined}
+              onContentChange={setArticleContentHTML}
+            />
           </Input.Wrapper>
 
           <Group justify="space-between">

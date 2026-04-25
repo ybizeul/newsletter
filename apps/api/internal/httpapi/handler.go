@@ -62,6 +62,7 @@ type createArticleRequest struct {
 	Public          *bool    `json:"public"`
 	Title           string   `json:"title"`
 	Markdown        string   `json:"markdown"`
+	ContentHTML     string   `json:"contentHTML"`
 	Tags            []string `json:"tags"`
 	TopicIcon       string   `json:"topicIcon"`
 	Illustration    string   `json:"illustration"`
@@ -93,6 +94,7 @@ type articleSummarySource struct {
 	Public       *bool               `bson:"public,omitempty"`
 	Title        string              `bson:"title"`
 	Markdown     string              `bson:"markdown"`
+	ContentHTML  string              `bson:"contentHTML,omitempty"`
 	Tags         []string            `bson:"tags,omitempty"`
 	TopicIcon    string              `bson:"topicIcon,omitempty"`
 	Illustration string              `bson:"illustration,omitempty"`
@@ -165,6 +167,7 @@ func (h *Handler) ListArticles(w http.ResponseWriter, r *http.Request) {
 			"public":       1,
 			"title":        1,
 			"markdown":     1,
+			"contentHTML":  1,
 			"tags":         1,
 			"topicIcon":    1,
 			"illustration": 1,
@@ -208,7 +211,7 @@ func (h *Handler) ListArticles(w http.ResponseWriter, r *http.Request) {
 				Status:       raw.Status,
 				CreatedAt:    raw.CreatedAt,
 				UpdatedAt:    raw.UpdatedAt,
-				Preview:      markdownPreviewText(raw.Markdown, 3, 180),
+				Preview:      contentPreview(raw.Markdown, raw.ContentHTML, 3, 180),
 			})
 		}
 
@@ -310,6 +313,7 @@ type updateArticleRequest struct {
 	Public          *bool    `json:"public"`
 	Title           string   `json:"title"`
 	Markdown        string   `json:"markdown"`
+	ContentHTML     string   `json:"contentHTML"`
 	Tags            []string `json:"tags"`
 	TopicIcon       string   `json:"topicIcon"`
 	Illustration    string   `json:"illustration"`
@@ -353,6 +357,7 @@ func (h *Handler) UpdateArticle(w http.ResponseWriter, r *http.Request, id strin
 	setFields := bson.M{
 		"title":           strings.TrimSpace(req.Title),
 		"markdown":        req.Markdown,
+		"contentHTML":     req.ContentHTML,
 		"tags":            normalizeArticleTags(req.Tags),
 		"topicIcon":       strings.TrimSpace(req.TopicIcon),
 		"illustration":    strings.TrimSpace(req.Illustration),
@@ -942,6 +947,7 @@ type createNewsletterRequest struct {
 	Title           string   `json:"title"`
 	HeaderID        string   `json:"headerId"`
 	IntroMarkdown   string   `json:"introMarkdown"`
+	IntroHTML       string   `json:"introHTML"`
 	IncludeIndex    bool     `json:"includeIndex"`
 	ArticleIDs      []string `json:"articleIds"`
 	RecipientIDs    []string `json:"recipientIds"`
@@ -953,6 +959,7 @@ type updateNewsletterRequest struct {
 	Title           string   `json:"title"`
 	HeaderID        string   `json:"headerId"`
 	IntroMarkdown   string   `json:"introMarkdown"`
+	IntroHTML       string   `json:"introHTML"`
 	IncludeIndex    bool     `json:"includeIndex"`
 	ContentWidth    int      `json:"contentWidth"`
 	ArticleIDs      []string `json:"articleIds"`
@@ -991,6 +998,7 @@ func (h *Handler) CreateNewsletter(w http.ResponseWriter, r *http.Request) {
 		Title:           req.Title,
 		HeaderID:        strings.TrimSpace(req.HeaderID),
 		IntroMarkdown:   req.IntroMarkdown,
+		IntroHTML:       req.IntroHTML,
 		IncludeIndex:    req.IncludeIndex,
 		ArticleIDs:      req.ArticleIDs,
 		RecipientIDs:    recipientIDs,
@@ -1020,6 +1028,7 @@ func (h *Handler) ListNewsletters(w http.ResponseWriter, r *http.Request) {
 			"title":         1,
 			"headerId":      1,
 			"introMarkdown": 1,
+			"introHTML":     1,
 			"includeIndex":  1,
 			"articleIds":    1,
 			"recipientIds":  1,
@@ -1038,6 +1047,7 @@ func (h *Handler) ListNewsletters(w http.ResponseWriter, r *http.Request) {
 			Title         string                 `bson:"title"`
 			HeaderID      string                 `bson:"headerId,omitempty"`
 			IntroMarkdown string                 `bson:"introMarkdown"`
+			IntroHTML     string                 `bson:"introHTML,omitempty"`
 			IncludeIndex  bool                   `bson:"includeIndex"`
 			ArticleIDs    []string               `bson:"articleIds"`
 			RecipientIDs  []string               `bson:"recipientIds"`
@@ -1098,7 +1108,7 @@ func (h *Handler) ListNewsletters(w http.ResponseWriter, r *http.Request) {
 				SentAt:        raw.SentAt,
 				CreatedAt:     raw.CreatedAt,
 				UpdatedAt:     raw.UpdatedAt,
-				Preview:       markdownPreviewText(raw.IntroMarkdown, 3, 180),
+				Preview:       contentPreview(raw.IntroMarkdown, raw.IntroHTML, 3, 180),
 			})
 		}
 
@@ -1256,6 +1266,7 @@ func (h *Handler) UpdateNewsletter(w http.ResponseWriter, r *http.Request, id st
 			"title":           strings.TrimSpace(req.Title),
 			"headerId":        strings.TrimSpace(req.HeaderID),
 			"introMarkdown":   req.IntroMarkdown,
+			"introHTML":       req.IntroHTML,
 			"includeIndex":    req.IncludeIndex,
 			"contentWidth":    req.ContentWidth,
 			"articleIds":      req.ArticleIDs,
@@ -1741,11 +1752,18 @@ func (h *Handler) renderNewsletter(ctx context.Context, newsletter model.Newslet
 		}
 	}
 
-	introHTML, err := renderMarkdownToSafeHTML(newsletter.IntroMarkdown)
-	if err != nil {
-		return "", "", err
+	var introHTML string
+	if strings.TrimSpace(newsletter.IntroHTML) != "" {
+		introHTML = sanitizeHTML(newsletter.IntroHTML)
+	} else {
+		var err error
+		introHTML, err = renderMarkdownToSafeHTML(newsletter.IntroMarkdown)
+		if err != nil {
+			return "", "", err
+		}
 	}
 	introHTML = enforceImageFullWidth(introHTML)
+	introHTML = enforceContentTableStyles(introHTML)
 
 	var body strings.Builder
 	body.WriteString("<!doctype html><html><body style=\"margin:0;padding:0;font-family:Arial,Helvetica,sans-serif;line-height:1.5;color:#111\">\n")
@@ -1763,7 +1781,11 @@ func (h *Handler) renderNewsletter(ctx context.Context, newsletter model.Newslet
 	if headerText != "" {
 		text.WriteString(headerText + "\n\n")
 	}
-	text.WriteString(newsletter.IntroMarkdown + "\n\n")
+	if strings.TrimSpace(newsletter.IntroHTML) != "" {
+		text.WriteString(stripHTMLTags(newsletter.IntroHTML) + "\n\n")
+	} else {
+		text.WriteString(newsletter.IntroMarkdown + "\n\n")
+	}
 
 	if newsletter.IncludeIndex && len(articles) > 0 {
 		body.WriteString("<table role=\"presentation\" cellpadding=\"0\" cellspacing=\"0\" width=\"100%\" style=\"margin:0 0 24px;border-collapse:collapse;background:#f1f3f5;border:1px solid #e9ecef\">\n")
@@ -1787,11 +1809,18 @@ func (h *Handler) renderNewsletter(ctx context.Context, newsletter model.Newslet
 	}
 
 	for _, article := range articles {
-		articleHTML, err := renderMarkdownToSafeHTML(article.Markdown)
-		if err != nil {
-			return "", "", err
+		var articleHTML string
+		if strings.TrimSpace(article.ContentHTML) != "" {
+			articleHTML = sanitizeHTML(article.ContentHTML)
+		} else {
+			var err error
+			articleHTML, err = renderMarkdownToSafeHTML(article.Markdown)
+			if err != nil {
+				return "", "", err
+			}
 		}
 		articleHTML = enforceImageFullWidth(articleHTML)
+		articleHTML = enforceContentTableStyles(articleHTML)
 		illustration := strings.TrimSpace(article.Illustration)
 		hasIconIllustration := strings.TrimSpace(article.IconSource) != "" ||
 			regexp.MustCompile(`(?i)^data:image/(svg\+xml|png|jpeg|gif)(?:;[^,]*)?,`).MatchString(illustration)
@@ -1817,13 +1846,17 @@ func (h *Handler) renderNewsletter(ctx context.Context, newsletter model.Newslet
 			body.WriteString("<table role=\"presentation\" cellpadding=\"0\" cellspacing=\"0\" width=\"100%\" style=\"border-collapse:collapse;margin:0 0 8px;table-layout:fixed\"><tr><td style=\"vertical-align:middle;word-break:break-word;overflow-wrap:anywhere;font-size:20px;line-height:26px;color:#111111;mso-line-height-rule:exactly;\"><b style=\"font-weight:700;mso-bidi-font-weight:bold;\">" + html.EscapeString(article.Title) + "</b></td></tr></table>\n")
 		}
 		if illustration != "" && !hasIconIllustration {
-			body.WriteString("<p style=\"margin:12px 0\"><img src=\"" + html.EscapeString(illustration) + "\" alt=\"" + html.EscapeString(article.Title) + "\" style=\"max-width:100%;width:auto;height:auto;display:block;margin:0 auto;float:none;border-radius:8px\" /></p>\n")
+			body.WriteString(`<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;margin:12px 0;"><tr><td align="center" style="text-align:center;padding:0;"><img src="` + html.EscapeString(illustration) + `" alt="` + html.EscapeString(article.Title) + `" style="max-width:100%;width:auto;height:auto;display:block;margin:4px auto;float:none;border:0;" /></td></tr></table>` + "\n")
 		}
 		body.WriteString(articleHTML + "\n")
 		body.WriteString("</div>\n")
 
 		text.WriteString(article.Title + "\n")
-		text.WriteString(article.Markdown + "\n\n")
+		if strings.TrimSpace(article.ContentHTML) != "" {
+			text.WriteString(stripHTMLTags(article.ContentHTML) + "\n\n")
+		} else {
+			text.WriteString(article.Markdown + "\n\n")
+		}
 	}
 
 	body.WriteString("</td></tr></table>\n")
@@ -1902,7 +1935,7 @@ func enforceImageFullWidth(input string) string {
 	widthAttrRe := regexp.MustCompile(`(?i)\swidth\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)`)
 	heightAttrRe := regexp.MustCompile(`(?i)\sheight\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)`)
 
-	return re.ReplaceAllStringFunc(input, func(tag string) string {
+	result := re.ReplaceAllStringFunc(input, func(tag string) string {
 		tag = widthAttrRe.ReplaceAllString(tag, "")
 		tag = heightAttrRe.ReplaceAllString(tag, "")
 		styleRe := regexp.MustCompile(`(?i)style\s*=\s*"([^"]*)"`)
@@ -1911,12 +1944,20 @@ func enforceImageFullWidth(input string) string {
 			if styleValue != "" && !strings.HasSuffix(styleValue, ";") {
 				styleValue += ";"
 			}
-			styleValue += "max-width:100%;width:auto;height:auto;display:block;margin:0 auto;float:none;"
+			styleValue += "max-width:100%;width:auto;height:auto;display:block;margin:4px auto;float:none;border:0;border-radius:0;"
 			return styleRe.ReplaceAllString(tag, `style="`+styleValue+`"`)
 		}
 
-		return strings.Replace(tag, "<img", `<img style="max-width:100%;width:auto;height:auto;display:block;margin:0 auto;float:none;"`, 1)
+		return strings.Replace(tag, "<img", `<img style="max-width:100%;width:auto;height:auto;display:block;margin:4px auto;float:none;border:0;border-radius:0;"`, 1)
 	})
+
+	// Wrap paragraph-images in centered table cells for Apple Mail compatibility.
+	// Apple Mail ignores margin:auto on block images; align="center" + text-align is reliable.
+	pImgRe := regexp.MustCompile(`(?is)<p\b[^>]*>\s*(<img\b[^>]*>)\s*</p>`)
+	result = pImgRe.ReplaceAllString(result,
+		`<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;"><tr><td align="center" style="text-align:center;padding:4px 0;">$1</td></tr></table>`)
+
+	return result
 }
 
 func enforceImageNaturalWidth(input string) string {
@@ -1933,11 +1974,11 @@ func enforceImageNaturalWidth(input string) string {
 			if styleValue != "" && !strings.HasSuffix(styleValue, ";") {
 				styleValue += ";"
 			}
-			styleValue += "max-width:100%;width:auto;height:auto;display:block;float:none;"
+			styleValue += "max-width:100%;width:auto;height:auto;display:block;margin:4px;float:none;border:0;border-radius:0;"
 			return styleRe.ReplaceAllString(tag, `style="`+styleValue+`"`)
 		}
 
-		return strings.Replace(tag, "<img", `<img style="max-width:100%;width:auto;height:auto;display:block;float:none;"`, 1)
+		return strings.Replace(tag, "<img", `<img style="max-width:100%;width:auto;height:auto;display:block;margin:4px;float:none;border:0;border-radius:0;"`, 1)
 	})
 }
 
@@ -2261,6 +2302,116 @@ func enforceTableCellAlignment(input string) string {
 	return output
 }
 
+func enforceContentTableStyles(input string) string {
+	styleRe := regexp.MustCompile(`(?i)\bstyle\s*=\s*"([^"]*)"`)
+
+	ensureStyle := func(tag, defaults string) string {
+		if matches := styleRe.FindStringSubmatch(tag); len(matches) == 2 {
+			existing := matches[1]
+			if existing != "" && !strings.HasSuffix(strings.TrimSpace(existing), ";") {
+				existing += ";"
+			}
+			return styleRe.ReplaceAllString(tag, `style="`+defaults+existing+`"`)
+		}
+		return strings.Replace(tag, ">", ` style="`+defaults+`">`, 1)
+	}
+
+	ensureStyleIfMissing := func(tag string, props map[string]string) string {
+		var existingStyle string
+		if matches := styleRe.FindStringSubmatch(tag); len(matches) == 2 {
+			existingStyle = matches[1]
+		}
+		lower := strings.ToLower(existingStyle)
+		additions := ""
+		for prop, val := range props {
+			if !strings.Contains(lower, prop) {
+				additions += prop + ":" + val + ";"
+			}
+		}
+		if additions == "" && existingStyle != "" {
+			return tag
+		}
+		if existingStyle != "" {
+			if !strings.HasSuffix(strings.TrimSpace(existingStyle), ";") {
+				existingStyle += ";"
+			}
+			return styleRe.ReplaceAllString(tag, `style="`+additions+existingStyle+`"`)
+		}
+		return strings.Replace(tag, ">", ` style="`+additions+`">`, 1)
+	}
+
+	// Tables: border-collapse
+	tableRe := regexp.MustCompile(`(?i)<table\b[^>]*>`)
+	input = tableRe.ReplaceAllStringFunc(input, func(tag string) string {
+		return ensureStyleIfMissing(tag, map[string]string{"border-collapse": "collapse"})
+	})
+
+	// Table cells: border + padding
+	tdRe := regexp.MustCompile(`(?i)<td\b[^>]*>`)
+	input = tdRe.ReplaceAllStringFunc(input, func(tag string) string {
+		return ensureStyleIfMissing(tag, map[string]string{
+			"border":  "1px solid #ced4da",
+			"padding": "4px 8px",
+		})
+	})
+
+	// Table headers: border + padding + background + font-weight
+	thRe := regexp.MustCompile(`(?i)<th\b[^>]*>`)
+	input = thRe.ReplaceAllStringFunc(input, func(tag string) string {
+		return ensureStyleIfMissing(tag, map[string]string{
+			"border":           "1px solid #ced4da",
+			"padding":          "4px 8px",
+			"background-color": "#f1f3f5",
+			"font-weight":      "600",
+		})
+	})
+
+	// Paragraphs: margin
+	pRe := regexp.MustCompile(`(?i)<p\b[^>]*>`)
+	input = pRe.ReplaceAllStringFunc(input, func(tag string) string {
+		return ensureStyleIfMissing(tag, map[string]string{
+			"margin": "8px 0 0 0",
+		})
+	})
+
+	// Headings
+	headingDefaults := map[string]string{
+		"h1": "font-size:1.5em;font-weight:700;margin:1em 0 0.5em 0;",
+		"h2": "font-size:1.25em;font-weight:700;margin:1em 0 0.5em 0;",
+		"h3": "font-size:1.125em;font-weight:600;margin:1em 0 0.5em 0;",
+		"h4": "font-size:1em;font-weight:600;margin:1em 0 0.5em 0;",
+	}
+	for tag, defaults := range headingDefaults {
+		re := regexp.MustCompile(`(?i)<` + tag + `\b[^>]*>`)
+		d := defaults
+		input = re.ReplaceAllStringFunc(input, func(match string) string {
+			return ensureStyle(match, d)
+		})
+	}
+
+	// Lists: margin + padding
+	listRe := regexp.MustCompile(`(?i)<(?:ul|ol)\b[^>]*>`)
+	input = listRe.ReplaceAllStringFunc(input, func(tag string) string {
+		return ensureStyleIfMissing(tag, map[string]string{
+			"margin":       "0.5em 0",
+			"padding-left": "1.5em",
+		})
+	})
+
+	// Horizontal rules
+	hrRe := regexp.MustCompile(`(?i)<hr\b[^>]*>`)
+	input = hrRe.ReplaceAllStringFunc(input, func(tag string) string {
+		return ensureStyleIfMissing(tag, map[string]string{
+			"border":           "none",
+			"height":           "1px",
+			"background-color": "#e5e7eb",
+			"margin":           "1.5em 0",
+		})
+	})
+
+	return input
+}
+
 func enforceTableFullWidth(input string) string {
 	tableRe := regexp.MustCompile(`(?i)<table\b[^>]*>`)
 	styleRe := regexp.MustCompile(`(?i)\bstyle\s*=\s*"([^"]*)"`)
@@ -2294,6 +2445,89 @@ func enforceTableFullWidth(input string) string {
 
 		return updated
 	})
+}
+
+func contentPreview(markdown, contentHTML string, maxLines, maxChars int) string {
+	if strings.TrimSpace(contentHTML) != "" {
+		return htmlPreviewText(contentHTML, maxLines, maxChars)
+	}
+	return markdownPreviewText(markdown, maxLines, maxChars)
+}
+
+func htmlPreviewText(input string, maxLines, maxChars int) string {
+	// Insert newlines before block-level closing tags so text from different
+	// paragraphs/divs/headings doesn't merge together after tag stripping.
+	blockBoundary := regexp.MustCompile(`(?i)</(p|div|h[1-6]|li|tr|blockquote)>`)
+	s := blockBoundary.ReplaceAllString(input, "\n")
+	brRe := regexp.MustCompile(`(?i)<br\s*/?>`)
+	s = brRe.ReplaceAllString(s, "\n")
+	s = regexp.MustCompile(`<[^>]+>`).ReplaceAllString(s, " ")
+	s = html.UnescapeString(s)
+	s = strings.ReplaceAll(s, "\r", "")
+
+	lines := strings.Split(s, "\n")
+	normalized := make([]string, 0, maxLines)
+	for _, line := range lines {
+		trimmed := strings.Join(strings.Fields(strings.TrimSpace(line)), " ")
+		if trimmed == "" {
+			continue
+		}
+		normalized = append(normalized, trimmed)
+		if len(normalized) >= maxLines {
+			break
+		}
+	}
+
+	joined := strings.Join(normalized, " ")
+	if len(joined) <= maxChars {
+		return joined
+	}
+	return strings.TrimSpace(joined[:maxChars]) + "..."
+}
+
+func stripHTMLTags(input string) string {
+	stripped := regexp.MustCompile(`<[^>]+>`).ReplaceAllString(input, " ")
+	stripped = strings.Join(strings.Fields(stripped), " ")
+	return strings.TrimSpace(stripped)
+}
+
+func sanitizeHTML(htmlInput string) string {
+	policy := bluemonday.UGCPolicy()
+	policy.RequireParseableURLs(false)
+	policy.AllowDataURIImages()
+	policy.AllowURLSchemes("http", "https", "data")
+	policy.AllowAttrs("src").Matching(regexp.MustCompile(`^(?i)(https?://|data:image/)`)).OnElements("img")
+	policy.AllowAttrs("alt", "title").OnElements("img")
+	policy.AllowAttrs("href").OnElements("a")
+	policy.AllowAttrs("style").OnElements(
+		"p", "span", "div",
+		"table", "thead", "tbody", "tfoot", "tr", "th", "td",
+		"h1", "h2", "h3", "h4", "h5", "h6",
+		"ul", "ol", "li",
+		"strong", "em", "u", "a", "img",
+		"blockquote",
+	)
+	styleValuePattern := regexp.MustCompile(`(?i)^[a-z0-9\s#(),.%'"\-+/]+$`)
+	policy.AllowStyles(
+		"text-align", "font-size", "font-family", "font-weight", "font-style",
+		"text-decoration", "line-height", "color", "background-color",
+		"vertical-align", "width", "max-width", "height",
+		"display", "margin", "margin-left", "margin-right", "margin-top", "margin-bottom",
+		"border", "border-left", "border-collapse", "table-layout",
+		"padding", "padding-left", "padding-right", "padding-top", "padding-bottom",
+	).Matching(styleValuePattern).OnElements(
+		"p", "span", "div",
+		"table", "thead", "tbody", "tfoot", "tr", "th", "td",
+		"h1", "h2", "h3", "h4", "h5", "h6",
+		"ul", "ol", "li",
+		"strong", "em", "u", "a", "img",
+		"blockquote",
+	)
+	policy.AllowElements("table", "thead", "tbody", "tfoot", "tr", "th", "td", "blockquote")
+	policy.AllowAttrs("align", "valign", "colspan", "rowspan").OnElements("th", "td")
+	sanitized := policy.Sanitize(htmlInput)
+	sanitized = strings.ReplaceAll(sanitized, "<blockquote>", `<blockquote style="border-left:4px solid #ccc;background-color:#f5f5f5;margin:1em 0;padding:0.75em 1em">`)
+	return sanitized
 }
 
 func renderMarkdownToSafeHTML(markdown string) (string, error) {

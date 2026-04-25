@@ -19,6 +19,7 @@ type Newsletter struct {
 	Title           string           `bson:"title" json:"title"`
 	HeaderID        string           `bson:"headerId,omitempty" json:"headerId,omitempty"`
 	IntroMarkdown   string           `bson:"introMarkdown" json:"introMarkdown"`
+	IntroHTML       string           `bson:"introHTML,omitempty" json:"introHTML,omitempty"`
 	IncludeIndex    bool             `bson:"includeIndex" json:"includeIndex"`
 	ArticleIDs      []string         `bson:"articleIds" json:"articleIds"`
 	RecipientIDs    []string         `bson:"recipientIds" json:"recipientIds"`
