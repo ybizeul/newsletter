@@ -466,6 +466,16 @@ export default function ArticlesPage() {
     () => new Set(allNewsletterSummaries.flatMap((n) => n.articleIds)),
     [allNewsletterSummaries]
   );
+
+  const newsletterCountByArticleId = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const newsletter of allNewsletterSummaries) {
+      for (const articleId of newsletter.articleIds) {
+        counts.set(articleId, (counts.get(articleId) ?? 0) + 1);
+      }
+    }
+    return counts;
+  }, [allNewsletterSummaries]);
   const articleFilterLabel = articleSmartFilter === "mine"
     ? "Mine"
     : articleSmartFilter === "others"
@@ -1624,9 +1634,32 @@ export default function ArticlesPage() {
                     </Group>
                   ) : null}
                   {previewText ? (
-                    <Text size="xs" c="dimmed" lineClamp={3}>
-                      {previewText}
-                    </Text>
+                    <Group gap={6} align="center" wrap="nowrap">
+                      <Text size="xs" c="dimmed" lineClamp={3} style={{ flex: 1 }}>
+                        {previewText}
+                      </Text>
+                      {(newsletterCountByArticleId.get(article.id) ?? 0) > 0 ? (
+                        <Tooltip label={`Used in ${newsletterCountByArticleId.get(article.id)} newsletter${(newsletterCountByArticleId.get(article.id) ?? 0) > 1 ? "s" : ""}`} position="top" withArrow>
+                          <div style={{
+                            display: "inline-flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            minWidth: 18,
+                            height: 18,
+                            padding: "0 4px",
+                            borderRadius: 6,
+                            backgroundColor: "#b3c0cc",
+                            color: "#fff",
+                            fontSize: 11,
+                            fontWeight: 600,
+                            lineHeight: 1,
+                            flexShrink: 0
+                          }}>
+                            {newsletterCountByArticleId.get(article.id)}
+                          </div>
+                        </Tooltip>
+                      ) : null}
+                    </Group>
                   ) : null}
                   {(article.public === false && (article.owner ?? "").trim() !== "") || (article.tags && article.tags.length > 0) ? (
                     <Group gap={4} wrap="wrap">
