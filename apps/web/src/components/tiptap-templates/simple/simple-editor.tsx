@@ -204,7 +204,7 @@ export function SimpleEditor({
   onContentChange?: (html: string) => void
 }) {
   const isMobile = useIsBreakpoint()
-  const { height: _height } = useWindowSize()
+  useWindowSize()
   const [mobileView, setMobileView] = useState<"main" | "highlighter" | "link">(
     "main"
   )
@@ -288,7 +288,7 @@ export function SimpleEditor({
     return () => { editor.off("update", handler) }
   }, [editor, onContentChange])
 
-  const _rect = useCursorVisibility({
+  useCursorVisibility({
     editor,
     overlayHeight: toolbarRef.current?.getBoundingClientRect().height ?? 0,
   })
