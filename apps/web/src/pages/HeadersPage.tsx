@@ -391,7 +391,7 @@ export default function HeadersPage() {
     >
       {!isMobile || !isMobileEditorOpen ? (
       <div style={{ overflow: "hidden" }}>
-        <Group justify="space-between" p="sm" style={{ borderBottom: "1px solid #e9ecef" }}>
+        <Group justify="space-between" p="sm" style={{ borderBottom: "1px solid var(--mantine-color-default-border)" }}>
           <Text fw={600}>Headers ({headers.length})</Text>
           <Group gap="xs">
             <Button
@@ -423,9 +423,9 @@ export default function HeadersPage() {
                 onClick={() => void onSelectHeader(header)}
                 style={{
                   padding: 12,
-                  borderBottom: "1px solid #f1f3f5",
+                  borderBottom: "1px solid var(--mantine-color-default-border)",
                   cursor: "pointer",
-                  backgroundColor: selectedHeaderId === header.id ? "#f1fbff" : "transparent"
+                  backgroundColor: selectedHeaderId === header.id ? "var(--mantine-primary-color-light)" : "transparent"
                 }}
               >
                 <Stack gap={6} style={{ flex: 1 }}>
@@ -483,7 +483,7 @@ export default function HeadersPage() {
           width: 8,
           cursor: "col-resize",
           zIndex: 20,
-          background: "linear-gradient(to right, transparent 3px, #e9ecef 3px, #e9ecef 4px, transparent 4px)"
+          background: "linear-gradient(to right, transparent 3px, var(--mantine-color-default-border) 3px, var(--mantine-color-default-border) 4px, transparent 4px)"
         }}
       />
       ) : null}

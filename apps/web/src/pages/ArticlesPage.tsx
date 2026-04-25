@@ -1395,7 +1395,7 @@ export default function ArticlesPage() {
     >
       {!isMobile || !isMobileEditorOpen ? (
       <div style={{ overflow: "hidden" }}>
-        <Group justify="space-between" p="sm" style={{ borderBottom: "1px solid #e9ecef" }}>
+        <Group justify="space-between" p="sm" style={{ borderBottom: "1px solid var(--mantine-color-default-border)" }}>
           <Text fw={600}>{articleFilterLabel} ({sortedArticles.length})</Text>
           <Group gap="xs">
             <Button
@@ -1414,7 +1414,7 @@ export default function ArticlesPage() {
           </Group>
         </Group>
 
-        <div style={{ padding: 10, borderBottom: "1px solid #e9ecef", display: "flex", alignItems: "center", gap: 6 }}>
+        <div style={{ padding: 10, borderBottom: "1px solid var(--mantine-color-default-border)", display: "flex", alignItems: "center", gap: 6 }}>
           <TextInput
             radius="xl"
             style={{ flex: 1 }}
@@ -1506,16 +1506,16 @@ export default function ArticlesPage() {
                 onClick={() => void onEdit(article)}
                 style={{
                   padding: 12,
-                  borderBottom: "1px solid #f1f3f5",
+                  borderBottom: "1px solid var(--mantine-color-default-border)",
                   cursor: "pointer",
-                  backgroundColor: selectedArticleId === article.id ? "#f1fbff" : "transparent"
+                  backgroundColor: selectedArticleId === article.id ? "var(--mantine-primary-color-light)" : "transparent"
                 }}
               >
                 <Stack gap={6} style={{ flex: 1 }}>
                   <Group justify="space-between" align="flex-start" wrap="nowrap" gap="xs">
                     <Group gap={6} wrap="nowrap" style={{ flex: 1, minWidth: 0, justifyContent: "flex-start" }}>
                       {allNewsletterSummaries.length > 0 && !usedArticleIds.has(article.id) ? (
-                        <div style={{ width: 8, height: 8, borderRadius: "50%", backgroundColor: "#228be6", flexShrink: 0 }} />
+                        <div style={{ width: 8, height: 8, borderRadius: "50%", backgroundColor: "var(--mantine-primary-color-filled)", flexShrink: 0 }} />
                       ) : null}
                       <Text
                         fw={700}
@@ -1531,7 +1531,7 @@ export default function ArticlesPage() {
                         {titleText}
                       </Text>
                       {favoriteNewsletterArticleIds.includes(article.id) ? (
-                        <IconMail size={12} color="#228be6" style={{ flexShrink: 0 }} />
+                        <IconMail size={12} color="var(--mantine-primary-color-filled)" style={{ flexShrink: 0 }} />
                       ) : null}
                     </Group>
                     <Text size="xs" c="dimmed" style={{ flexShrink: 0 }}>
@@ -1540,7 +1540,7 @@ export default function ArticlesPage() {
                   </Group>
                   {(article.owner ?? "").trim() !== "" ? (
                     <Group gap={4} wrap="nowrap" align="center">
-                      <IconUserFilled size={11} color="#868e96" style={{ flexShrink: 0 }} />
+                      <IconUserFilled size={11} color="var(--mantine-color-gray-6)" style={{ flexShrink: 0 }} />
                       <Text size="xs" c="dimmed" style={{ minWidth: 0 }}>
                         {article.owner}
                       </Text>
@@ -1561,8 +1561,8 @@ export default function ArticlesPage() {
                             height: 18,
                             padding: "0 4px",
                             borderRadius: 6,
-                            backgroundColor: "#b3c0cc",
-                            color: "#fff",
+                            backgroundColor: "var(--mantine-color-gray-5)",
+                            color: "var(--mantine-color-white)",
                             fontSize: 11,
                             fontWeight: 600,
                             lineHeight: 1,
@@ -1623,7 +1623,7 @@ export default function ArticlesPage() {
           width: 8,
           cursor: "col-resize",
           zIndex: 20,
-          background: "linear-gradient(to right, transparent 3px, #e9ecef 3px, #e9ecef 4px, transparent 4px)"
+          background: "linear-gradient(to right, transparent 3px, var(--mantine-color-default-border) 3px, var(--mantine-color-default-border) 4px, transparent 4px)"
         }}
       />
       ) : null}
@@ -1675,7 +1675,7 @@ export default function ArticlesPage() {
                     >
                       <IconMail
                         size={14}
-                        color={isEditingArticleInFavorite ? "#228be6" : "#adb5bd"}
+                        color={isEditingArticleInFavorite ? "var(--mantine-primary-color-filled)" : "var(--mantine-color-gray-5)"}
                       />
                     </ActionIcon>
                   ) : (
@@ -1685,7 +1685,7 @@ export default function ArticlesPage() {
                       leftSection={
                         <IconMail
                           size={14}
-                          color={isEditingArticleInFavorite ? "#228be6" : "#adb5bd"}
+                          color={isEditingArticleInFavorite ? "var(--mantine-primary-color-filled)" : "var(--mantine-color-gray-5)"}
                         />
                       }
                       onClick={() => void onToggleFavoriteNewsletterMembership()}
@@ -1729,7 +1729,7 @@ export default function ArticlesPage() {
               ref={favoriteMeasureRef}
               variant="default"
               size="xs"
-              leftSection={<IconMail size={14} color={isEditingArticleInFavorite ? "#228be6" : "#adb5bd"} />}
+              leftSection={<IconMail size={14} color={isEditingArticleInFavorite ? "var(--mantine-primary-color-filled)" : "var(--mantine-color-gray-5)"} />}
               style={{ position: "absolute", visibility: "hidden", pointerEvents: "none", height: 0, overflow: "hidden" }}
               tabIndex={-1}
               aria-hidden
@@ -1751,11 +1751,11 @@ export default function ArticlesPage() {
                 width: 40,
                 height: 40,
                 borderRadius: 9999,
-                border: "1px solid #dee2e6",
+                border: "1px solid var(--mantine-color-default-border)",
                 display: "inline-flex",
                 alignItems: "center",
                 justifyContent: "center",
-                  background: topicIconIllustration ? "#fff" : "#f8f9fa",
+                  background: topicIconIllustration ? "var(--mantine-color-body)" : "var(--mantine-color-default)",
                 cursor: "pointer",
                 padding: 0,
                 overflow: "hidden",
@@ -1948,11 +1948,11 @@ export default function ArticlesPage() {
                   width: 96,
                   height: 96,
                   borderRadius: 9999,
-                  border: "1px solid #dee2e6",
+                  border: "1px solid var(--mantine-color-default-border)",
                   display: "inline-flex",
                   alignItems: "center",
                   justifyContent: "center",
-                  background: topicIconIllustration ? "#fff" : "#f8f9fa",
+                  background: topicIconIllustration ? "var(--mantine-color-body)" : "var(--mantine-color-default)",
                   padding: 0,
                   overflow: "hidden",
                   cursor: "pointer"
@@ -2074,9 +2074,9 @@ export default function ArticlesPage() {
               </Box>
 
               <Group gap="xs" wrap="nowrap" align="center">
-                <Box style={{ flex: 1, height: 1, background: "#dee2e6" }} />
+                <Box style={{ flex: 1, height: 1, background: "var(--mantine-color-default-border)" }} />
                 <Text size="xs" c="dimmed" fw={600}>or</Text>
-                <Box style={{ flex: 1, height: 1, background: "#dee2e6" }} />
+                <Box style={{ flex: 1, height: 1, background: "var(--mantine-color-default-border)" }} />
               </Group>
 
               <TextInput
@@ -2111,9 +2111,9 @@ export default function ArticlesPage() {
                           setCustomIconImageSizeDelta(0);
                         }}
                         style={{
-                          border: isSelected ? "1px solid #228be6" : "1px solid #dee2e6",
+                          border: isSelected ? "1px solid var(--mantine-primary-color-filled)" : "1px solid var(--mantine-color-default-border)",
                           borderRadius: 8,
-                          background: isSelected ? "#e7f5ff" : "#fff",
+                          background: isSelected ? "var(--mantine-primary-color-light)" : "var(--mantine-color-body)",
                           cursor: "pointer",
                           padding: "10px 8px",
                           display: "flex",

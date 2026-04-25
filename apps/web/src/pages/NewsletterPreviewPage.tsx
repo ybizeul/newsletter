@@ -185,10 +185,10 @@ export default function NewsletterPreviewPage() {
                 ? {
                     width: "min(390px, 100%)",
                     margin: "0 auto",
-                    border: "1px solid #dee2e6",
+                    border: "1px solid var(--mantine-color-default-border)",
                     borderRadius: 18,
                     overflow: "hidden",
-                    background: "#f1f3f5",
+                    background: "var(--mantine-color-gray-1)",
                     boxShadow: "0 10px 24px rgba(0, 0, 0, 0.08)"
                   }
                 : undefined
@@ -200,7 +200,7 @@ export default function NewsletterPreviewPage() {
                   ? {
                       minHeight: 640,
                       padding: 4,
-                      background: "#f1f3f5"
+                      background: "var(--mantine-color-gray-1)"
                     }
                   : undefined
               }
@@ -210,7 +210,7 @@ export default function NewsletterPreviewPage() {
                   isMobilePreview
                     ? {
                         minHeight: "100%",
-                        background: "#ffffff"
+                        background: "var(--mantine-color-body)"
                       }
                     : undefined
                 }

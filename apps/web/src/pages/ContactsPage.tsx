@@ -252,7 +252,7 @@ export default function ContactsPage() {
     >
       {!isMobile || !isMobileEditorOpen ? (
         <div style={{ overflow: "hidden" }}>
-          <Group justify="space-between" p="sm" style={{ borderBottom: "1px solid #e9ecef" }}>
+          <Group justify="space-between" p="sm" style={{ borderBottom: "1px solid var(--mantine-color-default-border)" }}>
             <Text fw={600}>Contacts ({contacts.length})</Text>
             <Button
               variant="light"
@@ -280,9 +280,9 @@ export default function ContactsPage() {
                     onClick={() => openEdit(contact)}
                     style={{
                       padding: "10px 12px",
-                      borderBottom: "1px solid #f1f3f5",
+                      borderBottom: "1px solid var(--mantine-color-default-border)",
                       cursor: "pointer",
-                      backgroundColor: selectedContactId === contact.id ? "#f1fbff" : "transparent"
+                      backgroundColor: selectedContactId === contact.id ? "var(--mantine-primary-color-light)" : "transparent"
                     }}
                   >
                     <Group justify="space-between" wrap="nowrap">
@@ -336,7 +336,7 @@ export default function ContactsPage() {
             cursor: "col-resize",
             zIndex: 20,
             background:
-              "linear-gradient(to right, transparent 3px, #e9ecef 3px, #e9ecef 4px, transparent 4px)"
+              "linear-gradient(to right, transparent 3px, var(--mantine-color-default-border) 3px, var(--mantine-color-default-border) 4px, transparent 4px)"
           }}
         />
       ) : null}
@@ -422,7 +422,7 @@ export default function ContactsPage() {
                 </Group>
 
                 {isNewMode ? (
-                  <Stack gap="xs" mt="sm" style={{ borderTop: "1px solid #e9ecef", paddingTop: 16 }}>
+                  <Stack gap="xs" mt="sm" style={{ borderTop: "1px solid var(--mantine-color-default-border)", paddingTop: 16 }}>
                     <Text fw={600} size="sm">Paste-import contacts</Text>
                     <Text size="xs" c="dimmed">
                       Paste a tab-separated list of contacts, one per line:{" "}

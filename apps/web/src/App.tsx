@@ -1,7 +1,7 @@
-import { type MouseEvent as ReactMouseEvent, useState } from "react";
-import { ActionIcon, Anchor, AppShell, Box, Burger, Center, Group, Loader, Modal, NavLink, ScrollArea, Stack, Text } from "@mantine/core";
+import { type MouseEvent as ReactMouseEvent, useEffect, useState } from "react";
+import { ActionIcon, Anchor, AppShell, Box, Burger, Center, Group, Loader, Modal, NavLink, ScrollArea, Stack, Text, useComputedColorScheme, useMantineColorScheme } from "@mantine/core";
 import { useDisclosure } from "@mantine/hooks";
-import { IconAlignBoxCenterTop, IconArticle, IconClock, IconHelpCircle, IconList, IconLock, IconLogout, IconMail, IconStar, IconUser, IconAddressBook, IconWorld } from "@tabler/icons-react";
+import { IconAlignBoxCenterTop, IconArticle, IconClock, IconHelpCircle, IconList, IconLock, IconLogout, IconMail, IconMoon, IconStar, IconSun, IconUser, IconAddressBook, IconWorld } from "@tabler/icons-react";
 import { Navigate, Route, Routes, useLocation, useNavigate } from "react-router-dom";
 
 import ArticlesPage from "./pages/ArticlesPage";
@@ -25,7 +25,14 @@ function getStoredNavbarWidth(): number {
 
 function App() {
   const { user, loading, oidcEnabled, contactsDisabled, logout } = useAuth();
+  const { toggleColorScheme } = useMantineColorScheme();
+  const computedColorScheme = useComputedColorScheme("light");
   const [opened, { toggle, close }] = useDisclosure();
+
+  // Sync Mantine color scheme to .dark class for Tiptap editor SCSS
+  useEffect(() => {
+    document.documentElement.classList.toggle("dark", computedColorScheme === "dark");
+  }, [computedColorScheme]);
   const [isHelpOpen, setIsHelpOpen] = useState(false);
   const [navbarWidth, setNavbarWidth] = useState(getStoredNavbarWidth);
   const location = useLocation();
@@ -85,6 +92,16 @@ function App() {
             variant="subtle"
             color="gray"
             size="lg"
+            aria-label="Toggle color scheme"
+            title="Toggle color scheme"
+            onClick={toggleColorScheme}
+          >
+            {computedColorScheme === "dark" ? <IconSun size={18} /> : <IconMoon size={18} />}
+          </ActionIcon>
+          <ActionIcon
+            variant="subtle"
+            color="gray"
+            size="lg"
             aria-label="Open help"
             title="How it works"
             onClick={() => setIsHelpOpen(true)}
@@ -118,10 +135,10 @@ function App() {
 
           <Box
             style={{
-              border: "1px solid #e9ecef",
+              border: "1px solid var(--mantine-color-default-border)",
               borderRadius: 8,
               padding: 12,
-              background: "#f8f9fa"
+              background: "var(--mantine-color-default)"
             }}
           >
             <Text fw={600} size="sm" mb={6}>Table of contents</Text>
@@ -162,15 +179,15 @@ function App() {
                 <Text fw={700} size="sm" mb={4}>Understand visual clues</Text>
                 <Stack gap={6}>
                   <Group gap={6} wrap="nowrap">
-                    <IconStar size={14} fill="#fcc419" color="#f59f00" />
+                    <IconStar size={14} fill="var(--mantine-color-yellow-4)" color="var(--mantine-color-yellow-6)" />
                     <Text size="sm">Yellow star: marks the favorite newsletter in the newsletter list.</Text>
                   </Group>
                   <Group gap={6} wrap="nowrap">
-                    <IconMail size={14} color="#228be6" />
+                    <IconMail size={14} color="var(--mantine-color-blue-6)" />
                     <Text size="sm">Blue envelope: marks articles already included in the favorite newsletter.</Text>
                   </Group>
                   <Group gap={6} wrap="nowrap" align="center">
-                    <div style={{ width: 8, height: 8, borderRadius: "50%", backgroundColor: "#228be6", flexShrink: 0 }} />
+                    <div style={{ width: 8, height: 8, borderRadius: "50%", backgroundColor: "var(--mantine-color-blue-6)", flexShrink: 0 }} />
                     <Text size="sm">Blue dot: marks articles not yet used in any newsletter.</Text>
                   </Group>
                 </Stack>
@@ -300,7 +317,7 @@ function App() {
           width: 8,
           cursor: "col-resize",
           zIndex: 200,
-          background: "linear-gradient(to right, transparent 3px, #e9ecef 3px, #e9ecef 4px, transparent 4px)"
+          background: "linear-gradient(to right, transparent 3px, var(--mantine-color-default-border) 3px, var(--mantine-color-default-border) 4px, transparent 4px)"
         }}
       />
 

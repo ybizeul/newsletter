@@ -856,7 +856,7 @@ export default function NewslettersPage() {
     >
       {!isMobile || !isMobileEditorOpen ? (
       <div style={{ overflow: "hidden" }}>
-        <Group justify="space-between" p="sm" style={{ borderBottom: "1px solid #e9ecef" }}>
+        <Group justify="space-between" p="sm" style={{ borderBottom: "1px solid var(--mantine-color-default-border)" }}>
           <Text fw={600}>Newsletters ({newsletters.length})</Text>
           <Group gap="xs">
             <Button
@@ -887,9 +887,9 @@ export default function NewslettersPage() {
                 onClick={() => void onSelectNewsletter(newsletter)}
                 style={{
                   padding: 12,
-                  borderBottom: "1px solid #f1f3f5",
+                  borderBottom: "1px solid var(--mantine-color-default-border)",
                   cursor: "pointer",
-                  backgroundColor: selectedNewsletterId === newsletter.id ? "#f1fbff" : "transparent"
+                  backgroundColor: selectedNewsletterId === newsletter.id ? "var(--mantine-primary-color-light)" : "transparent"
                 }}
               >
                 <Stack gap={6} style={{ flex: 1 }}>
@@ -909,7 +909,7 @@ export default function NewslettersPage() {
                         {titleText}
                       </Text>
                       {newsletter.isFavorite ? (
-                        <IconStar size={12} fill="#fcc419" color="#f59f00" style={{ flexShrink: 0 }} />
+                        <IconStar size={12} fill="var(--mantine-color-yellow-4)" color="var(--mantine-color-yellow-6)" style={{ flexShrink: 0 }} />
                       ) : null}
                     </Group>
                     <Text size="xs" c="dimmed" style={{ flexShrink: 0 }}>
@@ -952,7 +952,7 @@ export default function NewslettersPage() {
           width: 8,
           cursor: "col-resize",
           zIndex: 20,
-          background: "linear-gradient(to right, transparent 3px, #e9ecef 3px, #e9ecef 4px, transparent 4px)"
+          background: "linear-gradient(to right, transparent 3px, var(--mantine-color-default-border) 3px, var(--mantine-color-default-border) 4px, transparent 4px)"
         }}
       />
       ) : null}
@@ -994,8 +994,8 @@ export default function NewslettersPage() {
                 >
                   <IconStar
                     size={16}
-                    fill={selectedNewsletter?.isFavorite ? "#fcc419" : "#ffffff"}
-                    color={selectedNewsletter?.isFavorite ? "#f59f00" : "#adb5bd"}
+                    fill={selectedNewsletter?.isFavorite ? "var(--mantine-color-yellow-4)" : "var(--mantine-color-body)"}
+                    color={selectedNewsletter?.isFavorite ? "var(--mantine-color-yellow-6)" : "var(--mantine-color-gray-5)"}
                   />
                 </ActionIcon>
                 <Button
@@ -1117,10 +1117,10 @@ export default function NewslettersPage() {
                   }}
                   style={{
                     width: "100%",
-                    border: "1px solid #e9ecef",
+                    border: "1px solid var(--mantine-color-default-border)",
                     borderRadius: 8,
                     padding: "8px 10px",
-                    background: "#fff",
+                    background: "var(--mantine-color-body)",
                     cursor: isMobile ? "default" : "grab"
                   }}
                 >
@@ -1135,7 +1135,7 @@ export default function NewslettersPage() {
                           }}
                           title="Drag row to reorder"
                         >
-                          <IconGripVertical size={16} color="#868e96" />
+                          <IconGripVertical size={16} color="var(--mantine-color-gray-6)" />
                         </div>
                       ) : null}
                       <Box
@@ -1143,12 +1143,12 @@ export default function NewslettersPage() {
                           width: 26,
                           height: 26,
                           borderRadius: 9999,
-                          border: "1px solid #dee2e6",
+                          border: "1px solid var(--mantine-color-default-border)",
                           display: "inline-flex",
                           alignItems: "center",
                           justifyContent: "center",
                           overflow: "hidden",
-                          background: "#f8f9fa",
+                          background: "var(--mantine-color-default)",
                           flexShrink: 0
                         }}
                       >
