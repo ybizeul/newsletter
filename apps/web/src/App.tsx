@@ -307,7 +307,6 @@ function App() {
       <AppShell.Main>
         <Routes>
           <Route path="/articles" element={<Navigate to="/articles/all" replace />} />
-          <Route path="/articles/public" element={oidcEnabled ? <ArticlesPage /> : <Navigate to="/articles/all" replace />} />
           <Route path="/articles/:smartFilter" element={<ArticlesPage />} />
           <Route path="/newsletters" element={<NewslettersPage />} />
           <Route path="/headers" element={<HeadersPage />} />

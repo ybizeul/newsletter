@@ -1303,9 +1303,12 @@ export default function ArticlesPage() {
   const preFilteredArticles = useMemo(() => {
     let scopedArticles = articles;
     if (articleSmartFilter === "mine") {
-      scopedArticles = currentUserEmail
-        ? scopedArticles.filter((article) => (article.owner ?? "").trim().toLowerCase() === currentUserEmail)
-        : [];
+      // Without a known identity, show all (single-user, no-OIDC setup).
+      if (currentUserEmail) {
+        scopedArticles = scopedArticles.filter(
+          (article) => (article.owner ?? "").trim().toLowerCase() === currentUserEmail
+        );
+      }
     } else if (articleSmartFilter === "recent") {
       const cutoff = Date.now() - RECENT_ARTICLES_WINDOW_MS;
       scopedArticles = scopedArticles.filter((article) => {
@@ -1313,13 +1316,25 @@ export default function ArticlesPage() {
         return Number.isFinite(createdAtMs) && createdAtMs >= cutoff;
       });
     } else if (articleSmartFilter === "private") {
-      scopedArticles = scopedArticles.filter((article) => article.public === false);
-    } else if (articleSmartFilter === "public") {
+      // Show private articles. Scope to current user when identity is known.
       scopedArticles = scopedArticles.filter((article) => {
-        const owner = (article.owner ?? "").trim().toLowerCase();
-        const isMine = currentUserEmail !== "" && owner === currentUserEmail;
-        return article.public !== false && !isMine;
+        if (article.public !== false) return false;
+        if (!currentUserEmail) return true;
+        return (article.owner ?? "").trim().toLowerCase() === currentUserEmail;
       });
+    } else if (articleSmartFilter === "public") {
+      // Show public articles from OTHER owners only.
+      // When identity is unknown we show nothing — we can't determine what's "mine".
+      if (!currentUserEmail) {
+        scopedArticles = [];
+      } else {
+        scopedArticles = scopedArticles.filter((article) => {
+          if (!article.public) return false;
+          const owner = (article.owner ?? "").trim().toLowerCase();
+          if (!owner) return false;
+          return owner !== currentUserEmail;
+        });
+      }
     }
 
     const query = articleSearchQuery.trim().toLowerCase();

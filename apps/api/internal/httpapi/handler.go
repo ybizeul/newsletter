@@ -191,7 +191,7 @@ func (h *Handler) ListArticles(w http.ResponseWriter, r *http.Request) {
 		items := make([]articleSummary, 0, len(rawItems))
 		for _, raw := range rawItems {
 			isPublic := true
-			if strings.TrimSpace(raw.Owner) != "" && raw.Public != nil {
+			if raw.Public != nil {
 				isPublic = *raw.Public
 			}
 
