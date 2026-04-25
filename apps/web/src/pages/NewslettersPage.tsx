@@ -402,18 +402,16 @@ export default function NewslettersPage() {
       setTitle(fullNewsletter.title);
       setHeaderId(fullNewsletter.headerId ?? null);
       setIntroMarkdown(fullNewsletter.introMarkdown);
-      {
-        let htmlContent: string;
-        if (fullNewsletter.introHTML?.trim()) {
-          htmlContent = fullNewsletter.introHTML;
-        } else if (fullNewsletter.introMarkdown?.trim()) {
-          try { htmlContent = await renderMarkdown(fullNewsletter.introMarkdown); } catch { htmlContent = "<p></p>"; }
-        } else {
-          htmlContent = "<p></p>";
-        }
-        setIntroContentHTML(htmlContent || "");
-        setIntroEditorKey(fullNewsletter.id);
+      let introHTML: string;
+      if (fullNewsletter.introHTML?.trim()) {
+        introHTML = fullNewsletter.introHTML;
+      } else if (fullNewsletter.introMarkdown?.trim()) {
+        try { introHTML = await renderMarkdown(fullNewsletter.introMarkdown); } catch { introHTML = "<p></p>"; }
+      } else {
+        introHTML = "<p></p>";
       }
+      setIntroContentHTML(introHTML || "");
+      setIntroEditorKey(fullNewsletter.id);
       setIncludeIndex(Boolean(fullNewsletter.includeIndex));
       setContentWidth(fullNewsletter.contentWidth || 680);
       setArticleIDs(fullNewsletter.articleIds);
@@ -437,7 +435,7 @@ export default function NewslettersPage() {
       lastSavedDraftRef.current = JSON.stringify({
         title: fullNewsletter.title.trim(),
         headerId: fullNewsletter.headerId ?? "",
-        introHTML: htmlContent,
+        introHTML: introHTML,
         includeIndex: Boolean(fullNewsletter.includeIndex),
         contentWidth: fullNewsletter.contentWidth || 680,
         articleIds: fullNewsletter.articleIds,
