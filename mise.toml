@@ -1,3 +1,6 @@
+[tools]
+go = "1.25.9"
+
 [tasks."deps:up"]
 description = "Start local dependencies (MongoDB)"
 run = "docker compose -f local/docker-compose.yml up -d"

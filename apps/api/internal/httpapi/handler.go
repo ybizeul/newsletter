@@ -806,7 +806,8 @@ func markdownPreviewText(input string, maxLines int, maxChars int) string {
 }
 
 func (h *Handler) DeleteArticle(w http.ResponseWriter, r *http.Request, id string) {
-	result, err := h.articles.DeleteOne(r.Context(), bson.M{"_id": id})
+	filter := bson.M{"_id": id, "$and": []bson.M{articleVisibilityFilter(UserFromContext(r.Context()))}}
+	result, err := h.articles.DeleteOne(r.Context(), filter)
 	if err != nil {
 		h.writeError(w, http.StatusInternalServerError, "failed to delete article")
 		return
@@ -1455,7 +1456,8 @@ func (h *Handler) SendNewsletterNow(w http.ResponseWriter, r *http.Request, id s
 }
 
 func (h *Handler) DeleteNewsletter(w http.ResponseWriter, r *http.Request, id string) {
-	result, err := h.newsletters.DeleteOne(r.Context(), bson.M{"_id": id})
+	filter := bson.M{"_id": id, "$and": []bson.M{newsletterVisibilityFilter(UserFromContext(r.Context()))}}
+	result, err := h.newsletters.DeleteOne(r.Context(), filter)
 	if err != nil {
 		h.writeError(w, http.StatusInternalServerError, "failed to delete newsletter")
 		return
@@ -2782,10 +2784,17 @@ func (h *Handler) sendSMTP(recipient, subject, htmlBody, textBody, accessToken, 
 		return fmt.Errorf("extract inline images: %w", err)
 	}
 
+	// Sanitize header values to prevent SMTP header injection
+	sanitizeHeader := func(v string) string {
+		v = strings.ReplaceAll(v, "\r", "")
+		v = strings.ReplaceAll(v, "\n", "")
+		return v
+	}
+
 	message := strings.Builder{}
-	message.WriteString("From: " + h.cfg.SMTPFrom + "\r\n")
-	message.WriteString("To: " + recipient + "\r\n")
-	message.WriteString("Subject: " + subject + "\r\n")
+	message.WriteString("From: " + sanitizeHeader(h.cfg.SMTPFrom) + "\r\n")
+	message.WriteString("To: " + sanitizeHeader(recipient) + "\r\n")
+	message.WriteString("Subject: " + sanitizeHeader(subject) + "\r\n")
 	message.WriteString("MIME-Version: 1.0\r\n")
 
 	altBoundary := fmt.Sprintf("alt-boundary-%d", time.Now().UnixNano())
