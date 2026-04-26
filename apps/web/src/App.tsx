@@ -1,15 +1,15 @@
-import { type MouseEvent as ReactMouseEvent, useEffect, useState } from "react";
+import { type MouseEvent as ReactMouseEvent, lazy, Suspense, useEffect, useState } from "react";
 import { ActionIcon, Anchor, AppShell, Box, Burger, Center, Group, Loader, Modal, NavLink, ScrollArea, Stack, Text, useComputedColorScheme, useMantineColorScheme } from "@mantine/core";
 import { useDisclosure } from "@mantine/hooks";
 import { IconAlignBoxCenterTop, IconArticle, IconClock, IconHelpCircle, IconList, IconLock, IconLogout, IconMail, IconMoon, IconStar, IconSun, IconUser, IconAddressBook, IconWorld } from "@tabler/icons-react";
 import { Navigate, Route, Routes, useLocation, useNavigate } from "react-router-dom";
 
-import ArticlesPage from "./pages/ArticlesPage";
-import ContactsPage from "./pages/ContactsPage";
-import HeadersPage from "./pages/HeadersPage";
+const ArticlesPage = lazy(() => import("./pages/ArticlesPage"));
+const ContactsPage = lazy(() => import("./pages/ContactsPage"));
+const HeadersPage = lazy(() => import("./pages/HeadersPage"));
+const NewslettersPage = lazy(() => import("./pages/NewslettersPage"));
+const NewsletterPreviewPage = lazy(() => import("./pages/NewsletterPreviewPage"));
 import LoginPage from "./pages/LoginPage";
-import NewslettersPage from "./pages/NewslettersPage";
-import NewsletterPreviewPage from "./pages/NewsletterPreviewPage";
 import { AuthProvider, useAuth } from "./lib/auth";
 
 const NAVBAR_WIDTH_STORAGE_KEY = "newsletter.navbar.width";
@@ -322,15 +322,17 @@ function App() {
       />
 
       <AppShell.Main>
-        <Routes>
-          <Route path="/articles" element={<Navigate to="/articles/all" replace />} />
-          <Route path="/articles/:smartFilter" element={<ArticlesPage />} />
-          <Route path="/newsletters" element={<NewslettersPage />} />
-          <Route path="/headers" element={<HeadersPage />} />
-          <Route path="/contacts" element={contactsDisabled ? <Navigate to="/articles" replace /> : <ContactsPage />} />
-          <Route path="/newsletters/:id/preview" element={<NewsletterPreviewPage />} />
-          <Route path="*" element={<Navigate to="/articles" replace />} />
-        </Routes>
+        <Suspense fallback={<Center h="100%"><Loader /></Center>}>
+          <Routes>
+            <Route path="/articles" element={<Navigate to="/articles/all" replace />} />
+            <Route path="/articles/:smartFilter" element={<ArticlesPage />} />
+            <Route path="/newsletters" element={<NewslettersPage />} />
+            <Route path="/headers" element={<HeadersPage />} />
+            <Route path="/contacts" element={contactsDisabled ? <Navigate to="/articles" replace /> : <ContactsPage />} />
+            <Route path="/newsletters/:id/preview" element={<NewsletterPreviewPage />} />
+            <Route path="*" element={<Navigate to="/articles" replace />} />
+          </Routes>
+        </Suspense>
       </AppShell.Main>
     </AppShell>
   );

@@ -103,11 +103,6 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   return payload as T;
 }
 
-export async function listArticles(): Promise<Article[]> {
-  const data = await request<ListResponse<Article>>("/articles/?view=full");
-  return data.items;
-}
-
 export async function listArticleSummaries(): Promise<ArticleSummary[]> {
   const data = await request<ListResponse<ArticleSummary>>("/articles/");
   return data.items;

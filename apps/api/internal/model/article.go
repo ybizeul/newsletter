@@ -27,6 +27,7 @@ type Article struct {
 	IconStrokeColor string        `bson:"iconStrokeColor,omitempty" json:"iconStrokeColor,omitempty"`
 	SentCount       int64         `bson:"sentCount" json:"sentCount"`
 	LastUsed        *time.Time    `bson:"last_used,omitempty" json:"lastUsed,omitempty"`
+	Preview         string        `bson:"preview,omitempty" json:"preview,omitempty"`
 	Status          ArticleStatus `bson:"status" json:"status"`
 	LockOwnerID     string        `bson:"lockOwnerId,omitempty" json:"lockOwnerId,omitempty"`
 	LockExpiresAt   *time.Time    `bson:"lockExpiresAt,omitempty" json:"lockExpiresAt,omitempty"`

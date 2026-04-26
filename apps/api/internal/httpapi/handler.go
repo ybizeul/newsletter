@@ -93,13 +93,12 @@ type articleSummarySource struct {
 	Owner        string              `bson:"owner,omitempty"`
 	Public       *bool               `bson:"public,omitempty"`
 	Title        string              `bson:"title"`
-	Markdown     string              `bson:"markdown"`
-	ContentHTML  string              `bson:"contentHTML,omitempty"`
 	Tags         []string            `bson:"tags,omitempty"`
 	TopicIcon    string              `bson:"topicIcon,omitempty"`
 	Illustration string              `bson:"illustration,omitempty"`
 	SentCount    int64               `bson:"sentCount"`
 	LastUsed     *time.Time          `bson:"last_used,omitempty"`
+	Preview      string              `bson:"preview,omitempty"`
 	Status       model.ArticleStatus `bson:"status"`
 	CreatedAt    time.Time           `bson:"createdAt"`
 	UpdatedAt    time.Time           `bson:"updatedAt"`
@@ -143,6 +142,7 @@ func (h *Handler) CreateArticle(w http.ResponseWriter, r *http.Request) {
 		IconBgColor:     strings.TrimSpace(req.IconBgColor),
 		IconStrokeColor: strings.TrimSpace(req.IconStrokeColor),
 		SentCount:       0,
+		Preview:         contentPreview(req.Markdown, req.ContentHTML, 3, 180),
 		Status:          model.ArticleStatusDraft,
 		Version:         1,
 		CreatedAt:       now,
@@ -167,13 +167,12 @@ func (h *Handler) ListArticles(w http.ResponseWriter, r *http.Request) {
 			"owner":        1,
 			"public":       1,
 			"title":        1,
-			"markdown":     1,
-			"contentHTML":  1,
 			"tags":         1,
 			"topicIcon":    1,
 			"illustration": 1,
 			"sentCount":    1,
 			"last_used":    1,
+			"preview":      1,
 			"status":       1,
 			"createdAt":    1,
 			"updatedAt":    1,
@@ -212,7 +211,7 @@ func (h *Handler) ListArticles(w http.ResponseWriter, r *http.Request) {
 				Status:       raw.Status,
 				CreatedAt:    raw.CreatedAt,
 				UpdatedAt:    raw.UpdatedAt,
-				Preview:      contentPreview(raw.Markdown, raw.ContentHTML, 3, 180),
+				Preview:      raw.Preview,
 			})
 		}
 
@@ -359,6 +358,7 @@ func (h *Handler) UpdateArticle(w http.ResponseWriter, r *http.Request, id strin
 		"title":           strings.TrimSpace(req.Title),
 		"markdown":        req.Markdown,
 		"contentHTML":     req.ContentHTML,
+		"preview":         contentPreview(req.Markdown, req.ContentHTML, 3, 180),
 		"tags":            normalizeArticleTags(req.Tags),
 		"topicIcon":       strings.TrimSpace(req.TopicIcon),
 		"illustration":    strings.TrimSpace(req.Illustration),

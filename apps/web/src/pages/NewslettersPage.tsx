@@ -21,9 +21,13 @@ import { useMediaQuery } from "@mantine/hooks";
 import {
   IconChevronDown,
   IconChevronUp,
+  IconEye,
+  IconFiles,
   IconGripVertical,
   IconSend,
   IconStar,
+  IconTrash,
+  IconUserCheck,
   IconX
 } from "@tabler/icons-react";
 import {
@@ -174,6 +178,10 @@ function toNewsletterSummary(newsletter: Newsletter): NewsletterSummary {
 export default function NewslettersPage() {
   const { oidcEnabled, contactsDisabled } = useAuth();
   const containerRef = useRef<HTMLDivElement | null>(null);
+  const headerRowRef = useRef<HTMLDivElement | null>(null);
+  const headerLeftRef = useRef<HTMLDivElement | null>(null);
+  const headerActionsRef = useRef<HTMLDivElement | null>(null);
+  const expandedActionsWidthRef = useRef<number>(0);
   const autosaveTimerRef = useRef<number | null>(null);
   const autosaveClearSavedRef = useRef<number | null>(null);
   const lastSavedDraftRef = useRef<string>("");
@@ -181,6 +189,7 @@ export default function NewslettersPage() {
   const [leftPaneWidth, setLeftPaneWidth] = useState(getStoredNewslettersPaneWidth);
   const isMobile = useMediaQuery("(max-width: 48em)");
   const [isMobileEditorOpen, setIsMobileEditorOpen] = useState(false);
+  const [isCompactActions, setIsCompactActions] = useState(false);
   const navigate = useNavigate();
   const location = useLocation();
   const [articles, setArticles] = useState<ArticleSummary[]>(() => cachedNewslettersData?.articles ?? []);
@@ -490,6 +499,51 @@ export default function NewslettersPage() {
       setIsMobileEditorOpen(false);
     }
   }, [isMobile]);
+
+  useEffect(() => {
+    const row = headerRowRef.current;
+    const left = headerLeftRef.current;
+    const actions = headerActionsRef.current;
+    if (!row || !left || !actions || !selectedNewsletterId) {
+      setIsCompactActions(false);
+      return;
+    }
+
+    const evaluateCompactMode = () => {
+      const available = row.clientWidth;
+      const overflowing = row.scrollWidth > row.clientWidth + 1;
+
+      if (!isCompactActions) {
+        expandedActionsWidthRef.current = actions.scrollWidth;
+        if (overflowing) {
+          setIsCompactActions(true);
+          return;
+        }
+      }
+
+      if (isCompactActions) {
+        const leftNeeded = left.scrollWidth;
+        const gap = 16;
+        const neededIfExpanded = leftNeeded + expandedActionsWidthRef.current + gap;
+        if (neededIfExpanded <= available - 12) {
+          setIsCompactActions(false);
+        }
+      }
+    };
+
+    const rafId = window.requestAnimationFrame(evaluateCompactMode);
+    const resizeObserver = new ResizeObserver(evaluateCompactMode);
+    resizeObserver.observe(row);
+    resizeObserver.observe(left);
+    resizeObserver.observe(actions);
+    window.addEventListener("resize", evaluateCompactMode);
+
+    return () => {
+      window.cancelAnimationFrame(rafId);
+      resizeObserver.disconnect();
+      window.removeEventListener("resize", evaluateCompactMode);
+    };
+  }, [selectedNewsletterId, autosaveStatus, isCompactActions]);
 
   const parseRecipients = () =>
     recipientRaw
@@ -968,14 +1022,14 @@ export default function NewslettersPage() {
           </Center>
         ) : (
         <Stack>
-          <Group justify="space-between">
-            <Group gap="xs" wrap="nowrap">
+          <Group justify="space-between" wrap="nowrap" ref={headerRowRef} style={{ overflow: "hidden", minWidth: 0 }}>
+            <Group gap="xs" wrap="nowrap" ref={headerLeftRef}>
               {isMobile ? (
                 <Button variant="subtle" size="xs" onClick={() => setIsMobileEditorOpen(false)}>
                   Back
                 </Button>
               ) : null}
-              <Text fw={700}>{selectedNewsletterId ? "Edit Newsletter" : "New Newsletter"}</Text>
+              <Text fw={700} style={{ whiteSpace: "nowrap", flexShrink: 0 }}>{selectedNewsletterId ? "Edit Newsletter" : "New Newsletter"}</Text>
               {selectedNewsletterId && (autosaveStatus === "saving" || autosaveStatus === "error") ? (
                 <Text size="xs" c={autosaveStatus === "error" ? "red" : "dimmed"}>
                   {autosaveStatus === "saving" ? "Saving..." : "Autosave failed"}
@@ -983,7 +1037,7 @@ export default function NewslettersPage() {
               ) : null}
             </Group>
             {selectedNewsletterId ? (
-              <Group gap="xs">
+              <Group gap="xs" wrap="nowrap" ref={headerActionsRef}>
                 <ActionIcon
                   variant={selectedNewsletter?.isFavorite ? "light" : "default"}
                   color={selectedNewsletter?.isFavorite ? "yellow" : "gray"}
@@ -998,36 +1052,60 @@ export default function NewslettersPage() {
                     color={selectedNewsletter?.isFavorite ? "var(--mantine-color-yellow-6)" : "var(--mantine-color-gray-5)"}
                   />
                 </ActionIcon>
-                <Button
-                  variant="light"
-                  color="blue"
-                  size="xs"
-                  onClick={() => navigate(`/newsletters/${selectedNewsletterId}/preview`, { state: { selectedNewsletterId } })}
-                >
-                  Preview
-                </Button>
-                <Button
-                  variant="default"
-                  size="xs"
-                  onClick={() => void onDuplicateNewsletter()}
-                  loading={isDuplicatingNewsletter}
-                >
-                  Duplicate
-                </Button>
-                {oidcEnabled && !selectedNewsletter?.owner ? (
+                {isCompactActions || isMobile ? (
+                  <ActionIcon variant="light" color="blue" size="md" aria-label="Preview" title="Preview" onClick={() => navigate(`/newsletters/${selectedNewsletterId}/preview`, { state: { selectedNewsletterId } })}>
+                    <IconEye size={16} />
+                  </ActionIcon>
+                ) : (
                   <Button
                     variant="light"
                     color="blue"
                     size="xs"
-                    onClick={() => void onClaimNewsletter()}
-                    loading={isClaimingNewsletter}
+                    onClick={() => navigate(`/newsletters/${selectedNewsletterId}/preview`, { state: { selectedNewsletterId } })}
                   >
-                    Claim
+                    Preview
                   </Button>
+                )}
+                {isCompactActions || isMobile ? (
+                  <ActionIcon variant="default" size="md" aria-label="Duplicate" title="Duplicate" onClick={() => void onDuplicateNewsletter()} loading={isDuplicatingNewsletter}>
+                    <IconFiles size={16} />
+                  </ActionIcon>
+                ) : (
+                  <Button
+                    variant="default"
+                    size="xs"
+                    onClick={() => void onDuplicateNewsletter()}
+                    loading={isDuplicatingNewsletter}
+                  >
+                    Duplicate
+                  </Button>
+                )}
+                {oidcEnabled && !selectedNewsletter?.owner ? (
+                  isCompactActions || isMobile ? (
+                    <ActionIcon variant="light" color="blue" size="md" aria-label="Claim" title="Claim" onClick={() => void onClaimNewsletter()} loading={isClaimingNewsletter}>
+                      <IconUserCheck size={16} />
+                    </ActionIcon>
+                  ) : (
+                    <Button
+                      variant="light"
+                      color="blue"
+                      size="xs"
+                      onClick={() => void onClaimNewsletter()}
+                      loading={isClaimingNewsletter}
+                    >
+                      Claim
+                    </Button>
+                  )
                 ) : null}
-                <Button color="red" variant="light" size="xs" onClick={() => requestDeleteNewsletter(selectedNewsletterId)}>
-                  Delete
-                </Button>
+                {isCompactActions || isMobile ? (
+                  <ActionIcon variant="light" color="red" size="md" aria-label="Delete" title="Delete" onClick={() => requestDeleteNewsletter(selectedNewsletterId)}>
+                    <IconTrash size={16} />
+                  </ActionIcon>
+                ) : (
+                  <Button color="red" variant="light" size="xs" onClick={() => requestDeleteNewsletter(selectedNewsletterId)}>
+                    Delete
+                  </Button>
+                )}
               </Group>
             ) : null}
           </Group>

@@ -27,7 +27,7 @@ import {
   useCombobox
 } from "@mantine/core";
 import { useMediaQuery } from "@mantine/hooks";
-import { IconCheck, IconChevronDown, IconMail, IconPencil, IconPointFilled, IconSearch, IconUserFilled } from "@tabler/icons-react";
+import { IconCheck, IconChevronDown, IconFiles, IconMail, IconPencil, IconPointFilled, IconSearch, IconTrash, IconUserCheck, IconUserFilled } from "@tabler/icons-react";
 import { SimpleEditor } from "@/components/tiptap-templates/simple/simple-editor";
 import { renderToStaticMarkup } from "react-dom/server";
 import { useParams } from "react-router-dom";
@@ -423,8 +423,7 @@ export default function ArticlesPage() {
   const headerRowRef = useRef<HTMLDivElement | null>(null);
   const headerLeftRef = useRef<HTMLDivElement | null>(null);
   const headerActionsRef = useRef<HTMLDivElement | null>(null);
-  const favoriteCompactRef = useRef<HTMLButtonElement | null>(null);
-  const favoriteMeasureRef = useRef<HTMLButtonElement | null>(null);
+  const expandedActionsWidthRef = useRef<number>(0);
   const iconSvgUploadInputRef = useRef<HTMLInputElement | null>(null);
   const autosaveTimerRef = useRef<number | null>(null);
   const autosaveClearSavedRef = useRef<number | null>(null);
@@ -475,7 +474,7 @@ export default function ArticlesPage() {
   const [isAddingToFavorite, setIsAddingToFavorite] = useState(false);
   const [isFavoriteMembershipLoading, setIsFavoriteMembershipLoading] = useState(false);
   const [isEditingArticleInFavorite, setIsEditingArticleInFavorite] = useState(false);
-  const [isCompactFavoriteAction, setIsCompactFavoriteAction] = useState(false);
+  const [isCompactActions, setIsCompactActions] = useState(false);
   const [isManualNewArticleMode, setIsManualNewArticleMode] = useState(false);
   const [allNewsletterSummaries, setAllNewsletterSummaries] = useState<NewsletterSummary[]>([]);
 
@@ -945,30 +944,29 @@ export default function ArticlesPage() {
     const row = headerRowRef.current;
     const left = headerLeftRef.current;
     const actions = headerActionsRef.current;
-    if (!row || !left || !actions || !isMobile || !editingId || !favoriteNewsletterId) {
-      setIsCompactFavoriteAction(false);
+    if (!row || !left || !actions || !editingId) {
+      setIsCompactActions(false);
       return;
     }
 
     const evaluateCompactMode = () => {
       const available = row.clientWidth;
-      const leftNeeded = left.scrollWidth;
-      const actionsNeeded = actions.scrollWidth;
-      const currentlyNeeded = leftNeeded + actionsNeeded;
+      const overflowing = row.scrollWidth > row.clientWidth + 1;
 
-      if (!isCompactFavoriteAction && currentlyNeeded > available + 1) {
-        setIsCompactFavoriteAction(true);
-        return;
+      if (!isCompactActions) {
+        expandedActionsWidthRef.current = actions.scrollWidth;
+        if (overflowing) {
+          setIsCompactActions(true);
+          return;
+        }
       }
 
-      if (isCompactFavoriteAction) {
-        const compactWidth = favoriteCompactRef.current?.offsetWidth ?? 34;
-        const fullWidth = favoriteMeasureRef.current?.offsetWidth ?? compactWidth;
-        const extraNeededForFull = Math.max(0, fullWidth - compactWidth);
-        const neededForFull = currentlyNeeded + extraNeededForFull;
-
-        if (neededForFull <= available - 12) {
-          setIsCompactFavoriteAction(false);
+      if (isCompactActions) {
+        const leftNeeded = left.scrollWidth;
+        const gap = 16;
+        const neededIfExpanded = leftNeeded + expandedActionsWidthRef.current + gap;
+        if (neededIfExpanded <= available - 12) {
+          setIsCompactActions(false);
         }
       }
     };
@@ -985,7 +983,7 @@ export default function ArticlesPage() {
       resizeObserver.disconnect();
       window.removeEventListener("resize", evaluateCompactMode);
     };
-  }, [isMobile, editingId, favoriteNewsletterId, favoriteNewsletterName, autosaveStatus, isCompactFavoriteAction]);
+  }, [editingId, favoriteNewsletterId, favoriteNewsletterName, autosaveStatus, isCompactActions]);
 
   const buildArticleDraftPayload = () => ({
     title: title.trim(),
@@ -1639,7 +1637,7 @@ export default function ArticlesPage() {
           </Center>
         ) : (
         <Stack>
-          <Group justify="space-between" wrap="nowrap" ref={headerRowRef}>
+          <Group justify="space-between" wrap="nowrap" ref={headerRowRef} style={{ overflow: "hidden", minWidth: 0 }}>
             <Group gap="xs" wrap="nowrap" ref={headerLeftRef}>
               {isMobile ? (
                 <Button variant="subtle" size="xs" onClick={() => setIsMobileEditorOpen(false)}>
@@ -1658,9 +1656,8 @@ export default function ArticlesPage() {
             {editingId ? (
               <Group gap="xs" wrap="nowrap" ref={headerActionsRef}>
                 {favoriteNewsletterId ? (
-                  isCompactFavoriteAction ? (
+                  isCompactActions || isMobile ? (
                     <ActionIcon
-                      ref={favoriteCompactRef}
                       variant="default"
                       size="md"
                       onClick={() => void onToggleFavoriteNewsletterMembership()}
@@ -1698,47 +1695,49 @@ export default function ArticlesPage() {
                     </Button>
                   )
                 ) : null}
-                <Button
-                  variant="default"
-                  size="xs"
-                  onClick={() => void onDuplicateArticle()}
-                  loading={isDuplicatingArticle}
-                >
-                  Duplicate
-                </Button>
-                {oidcEnabled && !articles.find((article) => article.id === editingId)?.owner ? (
+                {isCompactActions || isMobile ? (
+                  <ActionIcon variant="default" size="md" aria-label="Duplicate" title="Duplicate" onClick={() => void onDuplicateArticle()} loading={isDuplicatingArticle}>
+                    <IconFiles size={16} />
+                  </ActionIcon>
+                ) : (
                   <Button
-                    variant="light"
-                    color="blue"
+                    variant="default"
                     size="xs"
-                    onClick={() => void onClaimArticle()}
-                    loading={isClaimingArticle}
+                    onClick={() => void onDuplicateArticle()}
+                    loading={isDuplicatingArticle}
                   >
-                    Claim
+                    Duplicate
                   </Button>
+                )}
+                {oidcEnabled && !articles.find((article) => article.id === editingId)?.owner ? (
+                  isCompactActions || isMobile ? (
+                    <ActionIcon variant="light" color="blue" size="md" aria-label="Claim" title="Claim" onClick={() => void onClaimArticle()} loading={isClaimingArticle}>
+                      <IconUserCheck size={16} />
+                    </ActionIcon>
+                  ) : (
+                    <Button
+                      variant="light"
+                      color="blue"
+                      size="xs"
+                      onClick={() => void onClaimArticle()}
+                      loading={isClaimingArticle}
+                    >
+                      Claim
+                    </Button>
+                  )
                 ) : null}
-                <Button color="red" variant="light" size="xs" onClick={() => requestDeleteArticle(editingId)}>
-                  Delete
-                </Button>
+                {isCompactActions || isMobile ? (
+                  <ActionIcon variant="light" color="red" size="md" aria-label="Delete" title="Delete" onClick={() => requestDeleteArticle(editingId)}>
+                    <IconTrash size={16} />
+                  </ActionIcon>
+                ) : (
+                  <Button color="red" variant="light" size="xs" onClick={() => requestDeleteArticle(editingId)}>
+                    Delete
+                  </Button>
+                )}
               </Group>
             ) : null}
           </Group>
-
-          {editingId && favoriteNewsletterId ? (
-            <Button
-              ref={favoriteMeasureRef}
-              variant="default"
-              size="xs"
-              leftSection={<IconMail size={14} color={isEditingArticleInFavorite ? "var(--mantine-primary-color-filled)" : "var(--mantine-color-gray-5)"} />}
-              style={{ position: "absolute", visibility: "hidden", pointerEvents: "none", height: 0, overflow: "hidden" }}
-              tabIndex={-1}
-              aria-hidden
-            >
-              {favoriteNewsletterName
-                ? `${isEditingArticleInFavorite ? "Remove from" : "Add to"} ${favoriteNewsletterName}`
-                : "Add to favorite newsletter"}
-            </Button>
-          ) : null}
 
           <Group align="flex-end" wrap="nowrap">
             <UnstyledButton
