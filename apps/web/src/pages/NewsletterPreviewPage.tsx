@@ -215,12 +215,36 @@ export default function NewsletterPreviewPage() {
                     : undefined
                 }
               >
-                <div dangerouslySetInnerHTML={{ __html: data.html }} />
+                <div className="newsletter-preview" dangerouslySetInnerHTML={{ __html: data.html }} />
               </div>
             </div>
           </Box>
         </div>
       ) : null}
+
+      <style>{`
+        [data-mantine-color-scheme="dark"] .newsletter-preview body,
+        [data-mantine-color-scheme="dark"] .newsletter-preview {
+          color: var(--mantine-color-text) !important;
+        }
+        [data-mantine-color-scheme="dark"] .newsletter-preview td,
+        [data-mantine-color-scheme="dark"] .newsletter-preview p,
+        [data-mantine-color-scheme="dark"] .newsletter-preview b,
+        [data-mantine-color-scheme="dark"] .newsletter-preview span {
+          color: inherit !important;
+        }
+        [data-mantine-color-scheme="dark"] .newsletter-preview blockquote {
+          background-color: var(--mantine-color-dark-6) !important;
+          border-left-color: var(--mantine-color-dark-4) !important;
+        }
+        [data-mantine-color-scheme="dark"] .newsletter-preview table[style*="background:#f1f3f5"] {
+          background: var(--mantine-color-dark-6) !important;
+          border-color: var(--mantine-color-dark-4) !important;
+        }
+        [data-mantine-color-scheme="dark"] .newsletter-preview td[style*="border-top:1px solid #e5e7eb"] {
+          border-top-color: var(--mantine-color-dark-4) !important;
+        }
+      `}</style>
     </Stack>
   );
 }
