@@ -438,6 +438,8 @@ export default function ArticlesPage() {
   const headerActionsRef = useRef<HTMLDivElement | null>(null);
   const expandedActionsWidthRef = useRef<number>(0);
   const iconSvgUploadInputRef = useRef<HTMLInputElement | null>(null);
+  const articleListViewportRef = useRef<HTMLDivElement | null>(null);
+  const editorPaneRef = useRef<HTMLDivElement | null>(null);
   const autosaveTimerRef = useRef<number | null>(null);
   const autosaveClearSavedRef = useRef<number | null>(null);
   const lastSavedDraftRef = useRef<string>("");
@@ -1410,6 +1412,15 @@ export default function ArticlesPage() {
         position: "relative"
       }}
     >
+      {isMobile && (
+        <div
+          onTouchEnd={() => {
+            const target = isMobileEditorOpen ? editorPaneRef.current : articleListViewportRef.current;
+            target?.scrollTo({ top: 0, behavior: "smooth" });
+          }}
+          style={{ position: "fixed", top: 0, left: 0, right: 0, height: 12, zIndex: 1000 }}
+        />
+      )}
       <div style={{ overflow: "hidden", display: isMobile && isMobileEditorOpen ? "none" : undefined }}>
         <Group justify="space-between" p="sm" style={{ borderBottom: "1px solid var(--mantine-color-default-border)" }}>
           <Text fw={600}>{articleFilterLabel} ({sortedArticles.length})</Text>
@@ -1510,7 +1521,7 @@ export default function ArticlesPage() {
           )}
         </div>
 
-        <ScrollArea h="calc(100% - 110px)" offsetScrollbars>
+        <ScrollArea h="calc(100% - 110px)" offsetScrollbars viewportRef={articleListViewportRef}>
           <Stack gap={0}>
             {sortedArticles.map((article) => (
               (() => {
@@ -1653,7 +1664,7 @@ export default function ArticlesPage() {
       />
       ) : null}
 
-      <div style={{ padding: "12px clamp(8px, 2.5vw, 12px)", overflow: "auto", display: isMobile && !isMobileEditorOpen ? "none" : undefined }}>
+      <div ref={editorPaneRef} style={{ padding: "12px clamp(8px, 2.5vw, 12px)", overflow: "auto", display: isMobile && !isMobileEditorOpen ? "none" : undefined }}>
         {!hasLoadedArticles ? (
           <Center h="100%">
             <Stack align="center" gap="xs">
