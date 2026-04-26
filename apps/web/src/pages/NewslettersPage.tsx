@@ -20,6 +20,7 @@ import {
 import { useMediaQuery } from "@mantine/hooks";
 import {
   IconChevronDown,
+  IconChevronLeft,
   IconChevronUp,
   IconEye,
   IconFiles,
@@ -1025,9 +1026,9 @@ export default function NewslettersPage() {
           <Group justify="space-between" wrap="nowrap" ref={headerRowRef} style={{ overflow: "hidden", minWidth: 0 }}>
             <Group gap="xs" wrap="nowrap" ref={headerLeftRef}>
               {isMobile ? (
-                <Button variant="subtle" size="xs" onClick={() => setIsMobileEditorOpen(false)}>
-                  Back
-                </Button>
+                <ActionIcon variant="light" size="md" aria-label="Back" onClick={() => setIsMobileEditorOpen(false)}>
+                  <IconChevronLeft size={18} />
+                </ActionIcon>
               ) : null}
               <Text fw={700} style={{ whiteSpace: "nowrap", flexShrink: 0 }}>{selectedNewsletterId ? "Edit Newsletter" : "New Newsletter"}</Text>
               {selectedNewsletterId && (autosaveStatus === "saving" || autosaveStatus === "error") ? (
