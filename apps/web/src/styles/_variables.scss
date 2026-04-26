@@ -190,10 +190,10 @@
 
 /* Global colors - Dark mode */
 [data-mantine-color-scheme="dark"] {
-  --tt-bg-color: var(--black);
+  --tt-bg-color: var(--tt-gray-dark-100);
   --tt-border-color: var(--tt-gray-dark-a-200);
   --tt-border-color-tint: var(--tt-gray-dark-a-100);
-  --tt-sidebar-bg-color: var(--tt-gray-dark-100);
+  --tt-sidebar-bg-color: var(--tt-gray-dark-200);
   --tt-scrollbar-color: var(--tt-gray-dark-a-200);
   --tt-cursor-color: var(--tt-brand-color-400);
   --tt-selection-color: rgba(122, 82, 255, 0.2);

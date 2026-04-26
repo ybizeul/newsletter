@@ -322,7 +322,7 @@ function App() {
       />
 
       <AppShell.Main>
-        <Suspense fallback={<Center h="100%"><Loader /></Center>}>
+        <Suspense fallback={<Center h="calc(100vh - 60px)"><Loader /></Center>}>
           <Routes>
             <Route path="/articles" element={<Navigate to="/articles/all" replace />} />
             <Route path="/articles/:smartFilter" element={<ArticlesPage />} />
