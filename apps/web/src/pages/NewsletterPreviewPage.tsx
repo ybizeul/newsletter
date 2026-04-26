@@ -178,7 +178,7 @@ export default function NewsletterPreviewPage() {
       {copyMessage ? <Text c="dimmed">{copyMessage}</Text> : null}
 
       {data ? (
-        <div style={{ padding: isMobilePreview ? "4px" : "clamp(10px, 3vw, 16px)" }}>
+        <div style={{ padding: isMobilePreview ? "4px" : undefined }}>
           <Box
             style={
               isMobilePreview
