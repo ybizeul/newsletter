@@ -27,7 +27,7 @@ import {
   useCombobox
 } from "@mantine/core";
 import { useMediaQuery } from "@mantine/hooks";
-import { IconCheck, IconChevronDown, IconChevronLeft, IconFiles, IconMail, IconPencil, IconPointFilled, IconSearch, IconTrash, IconUserCheck, IconUserFilled } from "@tabler/icons-react";
+import { IconCheck, IconChevronDown, IconChevronLeft, IconFiles, IconMail, IconPencil, IconPointFilled, IconSearch, IconTrash, IconUpload, IconUserCheck, IconUserFilled } from "@tabler/icons-react";
 import { SimpleEditor } from "@/components/tiptap-templates/simple/simple-editor";
 import { renderToStaticMarkup } from "react-dom/server";
 import { useParams } from "react-router-dom";
@@ -43,6 +43,8 @@ const DEFAULT_TOPIC_ICON_BG = "#228be6";
 const DEFAULT_TOPIC_ICON_STROKE = "#ffffff";
 const ARTICLES_PANE_WIDTH_STORAGE_KEY = "newsletter.articles.pane.width";
 const FAVORITE_NEWSLETTER_ID_STORAGE_KEY = "newsletter.favorite.id";
+const SAVED_ICONS_STORAGE_KEY = "newsletter.articles.savedIcons";
+const MAX_SAVED_ICONS = 24;
 const ICON_PNG_RASTER_SIZE = 90;
 const RECENT_ARTICLES_WINDOW_MS = 30 * 24 * 60 * 60 * 1000;
 const TAG_COLORS = ["blue", "teal", "cyan", "grape", "indigo", "violet", "lime", "orange", "pink"] as const;
@@ -63,6 +65,17 @@ function normalizeArticleSummaryVisibility(article: ArticleSummary): ArticleSumm
     ...article,
     public: article.public !== false
   };
+}
+
+function getStoredSavedIcons(): string[] {
+  try {
+    const raw = window.localStorage.getItem(SAVED_ICONS_STORAGE_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed.filter((v: unknown) => typeof v === "string" && v.startsWith("data:")) : [];
+  } catch {
+    return [];
+  }
 }
 
 function getStoredArticlesPaneWidth(): number {
@@ -447,6 +460,8 @@ export default function ArticlesPage() {
   const [topicIconStrokeColor, setTopicIconStrokeColor] = useState(DEFAULT_TOPIC_ICON_STROKE);
   const [topicIconIllustration, setTopicIconIllustration] = useState("");
   const [isIconBrowserOpen, setIsIconBrowserOpen] = useState(false);
+  const [savedIcons, setSavedIcons] = useState<string[]>(getStoredSavedIcons);
+  const savedIconActiveRef = useRef(false);
   const [tablerIconMap, setTablerIconMap] = useState<TablerIconMap | null>(null);
   const [isIconLibraryLoading, setIsIconLibraryLoading] = useState(false);
   const [articleSearchQuery, setArticleSearchQuery] = useState("");
@@ -762,6 +777,10 @@ export default function ArticlesPage() {
 
   useEffect(() => {
     if (!customIconImageDataUrl.trim() && !topicIcon.trim()) {
+      if (savedIconActiveRef.current) {
+        savedIconActiveRef.current = false;
+        return;
+      }
       setTopicIconIllustration("");
       return;
     }
@@ -1991,25 +2010,91 @@ export default function ArticlesPage() {
               </Group>
             </Stack>
 
-            <Group justify="flex-end" mt="sm">
-              <Group gap="xs">
-                <Button
-                  variant="subtle"
-                  color="gray"
-                  onClick={() => {
-                    setTopicIcon("");
-                    setCustomIconImageDataUrl("");
-                    setCustomIconImageSizeDelta(0);
-                  }}
-                >
-                  Clear icon
-                </Button>
-                <Button variant="default" onClick={() => setIsIconBrowserOpen(false)}>
-                  Done
-                </Button>
-              </Group>
+            <Group justify={isMobile ? "center" : "flex-end"} mt="sm" gap="xs" grow={isMobile || undefined}>
+              <Button
+                variant="outline"
+                color="gray"
+                onClick={() => {
+                  setTopicIcon("");
+                  setCustomIconImageDataUrl("");
+                  setCustomIconImageSizeDelta(0);
+                }}
+              >
+                Clear icon
+              </Button>
+              <Button
+                variant="light"
+                disabled={!topicIconIllustration}
+                onClick={() => {
+                  if (!topicIconIllustration) return;
+                  const next = [topicIconIllustration, ...savedIcons.filter((s) => s !== topicIconIllustration)].slice(0, MAX_SAVED_ICONS);
+                  setSavedIcons(next);
+                  try { window.localStorage.setItem(SAVED_ICONS_STORAGE_KEY, JSON.stringify(next)); } catch { /* quota */ }
+                }}
+              >
+                Save icon
+              </Button>
             </Group>
           </Paper>
+
+          {savedIcons.length > 0 && (
+            <Paper withBorder p="sm" radius="md">
+              <Stack gap="xs">
+                <Group justify="space-between">
+                  <Text fw={600} size="sm">Saved icons</Text>
+                  <Button
+                    variant="subtle"
+                    color="gray"
+                    size="compact-xs"
+                    onClick={() => {
+                      setSavedIcons([]);
+                      window.localStorage.removeItem(SAVED_ICONS_STORAGE_KEY);
+                    }}
+                  >
+                    Clear all
+                  </Button>
+                </Group>
+                <Group gap="xs" wrap="wrap">
+                  {savedIcons.map((icon, idx) => (
+                    <Tooltip label="Click to use" key={idx}>
+                      <UnstyledButton
+                        onClick={() => {
+                          savedIconActiveRef.current = true;
+                          setTopicIcon("");
+                          setCustomIconImageDataUrl("");
+                          setCustomIconImageSizeDelta(0);
+                          setTopicIconIllustration(icon);
+                        }}
+                        style={{
+                          width: 48,
+                          height: 48,
+                          borderRadius: 9999,
+                          border: topicIconIllustration === icon ? "2px solid var(--mantine-primary-color-filled)" : "1px solid var(--mantine-color-default-border)",
+                          overflow: "hidden",
+                          cursor: "pointer",
+                          padding: 0,
+                          display: "inline-flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                        }}
+                      >
+                        <Box
+                          component="img"
+                          src={icon}
+                          alt={`Saved icon ${idx + 1}`}
+                          w={48}
+                          h={48}
+                          width={48}
+                          height={48}
+                          style={{ display: "block" }}
+                        />
+                      </UnstyledButton>
+                    </Tooltip>
+                  ))}
+                </Group>
+              </Stack>
+            </Paper>
+          )}
 
           <Paper
             withBorder
@@ -2031,9 +2116,10 @@ export default function ArticlesPage() {
                     <Button
                       variant="default"
                       size="xs"
+                      leftSection={isMobile ? undefined : <IconUpload size={14} />}
                       onClick={() => iconSvgUploadInputRef.current?.click()}
                     >
-                      Upload SVG
+                      {isMobile ? <IconUpload size={14} /> : "Upload SVG"}
                     </Button>
                     <input
                       ref={iconSvgUploadInputRef}
