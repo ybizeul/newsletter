@@ -1795,7 +1795,7 @@ func (h *Handler) renderNewsletter(ctx context.Context, newsletter model.Newslet
 	var body strings.Builder
 	body.WriteString("<!doctype html><html><body style=\"margin:0;padding:0;font-family:Arial,Helvetica,sans-serif;line-height:1.5;color:#111\">\n")
 	body.WriteString("<table role=\"presentation\" cellpadding=\"0\" cellspacing=\"0\" border=\"0\" width=\"100%\" style=\"border-collapse:collapse;margin:0;padding:0;mso-table-lspace:0pt;mso-table-rspace:0pt;\">\n")
-	body.WriteString("<tr><td align=\"center\" style=\"padding:24px 8px;mso-line-height-rule:exactly\">\n")
+	body.WriteString("<tr><td align=\"center\" style=\"padding:24px 25px;mso-line-height-rule:exactly\">\n")
 	body.WriteString("<!--[if mso]><table role=\"presentation\" cellpadding=\"0\" cellspacing=\"0\" border=\"0\" width=\"" + widthStr + "\" align=\"center\" style=\"border-collapse:collapse;\"><tr><td width=\"" + widthStr + "\" style=\"width:" + widthStr + "px;\"><![endif]-->\n")
 	body.WriteString("<table role=\"presentation\" cellpadding=\"0\" cellspacing=\"0\" border=\"0\" width=\"100%\" align=\"center\" style=\"width:100%;max-width:" + widthStr + "px;border-collapse:collapse;margin:0 auto;table-layout:fixed;mso-table-lspace:0pt;mso-table-rspace:0pt;\">\n")
 	body.WriteString("<tr><td style=\"padding:0;text-align:left;width:100%;word-break:break-word;overflow-wrap:anywhere;\">\n")
