@@ -31,7 +31,7 @@ import { IconCheck, IconChevronDown, IconChevronLeft, IconFiles, IconMail, IconP
 import { SimpleEditor } from "@/components/tiptap-templates/simple/simple-editor";
 import { renderToStaticMarkup } from "react-dom/server";
 import { useParams } from "react-router-dom";
-import { createArticle, deleteArticle, getArticle, getNewsletter, listArticleSummaries, listNewsletterSummaries, renderMarkdown, updateArticle, updateNewsletter } from "../lib/api";
+import { createArticle, deleteArticle, getArticle, getNewsletter, getSavedIcons, listArticleSummaries, listNewsletterSummaries, putSavedIcons, renderMarkdown, updateArticle, updateNewsletter } from "../lib/api";
 import { claimArticle } from "../lib/api";
 import { useAuth } from "../lib/auth";
 import type { TablerIconMap } from "../lib/tablerIconsBrowser";
@@ -556,6 +556,11 @@ export default function ArticlesPage() {
 
   useEffect(() => {
     void loadArticles();
+    // Load saved icons from server (localStorage is the fast cache)
+    getSavedIcons().then((icons) => {
+      setSavedIcons(icons);
+      try { window.localStorage.setItem(SAVED_ICONS_STORAGE_KEY, JSON.stringify(icons)); } catch { /* quota */ }
+    }).catch(() => { /* keep localStorage fallback */ });
   }, []);
 
   useEffect(() => {
@@ -2051,6 +2056,7 @@ export default function ArticlesPage() {
                   const next = [topicIconIllustration, ...savedIcons.filter((s) => s !== topicIconIllustration)].slice(0, MAX_SAVED_ICONS);
                   setSavedIcons(next);
                   try { window.localStorage.setItem(SAVED_ICONS_STORAGE_KEY, JSON.stringify(next)); } catch { /* quota */ }
+                  putSavedIcons(next).catch(() => { /* best effort */ });
                 }}
               >
                 Save icon
@@ -2070,6 +2076,7 @@ export default function ArticlesPage() {
                     onClick={() => {
                       setSavedIcons([]);
                       window.localStorage.removeItem(SAVED_ICONS_STORAGE_KEY);
+                      putSavedIcons([]).catch(() => { /* best effort */ });
                     }}
                   >
                     Clear all

@@ -282,3 +282,16 @@ export async function bulkImportContacts(contacts: ContactPayload[]): Promise<Bu
     body: JSON.stringify({ contacts })
   });
 }
+
+export async function getSavedIcons(): Promise<string[]> {
+  const data = await request<{ icons: string[] }>("/saved-icons");
+  return data.icons;
+}
+
+export async function putSavedIcons(icons: string[]): Promise<string[]> {
+  const data = await request<{ icons: string[] }>("/saved-icons", {
+    method: "PUT",
+    body: JSON.stringify({ icons })
+  });
+  return data.icons;
+}

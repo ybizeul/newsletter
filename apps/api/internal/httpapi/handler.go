@@ -40,6 +40,7 @@ type Handler struct {
 	headers     *mongo.Collection
 	newsletters *mongo.Collection
 	contacts    *mongo.Collection
+	userPrefs   *mongo.Collection
 	cfg         config.Config
 }
 
@@ -53,6 +54,7 @@ func NewHandler(db *mongo.Database, cfg config.Config) *Handler {
 		headers:     db.Collection("headers"),
 		newsletters: db.Collection("newsletters"),
 		contacts:    db.Collection("contacts"),
+		userPrefs:   db.Collection("user_preferences"),
 		cfg:         cfg,
 	}
 }
@@ -2866,4 +2868,61 @@ func (h *Handler) writeJSON(w http.ResponseWriter, status int, payload any) {
 
 func (h *Handler) writeError(w http.ResponseWriter, status int, message string) {
 	h.writeJSON(w, status, map[string]string{"error": message})
+}
+
+// --- User preferences (saved icons) ---
+
+const maxSavedIcons = 50
+
+func (h *Handler) GetSavedIcons(w http.ResponseWriter, r *http.Request) {
+	owner := resolveOwnerEmail(UserFromContext(r.Context()), "")
+	if owner == "" {
+		owner = "anonymous"
+	}
+
+	var doc struct {
+		Icons []string `bson:"icons"`
+	}
+	err := h.userPrefs.FindOne(r.Context(), bson.M{"_id": owner}).Decode(&doc)
+	if err != nil {
+		// Not found → empty list
+		h.writeJSON(w, http.StatusOK, map[string][]string{"icons": {}})
+		return
+	}
+	if doc.Icons == nil {
+		doc.Icons = []string{}
+	}
+	h.writeJSON(w, http.StatusOK, map[string][]string{"icons": doc.Icons})
+}
+
+func (h *Handler) PutSavedIcons(w http.ResponseWriter, r *http.Request) {
+	owner := resolveOwnerEmail(UserFromContext(r.Context()), "")
+	if owner == "" {
+		owner = "anonymous"
+	}
+
+	var req struct {
+		Icons []string `json:"icons"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		h.writeError(w, http.StatusBadRequest, "invalid payload")
+		return
+	}
+
+	if len(req.Icons) > maxSavedIcons {
+		req.Icons = req.Icons[:maxSavedIcons]
+	}
+
+	opts := options.Replace().SetUpsert(true)
+	_, err := h.userPrefs.ReplaceOne(r.Context(), bson.M{"_id": owner}, bson.M{
+		"_id":       owner,
+		"icons":     req.Icons,
+		"updatedAt": time.Now().UTC(),
+	}, opts)
+	if err != nil {
+		h.writeError(w, http.StatusInternalServerError, "failed to save icons")
+		return
+	}
+
+	h.writeJSON(w, http.StatusOK, map[string][]string{"icons": req.Icons})
 }

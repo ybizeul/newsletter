@@ -108,6 +108,9 @@ func main() {
 				})
 			})
 
+			protected.Get("/saved-icons", h.GetSavedIcons)
+			protected.Put("/saved-icons", h.PutSavedIcons)
+
 			protected.Route("/newsletters", func(newsletter chi.Router) {
 				newsletter.Post("/", h.CreateNewsletter)
 				newsletter.Get("/", h.ListNewsletters)
