@@ -1524,10 +1524,20 @@ export default function ArticlesPage() {
                   padding: 12,
                   borderBottom: "1px solid var(--mantine-color-default-border)",
                   cursor: "pointer",
-                  backgroundColor: selectedArticleId === article.id ? "var(--mantine-primary-color-light)" : "transparent"
+                  backgroundColor: selectedArticleId === article.id ? "var(--mantine-primary-color-light)" : "transparent",
+                  display: "flex",
+                  gap: 10,
+                  alignItems: "flex-start"
                 }}
               >
-                <Stack gap={6} style={{ flex: 1 }}>
+                {article.illustration ? (
+                  <img
+                    src={article.illustration}
+                    alt=""
+                    style={{ width: 36, height: 36, borderRadius: 6, flexShrink: 0, objectFit: "contain" }}
+                  />
+                ) : null}
+                <Stack gap={6} style={{ flex: 1, minWidth: 0 }}>
                   <Group justify="space-between" align="flex-start" wrap="nowrap" gap="xs">
                     <Group gap={6} wrap="nowrap" style={{ flex: 1, minWidth: 0, justifyContent: "flex-start" }}>
                       {allNewsletterSummaries.length > 0 && !usedArticleIds.has(article.id) ? (
