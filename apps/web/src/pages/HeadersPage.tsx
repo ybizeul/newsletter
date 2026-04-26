@@ -389,8 +389,7 @@ export default function HeadersPage() {
         position: "relative"
       }}
     >
-      {!isMobile || !isMobileEditorOpen ? (
-      <div style={{ overflow: "hidden" }}>
+      <div style={{ overflow: "hidden", display: isMobile && isMobileEditorOpen ? "none" : undefined }}>
         <Group justify="space-between" p="sm" style={{ borderBottom: "1px solid var(--mantine-color-default-border)" }}>
           <Text fw={600}>Headers ({headers.length})</Text>
           <Group gap="xs">
@@ -470,7 +469,6 @@ export default function HeadersPage() {
           </Stack>
         </ScrollArea>
       </div>
-      ) : null}
 
       {!isMobile ? (
       <div
@@ -488,8 +486,7 @@ export default function HeadersPage() {
       />
       ) : null}
 
-      {!isMobile || isMobileEditorOpen ? (
-      <div style={{ padding: "12px clamp(8px, 2.5vw, 12px)", overflow: "auto" }}>
+      <div style={{ padding: "12px clamp(8px, 2.5vw, 12px)", overflow: "auto", display: isMobile && !isMobileEditorOpen ? "none" : undefined }}>
         <Stack>
           <Group justify="space-between">
             <Group gap="xs" wrap="nowrap">
@@ -555,7 +552,6 @@ export default function HeadersPage() {
           {error ? <Text c="red">{error}</Text> : null}
         </Stack>
       </div>
-      ) : null}
 
       <Modal
         opened={Boolean(deleteHeaderId)}

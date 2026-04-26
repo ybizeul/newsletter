@@ -250,8 +250,7 @@ export default function ContactsPage() {
         position: "relative"
       }}
     >
-      {!isMobile || !isMobileEditorOpen ? (
-        <div style={{ overflow: "hidden" }}>
+        <div style={{ overflow: "hidden", display: isMobile && isMobileEditorOpen ? "none" : undefined }}>
           <Group justify="space-between" p="sm" style={{ borderBottom: "1px solid var(--mantine-color-default-border)" }}>
             <Text fw={600}>Contacts ({contacts.length})</Text>
             <Button
@@ -322,7 +321,6 @@ export default function ContactsPage() {
             </Stack>
           </ScrollArea>
         </div>
-      ) : null}
 
       {!isMobile ? (
         <div
@@ -341,8 +339,7 @@ export default function ContactsPage() {
         />
       ) : null}
 
-      {!isMobile || isMobileEditorOpen ? (
-        <div style={{ padding: "12px clamp(8px, 2.5vw, 12px)", overflow: "auto" }}>
+        <div style={{ padding: "12px clamp(8px, 2.5vw, 12px)", overflow: "auto", display: isMobile && !isMobileEditorOpen ? "none" : undefined }}>
           <Stack>
             <Group justify="space-between">
               <Group gap="xs">
@@ -471,7 +468,6 @@ export default function ContactsPage() {
             )}
           </Stack>
         </div>
-      ) : null}
 
       <Modal
         opened={Boolean(deleteContactId)}

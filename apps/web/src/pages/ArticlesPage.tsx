@@ -1391,8 +1391,7 @@ export default function ArticlesPage() {
         position: "relative"
       }}
     >
-      {!isMobile || !isMobileEditorOpen ? (
-      <div style={{ overflow: "hidden" }}>
+      <div style={{ overflow: "hidden", display: isMobile && isMobileEditorOpen ? "none" : undefined }}>
         <Group justify="space-between" p="sm" style={{ borderBottom: "1px solid var(--mantine-color-default-border)" }}>
           <Text fw={600}>{articleFilterLabel} ({sortedArticles.length})</Text>
           <Group gap="xs">
@@ -1608,7 +1607,6 @@ export default function ArticlesPage() {
           </Stack>
         </ScrollArea>
       </div>
-      ) : null}
 
       {!isMobile ? (
       <div
@@ -1626,8 +1624,7 @@ export default function ArticlesPage() {
       />
       ) : null}
 
-      {!isMobile || isMobileEditorOpen ? (
-      <div style={{ padding: "12px clamp(8px, 2.5vw, 12px)", overflow: "auto" }}>
+      <div style={{ padding: "12px clamp(8px, 2.5vw, 12px)", overflow: "auto", display: isMobile && !isMobileEditorOpen ? "none" : undefined }}>
         {!hasLoadedArticles ? (
           <Center h="100%">
             <Stack align="center" gap="xs">
@@ -1907,7 +1904,6 @@ export default function ArticlesPage() {
         </Stack>
         )}
       </div>
-      ) : null}
 
       <Modal
         opened={Boolean(deleteArticleId)}
