@@ -384,7 +384,7 @@ export default function HeadersPage() {
         display: "grid",
         gridTemplateColumns: isMobile ? "1fr" : `${leftPaneWidth}px 1fr`,
         gap: 0,
-        height: "calc(100vh - 120px)",
+        height: "calc(100vh - 60px)",
         minHeight: 560,
         position: "relative"
       }}
