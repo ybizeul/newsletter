@@ -14,7 +14,7 @@ import {
 } from "@tiptap/react"
 
 export const MAX_FILE_SIZE = 5 * 1024 * 1024 // 5MB
-export const IMAGE_MAX_DIMENSION = 800
+export const IMAGE_MAX_DIMENSION = 700
 export const IMAGE_JPEG_QUALITY = 0.8
 
 export const MAC_SYMBOLS: Record<string, string> = {
