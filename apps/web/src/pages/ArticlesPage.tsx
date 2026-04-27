@@ -27,7 +27,7 @@ import {
   useCombobox
 } from "@mantine/core";
 import { useMediaQuery } from "@mantine/hooks";
-import { IconCheck, IconChevronDown, IconChevronLeft, IconFiles, IconMail, IconPencil, IconPointFilled, IconSearch, IconTrash, IconUpload, IconUserCheck, IconUserFilled } from "@tabler/icons-react";
+import { IconCheck, IconChevronDown, IconChevronLeft, IconFiles, IconMail, IconPencil, IconPointFilled, IconSearch, IconTrash, IconUpload, IconUserCheck, IconUserFilled, IconX } from "@tabler/icons-react";
 import { SimpleEditor } from "@/components/tiptap-templates/simple/simple-editor";
 import { renderToStaticMarkup } from "react-dom/server";
 import { useParams } from "react-router-dom";
@@ -2084,40 +2084,64 @@ export default function ArticlesPage() {
                 </Group>
                 <Group gap="xs" wrap="wrap">
                   {savedIcons.map((icon, idx) => (
-                    <Tooltip label="Click to use" key={idx}>
-                      <UnstyledButton
-                        onClick={() => {
-                          savedIconActiveRef.current = true;
-                          setTopicIcon("");
-                          setCustomIconImageDataUrl("");
-                          setCustomIconImageSizeDelta(0);
-                          setTopicIconIllustration(icon);
+                    <Box key={idx} style={{ position: "relative", width: 48, height: 48 }}>
+                      <Tooltip label="Click to use">
+                        <UnstyledButton
+                          onClick={() => {
+                            savedIconActiveRef.current = true;
+                            setTopicIcon("");
+                            setCustomIconImageDataUrl("");
+                            setCustomIconImageSizeDelta(0);
+                            setTopicIconIllustration(icon);
+                          }}
+                          style={{
+                            width: 48,
+                            height: 48,
+                            borderRadius: 9999,
+                            border: topicIconIllustration === icon ? "2px solid var(--mantine-primary-color-filled)" : "1px solid var(--mantine-color-default-border)",
+                            overflow: "hidden",
+                            cursor: "pointer",
+                            padding: 0,
+                            display: "inline-flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                          }}
+                        >
+                          <Box
+                            component="img"
+                            src={icon}
+                            alt={`Saved icon ${idx + 1}`}
+                            w={48}
+                            h={48}
+                            width={48}
+                            height={48}
+                            style={{ display: "block" }}
+                          />
+                        </UnstyledButton>
+                      </Tooltip>
+                      <ActionIcon
+                        size={16}
+                        radius="xl"
+                        variant="filled"
+                        color="dark"
+                        onClick={(e: ReactMouseEvent) => {
+                          e.stopPropagation();
+                          const next = savedIcons.filter((_, i) => i !== idx);
+                          setSavedIcons(next);
+                          window.localStorage.setItem(SAVED_ICONS_STORAGE_KEY, JSON.stringify(next));
+                          putSavedIcons(next).catch(() => { /* best effort */ });
                         }}
                         style={{
-                          width: 48,
-                          height: 48,
-                          borderRadius: 9999,
-                          border: topicIconIllustration === icon ? "2px solid var(--mantine-primary-color-filled)" : "1px solid var(--mantine-color-default-border)",
-                          overflow: "hidden",
+                          position: "absolute",
+                          top: -4,
+                          right: -4,
+                          zIndex: 1,
                           cursor: "pointer",
-                          padding: 0,
-                          display: "inline-flex",
-                          alignItems: "center",
-                          justifyContent: "center",
                         }}
                       >
-                        <Box
-                          component="img"
-                          src={icon}
-                          alt={`Saved icon ${idx + 1}`}
-                          w={48}
-                          h={48}
-                          width={48}
-                          height={48}
-                          style={{ display: "block" }}
-                        />
-                      </UnstyledButton>
-                    </Tooltip>
+                        <IconX size={10} />
+                      </ActionIcon>
+                    </Box>
                   ))}
                 </Group>
               </Stack>
