@@ -2429,6 +2429,18 @@ func enforceContentTableStyles(input string) string {
 		})
 	})
 
+	// Zero out margin on <p> inside <li> before the general paragraph pass.
+	// TipTap serialises list-item content as <li><p>text</p></li>, so without
+	// this pre-pass the paragraph margin rule below would space list items like
+	// block paragraphs in email clients.
+	liPRe := regexp.MustCompile(`(?i)<p\b[^>]*>`)
+	liBlockRe := regexp.MustCompile(`(?is)<li\b[^>]*>.*?</li\s*>`)
+	input = liBlockRe.ReplaceAllStringFunc(input, func(liBlock string) string {
+		return liPRe.ReplaceAllStringFunc(liBlock, func(pTag string) string {
+			return ensureStyleIfMissing(pTag, map[string]string{"margin": "0"})
+		})
+	})
+
 	// Paragraphs: margin
 	pRe := regexp.MustCompile(`(?i)<p\b[^>]*>`)
 	input = pRe.ReplaceAllStringFunc(input, func(tag string) string {
@@ -2458,6 +2470,16 @@ func enforceContentTableStyles(input string) string {
 		return ensureStyleIfMissing(tag, map[string]string{
 			"margin":       "0.5em 0",
 			"padding-left": "1.5em",
+		})
+	})
+
+	// List items: zero margin/padding so the <p> wrapper that TipTap emits
+	// inside each <li> does not add paragraph-like spacing in email clients.
+	liTagRe := regexp.MustCompile(`(?i)<li\b[^>]*>`)
+	input = liTagRe.ReplaceAllStringFunc(input, func(tag string) string {
+		return ensureStyleIfMissing(tag, map[string]string{
+			"margin":  "0",
+			"padding": "0",
 		})
 	})
 
