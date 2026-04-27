@@ -127,7 +127,7 @@ func redirectURI(r *http.Request) string {
 func (a *OIDCAuth) oauth2Config(redirectURL string) oauth2.Config {
 	scopes := []string{oidc.ScopeOpenID, "profile", "email"}
 	if a.smtpXoauth2 {
-		scopes = append(scopes, "https://outlook.office.com/SMTP.Send")
+		scopes = append(scopes, "https://outlook.office.com/Mail.Send")
 	}
 	return oauth2.Config{
 		ClientID:     a.clientID,
