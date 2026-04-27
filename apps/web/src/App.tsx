@@ -212,6 +212,7 @@ function App() {
           </Group>
           <Box pl="md">
           <NavLink
+            component="button"
             label="All"
             active={location.pathname === "/articles" || location.pathname === "/articles/all"}
             variant="subtle"
@@ -224,6 +225,7 @@ function App() {
             }}
           />
           <NavLink
+            component="button"
             label="Mine"
             active={location.pathname === "/articles/mine"}
             variant="subtle"
@@ -236,6 +238,7 @@ function App() {
             }}
           />
           <NavLink
+            component="button"
             label="Private"
             active={location.pathname === "/articles/private"}
             variant="subtle"
@@ -249,6 +252,7 @@ function App() {
           />
           {oidcEnabled && (
           <NavLink
+            component="button"
             label="Public"
             active={location.pathname === "/articles/public"}
             variant="subtle"
@@ -262,6 +266,7 @@ function App() {
           />
           )}
           <NavLink
+            component="button"
             label="Recent"
             active={location.pathname === "/articles/recent"}
             variant="subtle"
@@ -276,6 +281,7 @@ function App() {
           </Box>
         </Box>
         <NavLink
+          component="button"
           label="Newsletters"
           active={location.pathname.startsWith("/newsletters")}
           leftSection={<IconMail size={16} />}
@@ -285,6 +291,7 @@ function App() {
           }}
         />
         <NavLink
+          component="button"
           label="Headers"
           active={location.pathname.startsWith("/headers")}
           leftSection={<IconAlignBoxCenterTop size={16} />}
@@ -295,6 +302,7 @@ function App() {
         />
         {!contactsDisabled ? (
           <NavLink
+            component="button"
             label="Contacts"
             active={location.pathname.startsWith("/contacts")}
             leftSection={<IconAddressBook size={16} />}

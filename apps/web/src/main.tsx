@@ -8,12 +8,18 @@ import "./styles/_variables.scss";
 import "./styles/_keyframe-animations.scss";
 import App from "./App";
 
-// Safari PWA fix: intercept same-origin <a> clicks so navigation stays in-app
-// instead of opening a new Safari window with a close button.
+// iOS PWA fix: intercept same-origin <a> clicks so navigation stays in-app
+// instead of opening a new Safari window.
 if ("standalone" in window.navigator && (window.navigator as any).standalone) {
   document.addEventListener("click", (e) => {
     const anchor = (e.target as HTMLElement).closest("a");
-    if (!anchor || !anchor.href) return;
+    if (!anchor) return;
+    // Anchors without href (e.g. Mantine NavLink renders as <a>) — just prevent
+    // any default behavior; the onClick handler already calls navigate().
+    if (!anchor.href) {
+      e.preventDefault();
+      return;
+    }
     const url = new URL(anchor.href, window.location.href);
     if (url.origin !== window.location.origin) return;
     if (anchor.target === "_blank") return;
