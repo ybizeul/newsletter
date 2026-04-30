@@ -1549,39 +1549,39 @@ func (h *Handler) processScheduledNewsletter(ctx context.Context, newsletter mod
 		senderEmail = u.Email
 	}
 
+	// Collect all recipients for BCC delivery.
+	var recipients []string
+
 	if len(loadedNewsletter.ContactTags) > 0 {
-		// Contact mode: resolve recipients, then substitute placeholders in the
-		// already-rendered HTML/text for each contact before sending.
 		contacts, err := h.resolveContactRecipients(ctx, loadedNewsletter.Owner, loadedNewsletter.ContactTags, loadedNewsletter.ContactTagsMode)
 		if err != nil {
 			return fmt.Errorf("failed to resolve contact recipients: %w", err)
 		}
 		for _, contact := range contacts {
-			pHTML := applyRenderedSubstitutions(htmlBody, contact, true)
-			pText := applyRenderedSubstitutions(textBody, contact, false)
-			recipient := strings.TrimSpace(contact.Email)
-			log.Printf("smtp send start newsletter_id=%s recipient=%s smtp_host=%s smtp_port=%s", loadedNewsletter.ID, recipient, h.cfg.SMTPHost, h.cfg.SMTPPort)
-			if err := h.sendEmail(recipient, loadedNewsletter.Title, pHTML, pText, accessToken, senderEmail); err != nil {
-				log.Printf("smtp send failed newsletter_id=%s recipient=%s error=%v", loadedNewsletter.ID, recipient, err)
-				return err
+			email := strings.TrimSpace(contact.Email)
+			if email != "" {
+				recipients = append(recipients, email)
 			}
-			log.Printf("smtp send success newsletter_id=%s recipient=%s", loadedNewsletter.ID, recipient)
 		}
 	} else {
-		// Email-list mode: broadcast the same rendered output to all recipients.
 		for _, r := range loadedNewsletter.RecipientIDs {
-			recipient := strings.TrimSpace(r)
-			if recipient == "" {
-				continue
+			email := strings.TrimSpace(r)
+			if email != "" {
+				recipients = append(recipients, email)
 			}
-			log.Printf("smtp send start newsletter_id=%s recipient=%s smtp_host=%s smtp_port=%s", loadedNewsletter.ID, recipient, h.cfg.SMTPHost, h.cfg.SMTPPort)
-			if err := h.sendEmail(recipient, loadedNewsletter.Title, htmlBody, textBody, accessToken, senderEmail); err != nil {
-				log.Printf("smtp send failed newsletter_id=%s recipient=%s error=%v", loadedNewsletter.ID, recipient, err)
-				return err
-			}
-			log.Printf("smtp send success newsletter_id=%s recipient=%s", loadedNewsletter.ID, recipient)
 		}
 	}
+
+	if len(recipients) == 0 {
+		return fmt.Errorf("no recipients for newsletter %s", loadedNewsletter.ID)
+	}
+
+	log.Printf("smtp send start newsletter_id=%s recipients=%d smtp_host=%s smtp_port=%s", loadedNewsletter.ID, len(recipients), h.cfg.SMTPHost, h.cfg.SMTPPort)
+	if err := h.sendEmailBcc(recipients, loadedNewsletter.Title, htmlBody, textBody, accessToken, senderEmail); err != nil {
+		log.Printf("smtp send failed newsletter_id=%s error=%v", loadedNewsletter.ID, err)
+		return err
+	}
+	log.Printf("smtp send success newsletter_id=%s recipients=%d", loadedNewsletter.ID, len(recipients))
 
 	now := time.Now().UTC()
 	if err := h.updateArticleUsageStats(ctx, loadedNewsletter.ArticleIDs, now); err != nil {
@@ -2787,6 +2787,13 @@ func (h *Handler) sendEmail(recipient, subject, htmlBody, textBody, accessToken,
 	return h.sendSMTP(recipient, subject, htmlBody, textBody, accessToken, senderEmail)
 }
 
+func (h *Handler) sendEmailBcc(recipients []string, subject, htmlBody, textBody, accessToken, senderEmail string) error {
+	if h.cfg.UseGraphAPI && accessToken != "" {
+		return h.sendGraphMailBcc(recipients, subject, htmlBody, accessToken)
+	}
+	return h.sendSMTPBcc(recipients, subject, htmlBody, textBody, accessToken, senderEmail)
+}
+
 // sendGraphMail sends an email via the Microsoft Graph API using the user's access token.
 func (h *Handler) sendGraphMail(recipient, subject, htmlBody, accessToken string) error {
 	if recipient == "" {
@@ -2807,6 +2814,60 @@ func (h *Handler) sendGraphMail(recipient, subject, htmlBody, accessToken string
 					},
 				},
 			},
+		},
+	}
+
+	body, err := json.Marshal(payload)
+	if err != nil {
+		return fmt.Errorf("graph: marshal payload: %w", err)
+	}
+
+	req, err := http.NewRequest("POST", "https://graph.microsoft.com/v1.0/me/sendMail", bytes.NewReader(body))
+	if err != nil {
+		return fmt.Errorf("graph: create request: %w", err)
+	}
+	req.Header.Set("Authorization", "Bearer "+accessToken)
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("graph: send request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusAccepted && resp.StatusCode != http.StatusOK {
+		var errBody bytes.Buffer
+		errBody.ReadFrom(resp.Body)
+		return fmt.Errorf("graph: sendMail returned %d: %s", resp.StatusCode, errBody.String())
+	}
+
+	return nil
+}
+
+// sendGraphMailBcc sends a single email via the Microsoft Graph API with all recipients in BCC.
+func (h *Handler) sendGraphMailBcc(recipients []string, subject, htmlBody, accessToken string) error {
+	if len(recipients) == 0 {
+		return nil
+	}
+
+	bccList := make([]map[string]any, 0, len(recipients))
+	for _, r := range recipients {
+		bccList = append(bccList, map[string]any{
+			"emailAddress": map[string]string{
+				"address": r,
+			},
+		})
+	}
+
+	payload := map[string]any{
+		"message": map[string]any{
+			"subject": subject,
+			"body": map[string]string{
+				"contentType": "HTML",
+				"content":     htmlBody,
+			},
+			"toRecipients":  []map[string]any{},
+			"bccRecipients": bccList,
 		},
 	}
 
@@ -2938,6 +2999,89 @@ func (h *Handler) sendSMTP(recipient, subject, htmlBody, textBody, accessToken, 
 
 	addr := h.cfg.SMTPHost + ":" + h.cfg.SMTPPort
 	return smtp.SendMail(addr, auth, envelopeSender, []string{recipient}, []byte(message.String()))
+}
+
+// sendSMTPBcc sends a single email with all recipients in BCC via SMTP.
+func (h *Handler) sendSMTPBcc(recipients []string, subject, htmlBody, textBody, accessToken, senderEmail string) error {
+	if len(recipients) == 0 {
+		return nil
+	}
+
+	cidHTML, attachments, err := extractInlineDataImages(htmlBody)
+	if err != nil {
+		return fmt.Errorf("extract inline images: %w", err)
+	}
+
+	sanitizeHeader := func(v string) string {
+		v = strings.ReplaceAll(v, "\r", "")
+		v = strings.ReplaceAll(v, "\n", "")
+		return v
+	}
+
+	message := strings.Builder{}
+	message.WriteString("From: " + sanitizeHeader(h.cfg.SMTPFrom) + "\r\n")
+	message.WriteString("Subject: " + sanitizeHeader(subject) + "\r\n")
+	message.WriteString("MIME-Version: 1.0\r\n")
+
+	altBoundary := fmt.Sprintf("alt-boundary-%d", time.Now().UnixNano())
+
+	if len(attachments) == 0 {
+		message.WriteString("Content-Type: multipart/alternative; boundary=" + altBoundary + "\r\n\r\n")
+		message.WriteString("--" + altBoundary + "\r\n")
+		message.WriteString("Content-Type: text/plain; charset=UTF-8\r\n\r\n")
+		message.WriteString(textBody + "\r\n\r\n")
+		message.WriteString("--" + altBoundary + "\r\n")
+		message.WriteString("Content-Type: text/html; charset=UTF-8\r\n\r\n")
+		message.WriteString(cidHTML + "\r\n\r\n")
+		message.WriteString("--" + altBoundary + "--\r\n")
+	} else {
+		relBoundary := fmt.Sprintf("rel-boundary-%d", time.Now().UnixNano())
+		message.WriteString("Content-Type: multipart/related; boundary=" + relBoundary + "\r\n\r\n")
+		message.WriteString("--" + relBoundary + "\r\n")
+		message.WriteString("Content-Type: multipart/alternative; boundary=" + altBoundary + "\r\n\r\n")
+		message.WriteString("--" + altBoundary + "\r\n")
+		message.WriteString("Content-Type: text/plain; charset=UTF-8\r\n\r\n")
+		message.WriteString(textBody + "\r\n\r\n")
+		message.WriteString("--" + altBoundary + "\r\n")
+		message.WriteString("Content-Type: text/html; charset=UTF-8\r\n\r\n")
+		message.WriteString(cidHTML + "\r\n\r\n")
+		message.WriteString("--" + altBoundary + "--\r\n")
+		for _, att := range attachments {
+			message.WriteString("--" + relBoundary + "\r\n")
+			message.WriteString("Content-Type: " + att.MimeType + "\r\n")
+			message.WriteString("Content-Transfer-Encoding: base64\r\n")
+			message.WriteString("Content-ID: <" + att.CID + ">\r\n")
+			message.WriteString("Content-Disposition: inline\r\n\r\n")
+			b64 := base64.StdEncoding.EncodeToString(att.Data)
+			for i := 0; i < len(b64); i += 76 {
+				end := i + 76
+				if end > len(b64) {
+					end = len(b64)
+				}
+				message.WriteString(b64[i:end] + "\r\n")
+			}
+		}
+		message.WriteString("--" + relBoundary + "--\r\n")
+	}
+
+	envelopeSender := h.cfg.SMTPFrom
+	if parsed, err := mail.ParseAddress(h.cfg.SMTPFrom); err == nil {
+		envelopeSender = parsed.Address
+	}
+
+	var auth smtp.Auth
+	switch {
+	case h.cfg.SMTPXoauth2:
+		if accessToken == "" {
+			return fmt.Errorf("smtp xoauth2 enabled but no access token in context")
+		}
+		auth = xoauth2Auth{user: senderEmail, accessToken: accessToken}
+	case h.cfg.SMTPUser != "":
+		auth = smtp.PlainAuth("", h.cfg.SMTPUser, h.cfg.SMTPPass, h.cfg.SMTPHost)
+	}
+
+	addr := h.cfg.SMTPHost + ":" + h.cfg.SMTPPort
+	return smtp.SendMail(addr, auth, envelopeSender, recipients, []byte(message.String()))
 }
 
 func (h *Handler) writeJSON(w http.ResponseWriter, status int, payload any) {
