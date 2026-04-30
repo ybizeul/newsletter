@@ -1353,7 +1353,7 @@ func (h *Handler) RenderMarkdown(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) GetRuntimeConfig(w http.ResponseWriter, r *http.Request) {
 	h.writeJSON(w, http.StatusOK, map[string]any{
-		"smtpConfigured":   h.cfg.SMTPHost != "" && h.cfg.SMTPFrom != "",
+		"smtpConfigured":   h.cfg.UseGraphAPI || (h.cfg.SMTPHost != "" && h.cfg.SMTPFrom != ""),
 		"oidcEnabled":      h.cfg.OIDCEnabled(),
 		"contactsDisabled": h.cfg.ContactsDisabled,
 	})
