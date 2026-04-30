@@ -64,6 +64,7 @@ type OIDCAuth struct {
 	clientID     string
 	clientSecret string
 	smtpXoauth2  bool
+	useGraphAPI  bool
 	sessions     *mongo.Collection
 }
 
@@ -101,6 +102,7 @@ func NewOIDCAuth(cfg config.Config, db *mongo.Database) (*OIDCAuth, error) {
 		clientID:     cfg.OIDCApplicationID,
 		clientSecret: cfg.OIDCSecret,
 		smtpXoauth2:  cfg.SMTPXoauth2,
+		useGraphAPI:  cfg.UseGraphAPI,
 		sessions:     sessions,
 	}, nil
 }
@@ -131,7 +133,11 @@ func redirectURI(r *http.Request) string {
 func (a *OIDCAuth) oauth2Config(redirectURL string) oauth2.Config {
 	scopes := []string{oidc.ScopeOpenID, "profile", "email"}
 	if a.smtpXoauth2 {
-		scopes = append(scopes, "https://outlook.office.com/Mail.Send")
+		if a.useGraphAPI {
+			scopes = append(scopes, "https://graph.microsoft.com/Mail.Send")
+		} else {
+			scopes = append(scopes, "https://outlook.office.com/Mail.Send")
+		}
 	}
 	return oauth2.Config{
 		ClientID:     a.clientID,

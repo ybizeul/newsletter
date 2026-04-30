@@ -1510,7 +1510,7 @@ func (h *Handler) RunSchedulerOnce(ctx context.Context) error {
 }
 
 func (h *Handler) processScheduledNewsletter(ctx context.Context, newsletter model.Newsletter) error {
-	if h.cfg.SMTPHost == "" || h.cfg.SMTPFrom == "" {
+	if !h.cfg.UseGraphAPI && (h.cfg.SMTPHost == "" || h.cfg.SMTPFrom == "") {
 		return fmt.Errorf("smtp is not configured")
 	}
 
@@ -1561,7 +1561,7 @@ func (h *Handler) processScheduledNewsletter(ctx context.Context, newsletter mod
 			pText := applyRenderedSubstitutions(textBody, contact, false)
 			recipient := strings.TrimSpace(contact.Email)
 			log.Printf("smtp send start newsletter_id=%s recipient=%s smtp_host=%s smtp_port=%s", loadedNewsletter.ID, recipient, h.cfg.SMTPHost, h.cfg.SMTPPort)
-			if err := h.sendSMTP(recipient, loadedNewsletter.Title, pHTML, pText, accessToken, senderEmail); err != nil {
+			if err := h.sendEmail(recipient, loadedNewsletter.Title, pHTML, pText, accessToken, senderEmail); err != nil {
 				log.Printf("smtp send failed newsletter_id=%s recipient=%s error=%v", loadedNewsletter.ID, recipient, err)
 				return err
 			}
@@ -1575,7 +1575,7 @@ func (h *Handler) processScheduledNewsletter(ctx context.Context, newsletter mod
 				continue
 			}
 			log.Printf("smtp send start newsletter_id=%s recipient=%s smtp_host=%s smtp_port=%s", loadedNewsletter.ID, recipient, h.cfg.SMTPHost, h.cfg.SMTPPort)
-			if err := h.sendSMTP(recipient, loadedNewsletter.Title, htmlBody, textBody, accessToken, senderEmail); err != nil {
+			if err := h.sendEmail(recipient, loadedNewsletter.Title, htmlBody, textBody, accessToken, senderEmail); err != nil {
 				log.Printf("smtp send failed newsletter_id=%s recipient=%s error=%v", loadedNewsletter.ID, recipient, err)
 				return err
 			}
@@ -2777,6 +2777,64 @@ func decodeDataImageURI(dataURI string) (string, []byte, error) {
 		return "", nil, err
 	}
 	return mimeType, []byte(decoded), nil
+}
+
+// sendEmail dispatches to Microsoft Graph API or SMTP based on configuration.
+func (h *Handler) sendEmail(recipient, subject, htmlBody, textBody, accessToken, senderEmail string) error {
+	if h.cfg.UseGraphAPI && accessToken != "" {
+		return h.sendGraphMail(recipient, subject, htmlBody, accessToken)
+	}
+	return h.sendSMTP(recipient, subject, htmlBody, textBody, accessToken, senderEmail)
+}
+
+// sendGraphMail sends an email via the Microsoft Graph API using the user's access token.
+func (h *Handler) sendGraphMail(recipient, subject, htmlBody, accessToken string) error {
+	if recipient == "" {
+		return nil
+	}
+
+	payload := map[string]any{
+		"message": map[string]any{
+			"subject": subject,
+			"body": map[string]string{
+				"contentType": "HTML",
+				"content":     htmlBody,
+			},
+			"toRecipients": []map[string]any{
+				{
+					"emailAddress": map[string]string{
+						"address": recipient,
+					},
+				},
+			},
+		},
+	}
+
+	body, err := json.Marshal(payload)
+	if err != nil {
+		return fmt.Errorf("graph: marshal payload: %w", err)
+	}
+
+	req, err := http.NewRequest("POST", "https://graph.microsoft.com/v1.0/me/sendMail", bytes.NewReader(body))
+	if err != nil {
+		return fmt.Errorf("graph: create request: %w", err)
+	}
+	req.Header.Set("Authorization", "Bearer "+accessToken)
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("graph: send request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusAccepted && resp.StatusCode != http.StatusOK {
+		var errBody bytes.Buffer
+		errBody.ReadFrom(resp.Body)
+		return fmt.Errorf("graph: sendMail returned %d: %s", resp.StatusCode, errBody.String())
+	}
+
+	return nil
 }
 
 // xoauth2Auth implements smtp.Auth for the SASL XOAUTH2 mechanism.
