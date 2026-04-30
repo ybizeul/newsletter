@@ -2,20 +2,20 @@ package httpapi
 
 import (
 	"context"
-	"crypto/hmac"
 	"crypto/rand"
-	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
-	"strings"
 	"time"
 
 	"newsletter/api/internal/config"
 
 	"github.com/coreos/go-oidc/v3/oidc"
+	"go.mongodb.org/mongo-driver/v2/bson"
+	"go.mongodb.org/mongo-driver/v2/mongo"
+	"go.mongodb.org/mongo-driver/v2/mongo/options"
 	"golang.org/x/oauth2"
 )
 
@@ -63,13 +63,13 @@ type OIDCAuth struct {
 	verifier     *oidc.IDTokenVerifier
 	clientID     string
 	clientSecret string
-	signingKey   []byte
 	smtpXoauth2  bool
+	sessions     *mongo.Collection
 }
 
 // NewOIDCAuth initialises the OIDC provider via discovery.
 // When cfg.OIDCEnabled() is false it returns a disabled no-op instance.
-func NewOIDCAuth(cfg config.Config) (*OIDCAuth, error) {
+func NewOIDCAuth(cfg config.Config, db *mongo.Database) (*OIDCAuth, error) {
 	if !cfg.OIDCEnabled() {
 		log.Println("oidc: disabled (env vars not set)")
 		return &OIDCAuth{enabled: false}, nil
@@ -85,8 +85,12 @@ func NewOIDCAuth(cfg config.Config) (*OIDCAuth, error) {
 
 	verifier := provider.Verifier(&oidc.Config{ClientID: cfg.OIDCApplicationID})
 
-	// Derive a 32-byte HMAC signing key from the client secret.
-	h := sha256.Sum256([]byte(cfg.OIDCSecret))
+	sessions := db.Collection("sessions")
+	// Create TTL index so expired sessions are auto-removed by MongoDB.
+	_, _ = sessions.Indexes().CreateOne(ctx, mongo.IndexModel{
+		Keys:    bson.D{{Key: "expiresAt", Value: 1}},
+		Options: options.Index().SetExpireAfterSeconds(0),
+	})
 
 	log.Printf("oidc: enabled issuer=%s client_id=%s", cfg.OIDCIssuer, cfg.OIDCApplicationID)
 
@@ -96,8 +100,8 @@ func NewOIDCAuth(cfg config.Config) (*OIDCAuth, error) {
 		verifier:     verifier,
 		clientID:     cfg.OIDCApplicationID,
 		clientSecret: cfg.OIDCSecret,
-		signingKey:   h[:],
 		smtpXoauth2:  cfg.SMTPXoauth2,
+		sessions:     sessions,
 	}, nil
 }
 
@@ -249,7 +253,7 @@ func (a *OIDCAuth) HandleCallback(w http.ResponseWriter, r *http.Request) {
 	if a.smtpXoauth2 {
 		accessToken = token.AccessToken
 	}
-	sessionValue, err := a.createSession(user, accessToken)
+	sessionID, err := a.createSession(r.Context(), user, accessToken)
 	if err != nil {
 		log.Printf("oidc: session creation failed: %v", err)
 		http.Error(w, "session error", http.StatusInternalServerError)
@@ -258,7 +262,7 @@ func (a *OIDCAuth) HandleCallback(w http.ResponseWriter, r *http.Request) {
 
 	http.SetCookie(w, &http.Cookie{
 		Name:     sessionCookieName,
-		Value:    sessionValue,
+		Value:    sessionID,
 		Path:     "/",
 		HttpOnly: true,
 		SameSite: http.SameSiteLaxMode,
@@ -269,8 +273,11 @@ func (a *OIDCAuth) HandleCallback(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, "/", http.StatusFound)
 }
 
-// HandleLogout clears the session cookie and redirects to /.
+// HandleLogout clears the session cookie and removes the server-side session.
 func (a *OIDCAuth) HandleLogout(w http.ResponseWriter, r *http.Request) {
+	if cookie, err := r.Cookie(sessionCookieName); err == nil && cookie.Value != "" {
+		_, _ = a.sessions.DeleteOne(r.Context(), bson.M{"_id": cookie.Value})
+	}
 	http.SetCookie(w, &http.Cookie{
 		Name:     sessionCookieName,
 		Value:    "",
@@ -298,7 +305,7 @@ func (a *OIDCAuth) HandleMe(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	payload, err := a.parseSession(cookie.Value)
+	payload, err := a.loadSession(r.Context(), cookie.Value)
 	if err != nil {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusUnauthorized)
@@ -327,7 +334,7 @@ func (a *OIDCAuth) Middleware(next http.Handler) http.Handler {
 			return
 		}
 
-		payload, err := a.parseSession(cookie.Value)
+		payload, err := a.loadSession(r.Context(), cookie.Value)
 		if err != nil {
 			http.Error(w, `{"error":"invalid session"}`, http.StatusUnauthorized)
 			return
@@ -342,57 +349,66 @@ func (a *OIDCAuth) Middleware(next http.Handler) http.Handler {
 }
 
 // ---------------------------------------------------------------------------
-// Session token: base64(json(payload)) + "." + base64(hmac-sha256)
+// Server-side session store (MongoDB)
 // ---------------------------------------------------------------------------
 
 type sessionPayload struct {
-	User        User   `json:"u"`
-	AccessToken string `json:"at,omitempty"`
-	ExpiresAt   int64  `json:"exp"`
+	User        User   `json:"u" bson:"user"`
+	AccessToken string `json:"at,omitempty" bson:"accessToken,omitempty"`
+	ExpiresAt   int64  `json:"exp" bson:"-"`
 }
 
-func (a *OIDCAuth) createSession(u *User, accessToken string) (string, error) {
-	p := sessionPayload{
-		User:        *u,
-		AccessToken: accessToken,
-		ExpiresAt:   time.Now().Add(sessionDuration).Unix(),
-	}
-	data, err := json.Marshal(p)
+type sessionDoc struct {
+	ID          string    `bson:"_id"`
+	User        User      `bson:"user"`
+	AccessToken string    `bson:"accessToken,omitempty"`
+	ExpiresAt   time.Time `bson:"expiresAt"`
+}
+
+func (a *OIDCAuth) createSession(ctx context.Context, u *User, accessToken string) (string, error) {
+	id, err := randomSessionID()
 	if err != nil {
 		return "", err
 	}
-	encoded := base64.RawURLEncoding.EncodeToString(data)
-	sig := a.sign(encoded)
-	return encoded + "." + sig, nil
+
+	doc := sessionDoc{
+		ID:          id,
+		User:        *u,
+		AccessToken: accessToken,
+		ExpiresAt:   time.Now().Add(sessionDuration),
+	}
+
+	_, err = a.sessions.InsertOne(ctx, doc)
+	if err != nil {
+		return "", fmt.Errorf("insert session: %w", err)
+	}
+
+	log.Printf("oidc: session created id=%s user=%s", id, u.Email)
+	return id, nil
 }
 
-func (a *OIDCAuth) parseSession(token string) (*sessionPayload, error) {
-	parts := strings.SplitN(token, ".", 2)
-	if len(parts) != 2 {
-		return nil, fmt.Errorf("malformed session token")
-	}
-	encoded, sig := parts[0], parts[1]
-	if a.sign(encoded) != sig {
-		return nil, fmt.Errorf("invalid session signature")
-	}
-	data, err := base64.RawURLEncoding.DecodeString(encoded)
+func (a *OIDCAuth) loadSession(ctx context.Context, id string) (*sessionPayload, error) {
+	var doc sessionDoc
+	err := a.sessions.FindOne(ctx, bson.M{"_id": id}).Decode(&doc)
 	if err != nil {
-		return nil, fmt.Errorf("decode session: %w", err)
+		return nil, fmt.Errorf("session not found: %w", err)
 	}
-	var p sessionPayload
-	if err := json.Unmarshal(data, &p); err != nil {
-		return nil, fmt.Errorf("unmarshal session: %w", err)
-	}
-	if time.Now().Unix() > p.ExpiresAt {
+	if time.Now().After(doc.ExpiresAt) {
+		_, _ = a.sessions.DeleteOne(ctx, bson.M{"_id": id})
 		return nil, fmt.Errorf("session expired")
 	}
-	return &p, nil
+	return &sessionPayload{
+		User:        doc.User,
+		AccessToken: doc.AccessToken,
+	}, nil
 }
 
-func (a *OIDCAuth) sign(data string) string {
-	mac := hmac.New(sha256.New, a.signingKey)
-	mac.Write([]byte(data))
-	return base64.RawURLEncoding.EncodeToString(mac.Sum(nil))
+func randomSessionID() (string, error) {
+	b := make([]byte, 32)
+	if _, err := rand.Read(b); err != nil {
+		return "", err
+	}
+	return base64.RawURLEncoding.EncodeToString(b), nil
 }
 
 func randomState() (string, error) {

@@ -35,7 +35,7 @@ func main() {
 		_ = mongoClient.Disconnect(context.Background())
 	}()
 
-	auth, err := httpapi.NewOIDCAuth(cfg)
+	auth, err := httpapi.NewOIDCAuth(cfg, mongoClient.Database(cfg.MongoDatabase))
 	if err != nil {
 		log.Fatalf("failed to initialise oidc: %v", err)
 	}
