@@ -1356,6 +1356,7 @@ func (h *Handler) GetRuntimeConfig(w http.ResponseWriter, r *http.Request) {
 		"smtpConfigured":   h.cfg.UseGraphAPI || (h.cfg.SMTPHost != "" && h.cfg.SMTPFrom != ""),
 		"oidcEnabled":      h.cfg.OIDCEnabled(),
 		"contactsDisabled": h.cfg.ContactsDisabled,
+		"scheduleDisabled": h.cfg.OIDCEnabled(),
 	})
 }
 

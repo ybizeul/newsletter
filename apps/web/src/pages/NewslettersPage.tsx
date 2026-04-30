@@ -177,7 +177,7 @@ function toNewsletterSummary(newsletter: Newsletter): NewsletterSummary {
 }
 
 export default function NewslettersPage() {
-  const { oidcEnabled, contactsDisabled } = useAuth();
+  const { oidcEnabled, contactsDisabled, scheduleDisabled } = useAuth();
   const containerRef = useRef<HTMLDivElement | null>(null);
   const headerRowRef = useRef<HTMLDivElement | null>(null);
   const headerLeftRef = useRef<HTMLDivElement | null>(null);
@@ -1343,7 +1343,7 @@ export default function NewslettersPage() {
             </Stack>
           ) : null}
 
-          {smtpConfigured ? (
+          {smtpConfigured && !scheduleDisabled ? (
             <Group grow>
               <DateTimePicker
                 label="Schedule send"
@@ -1362,7 +1362,7 @@ export default function NewslettersPage() {
                   Create Newsletter
                 </Button>
               ) : null}
-              {smtpConfigured ? (
+              {smtpConfigured && !scheduleDisabled ? (
                 <Button variant="light" onClick={() => void onSchedule()} disabled={!selectedNewsletterId}>
                   Schedule
                 </Button>
