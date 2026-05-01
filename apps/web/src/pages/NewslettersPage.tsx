@@ -56,6 +56,7 @@ import { SimpleEditor } from "@/components/tiptap-templates/simple/simple-editor
 const FALLBACK_CREATOR_ID = "demo-user";
 const NEWSLETTERS_PANE_WIDTH_STORAGE_KEY = "newsletter.newsletters.pane.width";
 const FAVORITE_NEWSLETTER_ID_STORAGE_KEY = "newsletter.favorite.id";
+const PENDING_SEND_NEWSLETTER_ID_KEY = "newsletter.pending_send.id";
 const MAX_RECIPIENTS = 3;
 
 type NewslettersDataCache = {
@@ -230,6 +231,7 @@ export default function NewslettersPage() {
   const [smtpConfigured, setSmtpConfigured] = useState(() => cachedNewslettersData?.smtpConfigured ?? true);
   const [isLoading, setIsLoading] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isSendingNow, setIsSendingNow] = useState(false);
   const [isDuplicatingNewsletter, setIsDuplicatingNewsletter] = useState(false);
   const [isClaimingNewsletter, setIsClaimingNewsletter] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -238,6 +240,13 @@ export default function NewslettersPage() {
   const [autosaveStatus, setAutosaveStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const [favoriteNewsletterId, setFavoriteNewsletterId] = useState<string | null>(getStoredFavoriteNewsletterId);
   const [isManualNewNewsletterMode, setIsManualNewNewsletterMode] = useState(false);
+  const pendingSendRef = useRef<string | null>((() => {
+    const id = window.sessionStorage.getItem(PENDING_SEND_NEWSLETTER_ID_KEY);
+    if (id) {
+      window.sessionStorage.removeItem(PENDING_SEND_NEWSLETTER_ID_KEY);
+    }
+    return id;
+  })());
 
   const withFavoriteFlag = (newsletter: NewsletterSummary): NewsletterSummary => ({
     ...newsletter,
@@ -499,6 +508,16 @@ export default function NewslettersPage() {
   }, [newsletters, isMobile, selectedNewsletterId, isManualNewNewsletterMode]);
 
   useEffect(() => {
+    if (!selectedNewsletterId || !pendingSendRef.current) {
+      return;
+    }
+    if (pendingSendRef.current === selectedNewsletterId) {
+      pendingSendRef.current = null;
+      void onSendNow();
+    }
+  }, [selectedNewsletterId]);
+
+  useEffect(() => {
     if (!isMobile) {
       setIsMobileEditorOpen(false);
     }
@@ -715,18 +734,20 @@ export default function NewslettersPage() {
     }
 
     setError(null);
+    setIsSendingNow(true);
     try {
       await sendNewsletterNow(selectedNewsletterId);
       await loadData();
     } catch (err) {
       if (err instanceof TokenExpiredError) {
-        const returnTo = selectedNewsletterId
-          ? `/newsletters?selected=${encodeURIComponent(selectedNewsletterId)}`
-          : `/newsletters`;
+        window.sessionStorage.setItem(PENDING_SEND_NEWSLETTER_ID_KEY, selectedNewsletterId);
+        const returnTo = `/newsletters?selected=${encodeURIComponent(selectedNewsletterId)}`;
         window.location.href = `/api/auth/login?returnTo=${encodeURIComponent(returnTo)}`;
         return;
       }
       setError(err instanceof Error ? err.message : "Failed to send newsletter now");
+    } finally {
+      setIsSendingNow(false);
     }
   };
 
@@ -1383,6 +1404,7 @@ export default function NewslettersPage() {
                   variant="light"
                   leftSection={<IconSend size={16} />}
                   onClick={() => void onSendNow()}
+                  loading={isSendingNow}
                   disabled={
                     !selectedNewsletterId ||
                     (recipientMode === "emails" && parsedRecipients.length === 0) ||
