@@ -50,10 +50,11 @@ func contextWithUser(ctx context.Context, u *User) context.Context {
 }
 
 const (
-	sessionCookieName = "newsletter_session"
-	stateCookieName   = "oidc_state"
-	callbackPath      = "/callback"
-	sessionDuration   = 24 * time.Hour
+	sessionCookieName  = "newsletter_session"
+	stateCookieName    = "oidc_state"
+	returnToCookieName = "oidc_return_to"
+	callbackPath       = "/callback"
+	sessionDuration    = 24 * time.Hour
 )
 
 // OIDCAuth handles OIDC authentication flows.
@@ -160,15 +161,30 @@ func (a *OIDCAuth) HandleLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	isSecure := r.TLS != nil || r.Header.Get("X-Forwarded-Proto") == "https"
+
 	http.SetCookie(w, &http.Cookie{
 		Name:     stateCookieName,
 		Value:    state,
 		Path:     "/",
 		HttpOnly: true,
 		SameSite: http.SameSiteLaxMode,
-		Secure:   r.TLS != nil || r.Header.Get("X-Forwarded-Proto") == "https",
+		Secure:   isSecure,
 		MaxAge:   300,
 	})
+
+	// Persist the returnTo path so the callback can redirect back.
+	if returnTo := r.URL.Query().Get("returnTo"); returnTo != "" {
+		http.SetCookie(w, &http.Cookie{
+			Name:     returnToCookieName,
+			Value:    returnTo,
+			Path:     "/",
+			HttpOnly: true,
+			SameSite: http.SameSiteLaxMode,
+			Secure:   isSecure,
+			MaxAge:   300,
+		})
+	}
 
 	cfg := a.oauth2Config(redirectURI(r))
 	log.Printf("oidc: login redirect_uri=%s", cfg.RedirectURL)
@@ -276,7 +292,19 @@ func (a *OIDCAuth) HandleCallback(w http.ResponseWriter, r *http.Request) {
 		MaxAge:   int(sessionDuration.Seconds()),
 	})
 
-	http.Redirect(w, r, "/", http.StatusFound)
+	// Redirect to the returnTo path if set, otherwise to root.
+	redirectTo := "/"
+	if cookie, err := r.Cookie(returnToCookieName); err == nil && cookie.Value != "" {
+		redirectTo = cookie.Value
+		http.SetCookie(w, &http.Cookie{
+			Name:     returnToCookieName,
+			Value:    "",
+			Path:     "/",
+			HttpOnly: true,
+			MaxAge:   -1,
+		})
+	}
+	http.Redirect(w, r, redirectTo, http.StatusFound)
 }
 
 // HandleLogout clears the session cookie and removes the server-side session.

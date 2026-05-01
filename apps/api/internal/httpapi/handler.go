@@ -45,6 +45,7 @@ type Handler struct {
 }
 
 var errNewsletterAlreadySending = errors.New("newsletter is already sending")
+var errTokenExpired = errors.New("access token expired")
 
 const maxNewsletterRecipients = 3
 
@@ -1432,6 +1433,15 @@ func (h *Handler) SendNewsletterNow(w http.ResponseWriter, r *http.Request, id s
 		}
 
 		log.Printf("send-now failed newsletter_id=%s error=%v", newsletter.ID, err)
+
+		if errors.Is(err, errTokenExpired) {
+			h.writeJSON(w, http.StatusUnauthorized, map[string]any{
+				"error":   "token_expired",
+				"message": "Your session token has expired. Please re-authenticate to send.",
+			})
+			return
+		}
+
 		_, _ = h.newsletters.UpdateByID(r.Context(), newsletter.ID, bson.M{
 			"$set": bson.M{
 				"status":        model.NewsletterStatusFailed,
@@ -2839,6 +2849,9 @@ func (h *Handler) sendGraphMail(recipient, subject, htmlBody, accessToken string
 	if resp.StatusCode != http.StatusAccepted && resp.StatusCode != http.StatusOK {
 		var errBody bytes.Buffer
 		errBody.ReadFrom(resp.Body)
+		if resp.StatusCode == http.StatusUnauthorized {
+			return errTokenExpired
+		}
 		return fmt.Errorf("graph: sendMail returned %d: %s", resp.StatusCode, errBody.String())
 	}
 
@@ -2893,6 +2906,9 @@ func (h *Handler) sendGraphMailBcc(recipients []string, subject, htmlBody, acces
 	if resp.StatusCode != http.StatusAccepted && resp.StatusCode != http.StatusOK {
 		var errBody bytes.Buffer
 		errBody.ReadFrom(resp.Body)
+		if resp.StatusCode == http.StatusUnauthorized {
+			return errTokenExpired
+		}
 		return fmt.Errorf("graph: sendMail returned %d: %s", resp.StatusCode, errBody.String())
 	}
 

@@ -2,6 +2,13 @@ import type { Article, ArticleSummary, Contact, Header, ListResponse, Newsletter
 
 const API_ROOT = "/api";
 
+export class TokenExpiredError extends Error {
+  constructor() {
+    super("token_expired");
+    this.name = "TokenExpiredError";
+  }
+}
+
 type CreateArticlePayload = {
   authorId?: string;
   public?: boolean;
@@ -94,6 +101,9 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     : ((await response.text()) as unknown as T | { error: string });
 
   if (!response.ok) {
+    if (response.status === 401 && (payload as { error?: string }).error === "token_expired") {
+      throw new TokenExpiredError();
+    }
     const message =
       (payload as { error?: string }).error ??
       (typeof payload === "string" && payload.length > 0 ? payload : "Request failed");

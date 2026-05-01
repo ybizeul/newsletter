@@ -44,7 +44,8 @@ import {
   scheduleNewsletter,
   sendNewsletterNow,
   updateNewsletter,
-  renderMarkdown
+  renderMarkdown,
+  TokenExpiredError
 } from "../lib/api";
 import type { ArticleSummary, Contact, Header, Newsletter, NewsletterSummary } from "../types/domain";
 import { useLocation, useNavigate } from "react-router-dom";
@@ -203,7 +204,9 @@ export default function NewslettersPage() {
     }));
   });
   const restoredNewsletterIdRef = useRef(
-    (location.state as { selectedNewsletterId?: string } | null)?.selectedNewsletterId ?? null
+    (location.state as { selectedNewsletterId?: string } | null)?.selectedNewsletterId ??
+    new URLSearchParams(location.search).get("selected") ??
+    null
   );
 
   const [selectedNewsletterId, setSelectedNewsletterID] = useState<string | null>(
@@ -716,6 +719,13 @@ export default function NewslettersPage() {
       await sendNewsletterNow(selectedNewsletterId);
       await loadData();
     } catch (err) {
+      if (err instanceof TokenExpiredError) {
+        const returnTo = selectedNewsletterId
+          ? `/newsletters?selected=${encodeURIComponent(selectedNewsletterId)}`
+          : `/newsletters`;
+        window.location.href = `/api/auth/login?returnTo=${encodeURIComponent(returnTo)}`;
+        return;
+      }
       setError(err instanceof Error ? err.message : "Failed to send newsletter now");
     }
   };
