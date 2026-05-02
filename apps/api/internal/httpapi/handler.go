@@ -959,6 +959,8 @@ type createNewsletterRequest struct {
 	HeaderID        string   `json:"headerId"`
 	IntroMarkdown   string   `json:"introMarkdown"`
 	IntroHTML       string   `json:"introHTML"`
+	FooterMarkdown  string   `json:"footerMarkdown"`
+	FooterHTML      string   `json:"footerHTML"`
 	IncludeIndex    bool     `json:"includeIndex"`
 	ArticleIDs      []string `json:"articleIds"`
 	RecipientIDs    []string `json:"recipientIds"`
@@ -971,6 +973,8 @@ type updateNewsletterRequest struct {
 	HeaderID        string   `json:"headerId"`
 	IntroMarkdown   string   `json:"introMarkdown"`
 	IntroHTML       string   `json:"introHTML"`
+	FooterMarkdown  string   `json:"footerMarkdown"`
+	FooterHTML      string   `json:"footerHTML"`
 	IncludeIndex    bool     `json:"includeIndex"`
 	ContentWidth    int      `json:"contentWidth"`
 	ArticleIDs      []string `json:"articleIds"`
@@ -1010,6 +1014,8 @@ func (h *Handler) CreateNewsletter(w http.ResponseWriter, r *http.Request) {
 		HeaderID:        strings.TrimSpace(req.HeaderID),
 		IntroMarkdown:   req.IntroMarkdown,
 		IntroHTML:       req.IntroHTML,
+		FooterMarkdown:  req.FooterMarkdown,
+		FooterHTML:      req.FooterHTML,
 		IncludeIndex:    req.IncludeIndex,
 		ArticleIDs:      req.ArticleIDs,
 		RecipientIDs:    recipientIDs,
@@ -1035,40 +1041,44 @@ func (h *Handler) ListNewsletters(w http.ResponseWriter, r *http.Request) {
 
 	if strings.EqualFold(strings.TrimSpace(r.URL.Query().Get("view")), "summary") {
 		findOptions.SetProjection(bson.M{
-			"owner":         1,
-			"title":         1,
-			"headerId":      1,
-			"introMarkdown": 1,
-			"introHTML":     1,
-			"includeIndex":  1,
-			"articleIds":    1,
-			"recipientIds":  1,
-			"isFavorite":    1,
-			"status":        1,
-			"deliveryError": 1,
-			"scheduledAt":   1,
-			"sentAt":        1,
-			"createdAt":     1,
-			"updatedAt":     1,
+			"owner":          1,
+			"title":          1,
+			"headerId":       1,
+			"introMarkdown":  1,
+			"introHTML":      1,
+			"footerMarkdown": 1,
+			"footerHTML":     1,
+			"includeIndex":   1,
+			"articleIds":     1,
+			"recipientIds":   1,
+			"isFavorite":     1,
+			"status":         1,
+			"deliveryError":  1,
+			"scheduledAt":    1,
+			"sentAt":         1,
+			"createdAt":      1,
+			"updatedAt":      1,
 		})
 
 		type newsletterSummarySource struct {
-			ID            string                 `bson:"_id"`
-			Owner         string                 `bson:"owner,omitempty"`
-			Title         string                 `bson:"title"`
-			HeaderID      string                 `bson:"headerId,omitempty"`
-			IntroMarkdown string                 `bson:"introMarkdown"`
-			IntroHTML     string                 `bson:"introHTML,omitempty"`
-			IncludeIndex  bool                   `bson:"includeIndex"`
-			ArticleIDs    []string               `bson:"articleIds"`
-			RecipientIDs  []string               `bson:"recipientIds"`
-			IsFavorite    bool                   `bson:"isFavorite"`
-			Status        model.NewsletterStatus `bson:"status"`
-			DeliveryError string                 `bson:"deliveryError,omitempty"`
-			ScheduledAt   *time.Time             `bson:"scheduledAt,omitempty"`
-			SentAt        *time.Time             `bson:"sentAt,omitempty"`
-			CreatedAt     time.Time              `bson:"createdAt"`
-			UpdatedAt     time.Time              `bson:"updatedAt"`
+			ID             string                 `bson:"_id"`
+			Owner          string                 `bson:"owner,omitempty"`
+			Title          string                 `bson:"title"`
+			HeaderID       string                 `bson:"headerId,omitempty"`
+			IntroMarkdown  string                 `bson:"introMarkdown"`
+			IntroHTML      string                 `bson:"introHTML,omitempty"`
+			FooterMarkdown string                 `bson:"footerMarkdown"`
+			FooterHTML     string                 `bson:"footerHTML,omitempty"`
+			IncludeIndex   bool                   `bson:"includeIndex"`
+			ArticleIDs     []string               `bson:"articleIds"`
+			RecipientIDs   []string               `bson:"recipientIds"`
+			IsFavorite     bool                   `bson:"isFavorite"`
+			Status         model.NewsletterStatus `bson:"status"`
+			DeliveryError  string                 `bson:"deliveryError,omitempty"`
+			ScheduledAt    *time.Time             `bson:"scheduledAt,omitempty"`
+			SentAt         *time.Time             `bson:"sentAt,omitempty"`
+			CreatedAt      time.Time              `bson:"createdAt"`
+			UpdatedAt      time.Time              `bson:"updatedAt"`
 		}
 
 		type newsletterSummary struct {
@@ -1278,6 +1288,8 @@ func (h *Handler) UpdateNewsletter(w http.ResponseWriter, r *http.Request, id st
 			"headerId":        strings.TrimSpace(req.HeaderID),
 			"introMarkdown":   req.IntroMarkdown,
 			"introHTML":       req.IntroHTML,
+			"footerMarkdown":  req.FooterMarkdown,
+			"footerHTML":      req.FooterHTML,
 			"includeIndex":    req.IncludeIndex,
 			"contentWidth":    req.ContentWidth,
 			"articleIds":      req.ArticleIDs,
@@ -1807,6 +1819,19 @@ func (h *Handler) renderNewsletter(ctx context.Context, newsletter model.Newslet
 	introHTML = enforceImageFullWidth(introHTML)
 	introHTML = enforceContentTableStyles(introHTML)
 
+	var footerHTML string
+	if strings.TrimSpace(newsletter.FooterHTML) != "" {
+		footerHTML = sanitizeHTML(newsletter.FooterHTML)
+	} else {
+		var err error
+		footerHTML, err = renderMarkdownToSafeHTML(newsletter.FooterMarkdown)
+		if err != nil {
+			return "", "", err
+		}
+	}
+	footerHTML = enforceImageFullWidth(footerHTML)
+	footerHTML = enforceContentTableStyles(footerHTML)
+
 	var body strings.Builder
 	body.WriteString("<!doctype html><html><body style=\"margin:0;padding:0;font-family:Arial,Helvetica,sans-serif;line-height:1.5;color:#111\">\n")
 	body.WriteString("<table role=\"presentation\" cellpadding=\"0\" cellspacing=\"0\" border=\"0\" width=\"100%\" style=\"border-collapse:collapse;margin:0;padding:0;mso-table-lspace:0pt;mso-table-rspace:0pt;\">\n")
@@ -1898,6 +1923,15 @@ func (h *Handler) renderNewsletter(ctx context.Context, newsletter model.Newslet
 			text.WriteString(stripHTMLTags(article.ContentHTML) + "\n\n")
 		} else {
 			text.WriteString(article.Markdown + "\n\n")
+		}
+	}
+
+	if strings.TrimSpace(footerHTML) != "" {
+		body.WriteString("<div style=\"margin-top:28px\">" + footerHTML + "</div>\n")
+		if strings.TrimSpace(newsletter.FooterHTML) != "" {
+			text.WriteString(stripHTMLTags(newsletter.FooterHTML) + "\n\n")
+		} else {
+			text.WriteString(newsletter.FooterMarkdown + "\n\n")
 		}
 	}
 

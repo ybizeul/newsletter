@@ -51,6 +51,8 @@ export interface Newsletter {
   headerId?: string;
   introMarkdown: string;
   introHTML?: string;
+  footerMarkdown: string;
+  footerHTML?: string;
   includeIndex: boolean;
   contentWidth: number;
   articleIds: string[];

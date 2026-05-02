@@ -218,6 +218,9 @@ export default function NewslettersPage() {
   const [, setIntroMarkdown] = useState("");
   const [introContentHTML, setIntroContentHTML] = useState("");
   const [introEditorKey, setIntroEditorKey] = useState("");
+  const [, setFooterMarkdown] = useState("");
+  const [footerContentHTML, setFooterContentHTML] = useState("");
+  const [footerEditorKey, setFooterEditorKey] = useState("");
   const [includeIndex, setIncludeIndex] = useState(false);
   const [contentWidth, setContentWidth] = useState(680);
   const [articleIds, setArticleIDs] = useState<string[]>([]);
@@ -402,6 +405,9 @@ export default function NewslettersPage() {
     setIntroContentHTML("");
     setIntroEditorKey("");
     setIntroMarkdown("");
+    setFooterContentHTML("");
+    setFooterEditorKey("");
+    setFooterMarkdown("");
     setIncludeIndex(false);
     setContentWidth(680);
     setArticleIDs([]);
@@ -434,6 +440,17 @@ export default function NewslettersPage() {
       }
       setIntroContentHTML(introHTML || "");
       setIntroEditorKey(fullNewsletter.id);
+      setFooterMarkdown(fullNewsletter.footerMarkdown);
+      let footerHTML: string;
+      if (fullNewsletter.footerHTML?.trim()) {
+        footerHTML = fullNewsletter.footerHTML;
+      } else if (fullNewsletter.footerMarkdown?.trim()) {
+        try { footerHTML = await renderMarkdown(fullNewsletter.footerMarkdown); } catch { footerHTML = "<p></p>"; }
+      } else {
+        footerHTML = "<p></p>";
+      }
+      setFooterContentHTML(footerHTML || "");
+      setFooterEditorKey(fullNewsletter.id + "-footer");
       setIncludeIndex(Boolean(fullNewsletter.includeIndex));
       setContentWidth(fullNewsletter.contentWidth || 680);
       setArticleIDs(fullNewsletter.articleIds);
@@ -458,6 +475,7 @@ export default function NewslettersPage() {
         title: fullNewsletter.title.trim(),
         headerId: fullNewsletter.headerId ?? "",
         introHTML: introHTML,
+        footerHTML: footerHTML,
         includeIndex: Boolean(fullNewsletter.includeIndex),
         contentWidth: fullNewsletter.contentWidth || 680,
         articleIds: fullNewsletter.articleIds,
@@ -582,6 +600,8 @@ export default function NewslettersPage() {
     headerId: headerId ?? "",
     introMarkdown: "",
     introHTML: introContentHTML,
+    footerMarkdown: "",
+    footerHTML: footerContentHTML,
     includeIndex,
     contentWidth,
     articleIds,
@@ -693,7 +713,7 @@ export default function NewslettersPage() {
         window.clearTimeout(autosaveTimerRef.current);
       }
     };
-  }, [selectedNewsletterId, title, headerId, introContentHTML, includeIndex, contentWidth, articleIds, recipientRaw, recipientMode, contactTags, contactTagsMode, hasTooManyRecipients, isSubmitting]);
+  }, [selectedNewsletterId, title, headerId, introContentHTML, footerContentHTML, includeIndex, contentWidth, articleIds, recipientRaw, recipientMode, contactTags, contactTagsMode, hasTooManyRecipients, isSubmitting]);
 
   useEffect(() => () => {
     if (autosaveTimerRef.current !== null) {
@@ -1323,6 +1343,17 @@ export default function NewslettersPage() {
               ) : null}
             </Stack>
             </Stack>
+
+          <Input.Wrapper
+            label="Footer"
+            description="Write the closing section shown after the selected articles."
+          >
+            <SimpleEditor
+              key={footerEditorKey}
+              initialContent={footerContentHTML || undefined}
+              onContentChange={setFooterContentHTML}
+            />
+          </Input.Wrapper>
             
           {smtpConfigured ? (
             <Stack gap="xs">
