@@ -1431,10 +1431,10 @@ func (h *Handler) SendNewsletterNow(w http.ResponseWriter, r *http.Request, id s
 		log.Printf("recovering sending state for manual send newsletter_id=%s updated_at=%s", newsletter.ID, newsletter.UpdatedAt.UTC().Format(time.RFC3339))
 		_, _ = h.newsletters.UpdateByID(r.Context(), newsletter.ID, bson.M{
 			"$set": bson.M{
-				"status":        model.NewsletterStatusFailed,
-				"deliveryError": "previous sending state was reset by manual send",
-				"updatedAt":     time.Now().UTC(),
+				"status":    model.NewsletterStatusDraft,
+				"updatedAt": time.Now().UTC(),
 			},
+			"$unset": bson.M{"deliveryError": ""},
 		})
 	}
 
