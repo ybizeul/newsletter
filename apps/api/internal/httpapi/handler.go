@@ -1927,6 +1927,9 @@ func (h *Handler) renderNewsletter(ctx context.Context, newsletter model.Newslet
 	}
 
 	if strings.TrimSpace(footerHTML) != "" {
+		if len(articles) > 0 {
+			body.WriteString("<table role=\"presentation\" cellpadding=\"0\" cellspacing=\"0\" width=\"100%\" style=\"border-collapse:collapse;margin:0 0 20px;table-layout:fixed\"><tr><td style=\"border-top:1px solid #e5e7eb;font-size:0;line-height:0;height:0\">&nbsp;</td></tr></table>\n")
+		}
 		body.WriteString("<div style=\"margin-top:28px\">" + footerHTML + "</div>\n")
 		if strings.TrimSpace(newsletter.FooterHTML) != "" {
 			text.WriteString(stripHTMLTags(newsletter.FooterHTML) + "\n\n")
