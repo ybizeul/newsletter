@@ -703,6 +703,7 @@ export default function ArticlesPage() {
   const onEdit = async (article: ArticleSummary) => {
     pendingEditRef.current = article.id;
     setIsManualNewArticleMode(false);
+    setSelectedArticleID(article.id);
     setError(null);
     try {
       const fullArticle = await getArticle(article.id);
@@ -1438,6 +1439,7 @@ export default function ArticlesPage() {
               variant="light"
               size="xs"
               onClick={() => {
+                pendingEditRef.current = null;
                 setIsManualNewArticleMode(true);
                 resetForm();
                 if (isMobile) {
@@ -1674,11 +1676,11 @@ export default function ArticlesPage() {
       ) : null}
 
       <div ref={editorPaneRef} style={{ padding: "12px clamp(8px, 2.5vw, 12px)", overflow: "auto", display: isMobile && !isMobileEditorOpen ? "none" : undefined }}>
-        {!hasLoadedArticles ? (
+        {!hasLoadedArticles || (!editingId && !isManualNewArticleMode && articles.length > 0) ? (
           <Center h="100%">
             <Stack align="center" gap="xs">
               <Loader size="sm" />
-              <Text size="sm" c="dimmed">Loading articles...</Text>
+              <Text size="sm" c="dimmed">{!hasLoadedArticles ? "Loading articles..." : "Loading article..."}</Text>
             </Stack>
           </Center>
         ) : (

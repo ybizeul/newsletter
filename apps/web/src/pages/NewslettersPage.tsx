@@ -188,6 +188,7 @@ export default function NewslettersPage() {
   const autosaveTimerRef = useRef<number | null>(null);
   const autosaveClearSavedRef = useRef<number | null>(null);
   const lastSavedDraftRef = useRef<string>("");
+  const pendingEditRef = useRef<string | null>(null);
   const wasNewslettersRouteActiveRef = useRef(false);
   const [leftPaneWidth, setLeftPaneWidth] = useState(getStoredNewslettersPaneWidth);
   const isMobile = useMediaQuery("(max-width: 48em)");
@@ -415,10 +416,13 @@ export default function NewslettersPage() {
   };
 
   const onSelectNewsletter = async (newsletter: NewsletterSummary) => {
+    pendingEditRef.current = newsletter.id;
     setIsManualNewNewsletterMode(false);
+    setSelectedNewsletterID(newsletter.id);
     setError(null);
     try {
       const fullNewsletter = await getNewsletter(newsletter.id);
+      if (pendingEditRef.current !== newsletter.id) return;
       setSelectedNewsletterID(fullNewsletter.id);
       setTitle(fullNewsletter.title);
       setHeaderId(fullNewsletter.headerId ?? null);
@@ -427,7 +431,7 @@ export default function NewslettersPage() {
       if (fullNewsletter.introHTML?.trim()) {
         introHTML = fullNewsletter.introHTML;
       } else if (fullNewsletter.introMarkdown?.trim()) {
-        try { introHTML = await renderMarkdown(fullNewsletter.introMarkdown); } catch { introHTML = "<p></p>"; }
+        try { introHTML = await renderMarkdown(fullNewsletter.introMarkdown); if (pendingEditRef.current !== newsletter.id) return; } catch { introHTML = "<p></p>"; }
       } else {
         introHTML = "<p></p>";
       }
@@ -438,7 +442,7 @@ export default function NewslettersPage() {
       if (fullNewsletter.footerHTML?.trim()) {
         footerHTML = fullNewsletter.footerHTML;
       } else if (fullNewsletter.footerMarkdown?.trim()) {
-        try { footerHTML = await renderMarkdown(fullNewsletter.footerMarkdown); } catch { footerHTML = "<p></p>"; }
+        try { footerHTML = await renderMarkdown(fullNewsletter.footerMarkdown); if (pendingEditRef.current !== newsletter.id) return; } catch { footerHTML = "<p></p>"; }
       } else {
         footerHTML = "<p></p>";
       }
@@ -969,6 +973,7 @@ export default function NewslettersPage() {
               variant="light"
               size="xs"
               onClick={() => {
+                pendingEditRef.current = null;
                 setIsManualNewNewsletterMode(true);
                 resetForm();
                 if (isMobile) {
@@ -1063,11 +1068,11 @@ export default function NewslettersPage() {
       ) : null}
 
       <div style={{ padding: "12px clamp(8px, 2.5vw, 12px)", overflow: "auto", display: isMobile && !isMobileEditorOpen ? "none" : undefined }}>
-        {!hasLoadedNewslettersData ? (
+        {!hasLoadedNewslettersData || (!selectedNewsletterId && !isManualNewNewsletterMode && newsletters.length > 0) ? (
           <Center h="100%">
             <Stack align="center" gap="xs">
               <Loader size="sm" />
-              <Text size="sm" c="dimmed">Loading newsletters...</Text>
+              <Text size="sm" c="dimmed">{!hasLoadedNewslettersData ? "Loading newsletters..." : "Loading newsletter..."}</Text>
             </Stack>
           </Center>
         ) : (
