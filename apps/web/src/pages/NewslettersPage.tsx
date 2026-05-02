@@ -487,6 +487,24 @@ export default function NewslettersPage() {
       if (isMobile) {
         setIsMobileEditorOpen(true);
       }
+      if (pendingSendRef.current === fullNewsletter.id) {
+        pendingSendRef.current = null;
+        setIsSendingNow(true);
+        try {
+          await sendNewsletterNow(fullNewsletter.id);
+          await loadData();
+        } catch (sendErr) {
+          if (sendErr instanceof TokenExpiredError) {
+            window.sessionStorage.setItem(PENDING_SEND_NEWSLETTER_ID_KEY, fullNewsletter.id);
+            const returnTo = `/newsletters?selected=${encodeURIComponent(fullNewsletter.id)}`;
+            window.location.href = `/api/auth/login?returnTo=${encodeURIComponent(returnTo)}`;
+            return;
+          }
+          setError(sendErr instanceof Error ? sendErr.message : "Failed to send newsletter now");
+        } finally {
+          setIsSendingNow(false);
+        }
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load newsletter details");
     }
@@ -524,16 +542,6 @@ export default function NewslettersPage() {
       resetForm();
     }
   }, [newsletters, isMobile, selectedNewsletterId, isManualNewNewsletterMode]);
-
-  useEffect(() => {
-    if (!selectedNewsletterId || !pendingSendRef.current) {
-      return;
-    }
-    if (pendingSendRef.current === selectedNewsletterId) {
-      pendingSendRef.current = null;
-      void onSendNow();
-    }
-  }, [selectedNewsletterId]);
 
   useEffect(() => {
     if (!isMobile) {
