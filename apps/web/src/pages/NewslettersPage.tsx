@@ -243,13 +243,6 @@ export default function NewslettersPage() {
   const [autosaveStatus, setAutosaveStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const [favoriteNewsletterId, setFavoriteNewsletterId] = useState<string | null>(getStoredFavoriteNewsletterId);
   const [isManualNewNewsletterMode, setIsManualNewNewsletterMode] = useState(false);
-  const pendingSendRef = useRef<string | null>((() => {
-    const id = window.sessionStorage.getItem(PENDING_SEND_NEWSLETTER_ID_KEY);
-    if (id) {
-      window.sessionStorage.removeItem(PENDING_SEND_NEWSLETTER_ID_KEY);
-    }
-    return id;
-  })());
 
   const withFavoriteFlag = (newsletter: NewsletterSummary): NewsletterSummary => ({
     ...newsletter,
@@ -487,8 +480,8 @@ export default function NewslettersPage() {
       if (isMobile) {
         setIsMobileEditorOpen(true);
       }
-      if (pendingSendRef.current === fullNewsletter.id) {
-        pendingSendRef.current = null;
+      if (window.sessionStorage.getItem(PENDING_SEND_NEWSLETTER_ID_KEY) === fullNewsletter.id) {
+        window.sessionStorage.removeItem(PENDING_SEND_NEWSLETTER_ID_KEY);
         setIsSendingNow(true);
         try {
           await sendNewsletterNow(fullNewsletter.id);
