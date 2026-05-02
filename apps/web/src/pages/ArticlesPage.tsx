@@ -443,6 +443,7 @@ export default function ArticlesPage() {
   const autosaveTimerRef = useRef<number | null>(null);
   const autosaveClearSavedRef = useRef<number | null>(null);
   const lastSavedDraftRef = useRef<string>("");
+  const pendingEditRef = useRef<string | null>(null);
   const [leftPaneWidth, setLeftPaneWidth] = useState(getStoredArticlesPaneWidth);
   const isMobile = useMediaQuery("(max-width: 48em)");
   const [isMobileEditorOpen, setIsMobileEditorOpen] = useState(false);
@@ -700,10 +701,12 @@ export default function ArticlesPage() {
   };
 
   const onEdit = async (article: ArticleSummary) => {
+    pendingEditRef.current = article.id;
     setIsManualNewArticleMode(false);
     setError(null);
     try {
       const fullArticle = await getArticle(article.id);
+      if (pendingEditRef.current !== article.id) return;
       const fullSummary = toArticleSummary(fullArticle);
       setEditingID(fullArticle.id);
       setSelectedArticleID(fullArticle.id);
@@ -717,6 +720,7 @@ export default function ArticlesPage() {
       } else if (fullArticle.markdown?.trim()) {
         try {
           htmlContent = await renderMarkdown(fullArticle.markdown);
+          if (pendingEditRef.current !== article.id) return;
         } catch {
           htmlContent = "<p></p>";
         }
