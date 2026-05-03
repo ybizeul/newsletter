@@ -1199,6 +1199,7 @@ export default function NewslettersPage() {
               key={introEditorKey}
               initialContent={introContentHTML || undefined}
               onContentChange={setIntroContentHTML}
+              minHeight={150}
             />
           </Input.Wrapper>
 
@@ -1364,6 +1365,7 @@ export default function NewslettersPage() {
               key={footerEditorKey}
               initialContent={footerContentHTML || undefined}
               onContentChange={setFooterContentHTML}
+              minHeight={150}
             />
           </Input.Wrapper>
             

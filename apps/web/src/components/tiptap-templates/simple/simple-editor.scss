@@ -43,7 +43,7 @@
 
 .simple-editor-content .tiptap.ProseMirror.simple-editor {
   flex: 1;
-  min-height: 320px;
+  min-height: var(--simple-editor-min-height, 320px);
   padding: 0.25rem 1.25rem 2rem;
 }
 

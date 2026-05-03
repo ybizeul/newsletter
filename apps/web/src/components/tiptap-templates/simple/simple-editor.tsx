@@ -217,9 +217,11 @@ const MobileToolbarContent = ({
 export function SimpleEditor({
   initialContent,
   onContentChange,
+  minHeight,
 }: {
   initialContent?: string
   onContentChange?: (html: string) => void
+  minHeight?: number
 }) {
   const isMobile = useIsBreakpoint()
   useWindowSize()
@@ -397,6 +399,7 @@ export function SimpleEditor({
           editor={editor}
           role="presentation"
           className="simple-editor-content"
+          style={minHeight ? { ['--simple-editor-min-height' as string]: `${minHeight}px` } : undefined}
         />
       </EditorContext.Provider>
     </div>
