@@ -188,6 +188,7 @@ export default function NewslettersPage() {
   const autosaveTimerRef = useRef<number | null>(null);
   const autosaveClearSavedRef = useRef<number | null>(null);
   const lastSavedDraftRef = useRef<string>("");
+  const isLoadingNewsletterRef = useRef(false);
   const pendingEditRef = useRef<string | null>(null);
   const wasNewslettersRouteActiveRef = useRef(false);
   const [leftPaneWidth, setLeftPaneWidth] = useState(getStoredNewslettersPaneWidth);
@@ -417,6 +418,7 @@ export default function NewslettersPage() {
 
   const onSelectNewsletter = async (newsletter: NewsletterSummary) => {
     pendingEditRef.current = newsletter.id;
+    isLoadingNewsletterRef.current = true;
     setIsManualNewNewsletterMode(false);
     setSelectedNewsletterID(newsletter.id);
     setError(null);
@@ -471,7 +473,9 @@ export default function NewslettersPage() {
       lastSavedDraftRef.current = JSON.stringify({
         title: fullNewsletter.title.trim(),
         headerId: fullNewsletter.headerId ?? "",
+        introMarkdown: "",
         introHTML: introHTML,
+        footerMarkdown: "",
         footerHTML: footerHTML,
         includeIndex: Boolean(fullNewsletter.includeIndex),
         contentWidth: fullNewsletter.contentWidth || 680,
@@ -480,6 +484,7 @@ export default function NewslettersPage() {
         contactTags: fullNewsletter.contactTags ?? [],
         contactTagsMode: fullNewsletter.contactTagsMode ?? "any"
       });
+      isLoadingNewsletterRef.current = false;
       setAutosaveStatus("idle");
       if (isMobile) {
         setIsMobileEditorOpen(true);
@@ -503,6 +508,7 @@ export default function NewslettersPage() {
         }
       }
     } catch (err) {
+      isLoadingNewsletterRef.current = false;
       setError(err instanceof Error ? err.message : "Failed to load newsletter details");
     }
   };
@@ -669,7 +675,7 @@ export default function NewslettersPage() {
   };
 
   useEffect(() => {
-    if (!selectedNewsletterId || isSubmitting) {
+    if (!selectedNewsletterId || isSubmitting || isLoadingNewsletterRef.current) {
       return;
     }
 
