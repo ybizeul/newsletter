@@ -2542,27 +2542,37 @@ func enforceContentTableStyles(input string) string {
 		})
 	})
 
-	// Links: remove default underline from <a>; underline is applied to
-	// child spans so the underline color matches the text color set by the
-	// editor on the <span>.
-	aRe := regexp.MustCompile(`(?i)<a\b[^>]*>`)
-	input = aRe.ReplaceAllStringFunc(input, func(tag string) string {
-		return ensureStyleIfMissing(tag, map[string]string{
-			"color":           "inherit",
-			"text-decoration": "none",
-		})
-	})
-
-	// Add underline to <span> elements inside <a> tags so the underline
-	// inherits the span's color (which is the actual text color).
+	// Links: for <a> tags that contain a <span>, remove the default underline
+	// from the <a> and apply it to the <span> so the underline color matches
+	// the text color set by the editor. For <a> tags without a <span>, keep
+	// the underline on the <a> itself.
 	aBlockRe := regexp.MustCompile(`(?is)<a\b[^>]*>.*?</a\s*>`)
 	spanRe := regexp.MustCompile(`(?i)<span\b[^>]*>`)
+	aOpenRe := regexp.MustCompile(`(?i)<a\b[^>]*>`)
 	input = aBlockRe.ReplaceAllStringFunc(input, func(aBlock string) string {
-		return spanRe.ReplaceAllStringFunc(aBlock, func(spanTag string) string {
-			return ensureStyleIfMissing(spanTag, map[string]string{
-				"text-decoration": "underline",
+		if spanRe.MatchString(aBlock) {
+			// Has <span> children: remove underline from <a>, add to <span>.
+			aBlock = aOpenRe.ReplaceAllStringFunc(aBlock, func(tag string) string {
+				return ensureStyleIfMissing(tag, map[string]string{
+					"color":           "inherit",
+					"text-decoration": "none",
+				})
 			})
-		})
+			aBlock = spanRe.ReplaceAllStringFunc(aBlock, func(spanTag string) string {
+				return ensureStyleIfMissing(spanTag, map[string]string{
+					"text-decoration": "underline",
+				})
+			})
+		} else {
+			// No <span>: ensure underline stays on the <a>.
+			aBlock = aOpenRe.ReplaceAllStringFunc(aBlock, func(tag string) string {
+				return ensureStyleIfMissing(tag, map[string]string{
+					"color":           "inherit",
+					"text-decoration": "underline",
+				})
+			})
+		}
+		return aBlock
 	})
 
 	return input
