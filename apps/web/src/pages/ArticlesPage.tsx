@@ -181,11 +181,16 @@ function applySvgFillColorOverride(svgDataUrl: string, fillColor: string): strin
   if (!fillColor.trim()) return svgDataUrl;
   const decoded = decodeSvgDataUrl(svgDataUrl);
   if (!decoded) return svgDataUrl;
-  const modified = decoded
+  let modified = decoded
     .replace(/fill\s*=\s*"[^"]*"/gi, `fill="${fillColor}"`)
     .replace(/fill\s*=\s*'[^']*'/gi, `fill='${fillColor}'`)
-    .replace(/(style\s*=\s*"[^"]*)fill\s*:\s*[^;"]+/gi, `$1fill:${fillColor}`)
-    .replace(/(style\s*=\s*'[^']*)fill\s*:\s*[^;']+/gi, `$1fill:${fillColor}`);
+    .replace(/(style\s*=\s*"[^"]*)(?<![a-z-])fill\s*:\s*[^;"]+/gi, `$1fill:${fillColor}`)
+    .replace(/(style\s*=\s*'[^']*)(?<![a-z-])fill\s*:\s*[^;']+/gi, `$1fill:${fillColor}`);
+  // Add fill to root <svg> for SVGs that rely on inherited default fill
+  modified = modified.replace(/(<svg\b[^>]*)(>)/i, (match, before, close) => {
+    if (/\bfill\s*=/i.test(before)) return match;
+    return `${before} fill="${fillColor}"${close}`;
+  });
   return `data:image/svg+xml,${encodeURIComponent(modified)}`;
 }
 
