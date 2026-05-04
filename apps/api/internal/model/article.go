@@ -25,6 +25,7 @@ type Article struct {
 	IconZoom        int           `bson:"iconZoom,omitempty" json:"iconZoom,omitempty"`
 	IconBgColor     string        `bson:"iconBgColor,omitempty" json:"iconBgColor,omitempty"`
 	IconStrokeColor string        `bson:"iconStrokeColor,omitempty" json:"iconStrokeColor,omitempty"`
+	IconFillColor   string        `bson:"iconFillColor,omitempty" json:"iconFillColor,omitempty"`
 	SentCount       int64         `bson:"sentCount" json:"sentCount"`
 	LastUsed        *time.Time    `bson:"last_used,omitempty" json:"lastUsed,omitempty"`
 	Preview         string        `bson:"preview,omitempty" json:"preview,omitempty"`

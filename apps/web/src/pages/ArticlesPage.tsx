@@ -124,7 +124,7 @@ function extractTopicIconStrokeColor(illustration?: string): string {
   }
 }
 
-function buildTopicIconIllustration(iconMap: TablerIconMap | null, iconName: string, circleColor: string, strokeColor: string): string {
+function buildTopicIconIllustration(iconMap: TablerIconMap | null, iconName: string, circleColor: string, strokeColor: string, fillColor?: string): string {
   if (!iconMap) {
     return "";
   }
@@ -135,10 +135,14 @@ function buildTopicIconIllustration(iconMap: TablerIconMap | null, iconName: str
   }
 
   const iconSvgRaw = renderToStaticMarkup(<IconComponent size={22} />);
-  const iconInner = iconSvgRaw
+  let iconInner = iconSvgRaw
     .replace(/^<svg[^>]*>/i, "")
     .replace(/<\/svg>$/i, "");
-  const iconSvg = `<g transform="translate(8 8)" color="${strokeColor}" stroke="currentColor" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${iconInner}</g>`;
+  const resolvedFill = fillColor?.trim() || "none";
+  if (fillColor?.trim()) {
+    iconInner = iconInner.replace(/\sfill\s*=\s*"none"/gi, "");
+  }
+  const iconSvg = `<g transform="translate(8 8)" color="${strokeColor}" stroke="currentColor" fill="${resolvedFill}" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${iconInner}</g>`;
 
   const finalSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 40 40"><circle cx="20" cy="20" r="20" fill="${circleColor}"/>${iconSvg}</svg>`;
   return `data:image/svg+xml,${encodeURIComponent(finalSvg)}`;
@@ -173,7 +177,19 @@ async function rasterizeSvgDataUrlToPngDataUrl(svgDataUrl: string): Promise<stri
   });
 }
 
-function buildPastedImageTopicIconIllustration(imageDataUrl: string, circleColor: string, sizeDelta: number): string {
+function applySvgFillColorOverride(svgDataUrl: string, fillColor: string): string {
+  if (!fillColor.trim()) return svgDataUrl;
+  const decoded = decodeSvgDataUrl(svgDataUrl);
+  if (!decoded) return svgDataUrl;
+  const modified = decoded
+    .replace(/fill\s*=\s*"[^"]*"/gi, `fill="${fillColor}"`)
+    .replace(/fill\s*=\s*'[^']*'/gi, `fill='${fillColor}'`)
+    .replace(/(style\s*=\s*"[^"]*)fill\s*:\s*[^;"]+/gi, `$1fill:${fillColor}`)
+    .replace(/(style\s*=\s*'[^']*)fill\s*:\s*[^;']+/gi, `$1fill:${fillColor}`);
+  return `data:image/svg+xml,${encodeURIComponent(modified)}`;
+}
+
+function buildPastedImageTopicIconIllustration(imageDataUrl: string, circleColor: string, sizeDelta: number, fillColor?: string): string {
   const trimmed = imageDataUrl.trim();
   if (!trimmed || !trimmed.startsWith("data:image/svg+xml")) {
     return "";
@@ -218,7 +234,8 @@ function buildPastedImageTopicIconIllustration(imageDataUrl: string, circleColor
   const imageX = insetOffset + (insetSize - imageWidth) / 2;
   const imageY = insetOffset + (insetSize - imageHeight) / 2;
 
-  const finalSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 40 40"><defs><clipPath id="topicIconClip"><circle cx="20" cy="20" r="20"/></clipPath></defs><circle cx="20" cy="20" r="20" fill="${circleColor}"/><g clip-path="url(#topicIconClip)"><image href="${trimmed}" x="${imageX}" y="${imageY}" width="${imageWidth}" height="${imageHeight}" preserveAspectRatio="none"/></g></svg>`;
+  const resolvedImage = fillColor?.trim() ? applySvgFillColorOverride(trimmed, fillColor) : trimmed;
+  const finalSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 40 40"><defs><clipPath id="topicIconClip"><circle cx="20" cy="20" r="20"/></clipPath></defs><circle cx="20" cy="20" r="20" fill="${circleColor}"/><g clip-path="url(#topicIconClip)"><image href="${resolvedImage}" x="${imageX}" y="${imageY}" width="${imageWidth}" height="${imageHeight}" preserveAspectRatio="none"/></g></svg>`;
   return `data:image/svg+xml,${encodeURIComponent(finalSvg)}`;
 }
 
@@ -461,6 +478,7 @@ export default function ArticlesPage() {
   const [customIconImageSizeDelta, setCustomIconImageSizeDelta] = useState(0);
   const [topicIconBgColor, setTopicIconBgColor] = useState(DEFAULT_TOPIC_ICON_BG);
   const [topicIconStrokeColor, setTopicIconStrokeColor] = useState(DEFAULT_TOPIC_ICON_STROKE);
+  const [topicIconFillColor, setTopicIconFillColor] = useState("");
   const [topicIconIllustration, setTopicIconIllustration] = useState("");
   const [isIconBrowserOpen, setIsIconBrowserOpen] = useState(false);
   const [savedIcons, setSavedIcons] = useState<string[]>(getStoredSavedIcons);
@@ -693,6 +711,7 @@ export default function ArticlesPage() {
     setCustomIconImageSizeDelta(0);
     setTopicIconBgColor(DEFAULT_TOPIC_ICON_BG);
     setTopicIconStrokeColor(DEFAULT_TOPIC_ICON_STROKE);
+    setTopicIconFillColor("");
     setTopicIconIllustration("");
     setEditingID(null);
     setSelectedArticleID(null);
@@ -741,6 +760,7 @@ export default function ArticlesPage() {
       const iconStyleSource = fullArticle.iconSource || fullArticle.illustration;
       setTopicIconBgColor(fullArticle.iconBgColor || extractTopicIconBackgroundColor(iconStyleSource));
       setTopicIconStrokeColor(fullArticle.iconStrokeColor || extractTopicIconStrokeColor(iconStyleSource));
+      setTopicIconFillColor(fullArticle.iconFillColor || "");
       setTopicIconIllustration(fullArticle.illustration ?? "");
       setArticles((current) =>
         current.map((item) => (item.id === fullSummary.id ? fullSummary : item))
@@ -755,7 +775,8 @@ export default function ArticlesPage() {
         iconSource: fullArticle.iconSource ?? "",
         iconZoom: typeof fullArticle.iconZoom === "number" ? fullArticle.iconZoom : 0,
         iconBgColor: fullArticle.iconBgColor || "",
-        iconStrokeColor: fullArticle.iconStrokeColor || ""
+        iconStrokeColor: fullArticle.iconStrokeColor || "",
+        iconFillColor: fullArticle.iconFillColor || ""
       });
       setAutosaveStatus("idle");
       if (isMobile) {
@@ -782,9 +803,9 @@ export default function ArticlesPage() {
 
   const generatedTopicIconSource = useMemo(
     () => customIconImageDataUrl.trim()
-      ? buildPastedImageTopicIconIllustration(customIconImageDataUrl, topicIconBgColor, customIconImageSizeDelta)
-      : buildTopicIconIllustration(tablerIconMap, resolvedTopicIconName, topicIconBgColor, topicIconStrokeColor),
-    [customIconImageDataUrl, customIconImageSizeDelta, tablerIconMap, resolvedTopicIconName, topicIconBgColor, topicIconStrokeColor]
+      ? buildPastedImageTopicIconIllustration(customIconImageDataUrl, topicIconBgColor, customIconImageSizeDelta, topicIconFillColor)
+      : buildTopicIconIllustration(tablerIconMap, resolvedTopicIconName, topicIconBgColor, topicIconStrokeColor, topicIconFillColor),
+    [customIconImageDataUrl, customIconImageSizeDelta, tablerIconMap, resolvedTopicIconName, topicIconBgColor, topicIconStrokeColor, topicIconFillColor]
   );
 
   useEffect(() => {
@@ -1026,10 +1047,11 @@ export default function ArticlesPage() {
     illustration: topicIconIllustration,
     iconSource: customIconImageDataUrl.trim()
       ? customIconImageDataUrl.trim()
-      : buildTopicIconIllustration(tablerIconMap, resolvedTopicIconName, topicIconBgColor, topicIconStrokeColor),
+      : buildTopicIconIllustration(tablerIconMap, resolvedTopicIconName, topicIconBgColor, topicIconStrokeColor, topicIconFillColor),
     iconZoom: customIconImageDataUrl.trim() ? customIconImageSizeDelta : 0,
     iconBgColor: topicIconBgColor,
-    iconStrokeColor: topicIconStrokeColor
+    iconStrokeColor: topicIconStrokeColor,
+    iconFillColor: topicIconFillColor
   });
 
   const onSubmit = async () => {
@@ -2037,6 +2059,14 @@ export default function ArticlesPage() {
                   value={topicIconStrokeColor}
                   onChange={setTopicIconStrokeColor}
                   swatches={["#ffffff", "#f8f9fa", "#dee2e6", "#212529", "#000000"]}
+                  style={{ minWidth: 220 }}
+                />
+                <ColorInput
+                  label="Fill"
+                  format="hex"
+                  value={topicIconFillColor}
+                  onChange={setTopicIconFillColor}
+                  swatches={["#228be6", "#15aabf", "#40c057", "#fab005", "#fd7e14", "#fa5252", "#ffffff", "#000000"]}
                   style={{ minWidth: 220 }}
                 />
               </Group>
