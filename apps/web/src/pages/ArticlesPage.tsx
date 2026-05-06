@@ -185,11 +185,7 @@ function applySvgFillColorOverride(svgDataUrl: string, fillColor: string): strin
     .replace(/fill\s*=\s*"[^"]*"/gi, `fill="${fillColor}"`)
     .replace(/fill\s*=\s*'[^']*'/gi, `fill='${fillColor}'`)
     .replace(/(style\s*=\s*"[^"]*)(?<![a-z-])fill\s*:\s*[^;"]+/gi, `$1fill:${fillColor}`)
-    .replace(/(style\s*=\s*'[^']*)(?<![a-z-])fill\s*:\s*[^;']+/gi, `$1fill:${fillColor}`)
-    // Replace fill inside <style> CSS blocks
-    .replace(/(<style\b[^>]*>)([\s\S]*?)(<\/style>)/gi, (_m, open, css, close) =>
-      open + css.replace(/(?<![a-z-])fill\s*:\s*[^;}\s]+/gi, `fill:${fillColor}`) + close
-    );
+    .replace(/(style\s*=\s*'[^']*)(?<![a-z-])fill\s*:\s*[^;']+/gi, `$1fill:${fillColor}`);
   // Add fill to root <svg> for SVGs that rely on inherited default fill
   modified = modified.replace(/(<svg\b[^>]*)(>)/i, (match, before, close) => {
     if (/\bfill\s*=/i.test(before)) return match;
@@ -2031,7 +2027,11 @@ export default function ArticlesPage() {
           <Paper withBorder p="sm" radius="md">
             <Stack gap="sm" align="center">
               <UnstyledButton
-                onClick={() => {}}
+                onClick={() => {
+                  setTopicIcon("");
+                  setCustomIconImageDataUrl("");
+                  setCustomIconImageSizeDelta(0);
+                }}
                 style={{
                   width: 96,
                   height: 96,
