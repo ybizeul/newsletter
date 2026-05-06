@@ -348,6 +348,11 @@ export default function ContactsPage() {
                     Back
                   </Button>
                 ) : null}
+                {isMobile && isEditing ? (
+                  <Button variant="light" size="xs" onClick={openNew}>
+                    New
+                  </Button>
+                ) : null}
                 <Text fw={700}>{rightPanelTitle}</Text>
               </Group>
               {isEditing ? (

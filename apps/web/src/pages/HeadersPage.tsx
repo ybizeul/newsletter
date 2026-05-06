@@ -495,6 +495,18 @@ export default function HeadersPage() {
                   Back
                 </Button>
               ) : null}
+              {isMobile && selectedHeaderId ? (
+                <Button
+                  variant="light"
+                  size="xs"
+                  onClick={() => {
+                    setIsManualNewHeaderMode(true);
+                    resetForm();
+                  }}
+                >
+                  New
+                </Button>
+              ) : null}
               <Text fw={700}>{selectedHeaderId ? "Edit Header" : "New Header"}</Text>
               {selectedHeaderId && (autosaveStatus === "saving" || autosaveStatus === "error") ? (
                 <Text size="xs" c={autosaveStatus === "error" ? "red" : "dimmed"}>

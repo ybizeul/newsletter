@@ -27,7 +27,7 @@ import {
   useCombobox
 } from "@mantine/core";
 import { useMediaQuery } from "@mantine/hooks";
-import { IconCheck, IconChevronDown, IconChevronLeft, IconFiles, IconMail, IconPencil, IconPointFilled, IconSearch, IconTrash, IconUpload, IconUserCheck, IconUserFilled, IconX } from "@tabler/icons-react";
+import { IconCheck, IconChevronDown, IconChevronLeft, IconFiles, IconMail, IconPencil, IconPlus, IconPointFilled, IconSearch, IconTrash, IconUpload, IconUserCheck, IconUserFilled, IconX } from "@tabler/icons-react";
 import { SimpleEditor } from "@/components/tiptap-templates/simple/simple-editor";
 import { renderToStaticMarkup } from "react-dom/server";
 import { useParams } from "react-router-dom";
@@ -1721,6 +1721,21 @@ export default function ArticlesPage() {
               {isMobile ? (
                 <ActionIcon variant="light" size="md" aria-label="Back" onClick={() => setIsMobileEditorOpen(false)}>
                   <IconChevronLeft size={18} />
+                </ActionIcon>
+              ) : null}
+              {isMobile && editingId ? (
+                <ActionIcon
+                  variant="light"
+                  size="md"
+                  aria-label="New Article"
+                  title="New Article"
+                  onClick={() => {
+                    pendingEditRef.current = null;
+                    setIsManualNewArticleMode(true);
+                    resetForm();
+                  }}
+                >
+                  <IconPlus size={16} />
                 </ActionIcon>
               ) : null}
               <Text fw={700} style={{ whiteSpace: "nowrap", flexShrink: 0 }}>

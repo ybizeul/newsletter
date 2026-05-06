@@ -25,6 +25,7 @@ import {
   IconEye,
   IconFiles,
   IconGripVertical,
+  IconPlus,
   IconSend,
   IconStar,
   IconTrash,
@@ -1143,6 +1144,22 @@ export default function NewslettersPage() {
               {isMobile ? (
                 <ActionIcon variant="light" size="md" aria-label="Back" onClick={() => setIsMobileEditorOpen(false)}>
                   <IconChevronLeft size={18} />
+                </ActionIcon>
+              ) : null}
+              {isMobile && selectedNewsletterId ? (
+                <ActionIcon
+                  variant="light"
+                  size="md"
+                  aria-label="New Newsletter"
+                  title="New Newsletter"
+                  onClick={() => {
+                    setCreateModalTitle("");
+                    setCreateModalRecipient("");
+                    setCreateModalError(null);
+                    setIsCreateModalOpen(true);
+                  }}
+                >
+                  <IconPlus size={16} />
                 </ActionIcon>
               ) : null}
               <Text fw={700} style={{ whiteSpace: "nowrap", flexShrink: 0 }}>{selectedNewsletterId ? "Edit Newsletter" : "New Newsletter"}</Text>
