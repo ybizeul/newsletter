@@ -1,4 +1,4 @@
-import { type MouseEvent as ReactMouseEvent, useEffect, useMemo, useRef, useState } from "react";
+import { type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActionIcon,
   Box,
@@ -90,11 +90,14 @@ function getStoredFavoriteNewsletterId(): string | null {
 function isValidRecipientAddress(value: string): boolean {
   const trimmed = value.trim();
   if (!trimmed) return false;
-  // Accepts plain email or "First Last <email@domain.com>" RFC 5322 format.
-  const simpleEmail = /^[^\s@<>]+@[^\s@<>]+\.[^\s@<>]+$/;
-  if (simpleEmail.test(trimmed)) return true;
-  const namedEmail = /^.+<[^\s@<>]+@[^\s@<>]+\.[^\s@<>]+>$/;
-  return namedEmail.test(trimmed);
+  // Basic structural check for client-side feedback. The backend performs
+  // authoritative RFC 5322 validation via mail.ParseAddress.
+  // Accepts plain "email@domain.com" or "First Last <email@domain.com>" format.
+  const hasAt = trimmed.includes("@");
+  if (!hasAt) return false;
+  const namedEmail = /^[^<]*<[^>]+@[^>]+>$/;
+  if (namedEmail.test(trimmed)) return true;
+  return /^[^<>\s]+@[^<>\s]+\.[^<>\s]+$/.test(trimmed);
 }
 
 function formatNewsletterCreatedAt(value: string): string {
@@ -678,6 +681,11 @@ export default function NewslettersPage() {
     }
   };
 
+  const onCreateModalKeyDown = (e: ReactKeyboardEvent) => {
+    if (e.key === "Enter") {
+      void onCreateNewsletter();
+    }
+  };
 
   const onSave = async () => {
     if (!title.trim()) {
@@ -1534,7 +1542,7 @@ export default function NewslettersPage() {
             required
             value={createModalTitle}
             onChange={(e) => setCreateModalTitle(e.currentTarget.value)}
-            onKeyDown={(e) => { if (e.key === "Enter") { void onCreateNewsletter(); } }}
+            onKeyDown={onCreateModalKeyDown}
             disabled={isCreatingNewsletter}
           />
           <TextInput
@@ -1543,7 +1551,7 @@ export default function NewslettersPage() {
             placeholder="email@example.com"
             value={createModalRecipient}
             onChange={(e) => setCreateModalRecipient(e.currentTarget.value)}
-            onKeyDown={(e) => { if (e.key === "Enter") { void onCreateNewsletter(); } }}
+            onKeyDown={onCreateModalKeyDown}
             disabled={isCreatingNewsletter}
           />
           {createModalError ? <Text c="red" size="sm">{createModalError}</Text> : null}
