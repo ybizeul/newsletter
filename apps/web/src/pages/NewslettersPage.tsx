@@ -650,6 +650,13 @@ export default function NewslettersPage() {
     }, 1200);
   };
 
+  const openCreateModal = () => {
+    setCreateModalTitle("");
+    setCreateModalRecipient("");
+    setCreateModalError(null);
+    setIsCreateModalOpen(true);
+  };
+
   const onCreateNewsletter = async () => {
     if (!createModalTitle.trim()) {
       setCreateModalError("Title is required");
@@ -1036,12 +1043,7 @@ export default function NewslettersPage() {
             <Button
               variant="light"
               size="xs"
-              onClick={() => {
-                setCreateModalTitle("");
-                setCreateModalRecipient("");
-                setCreateModalError(null);
-                setIsCreateModalOpen(true);
-              }}
+              onClick={openCreateModal}
             >
               New
             </Button>
@@ -1152,12 +1154,7 @@ export default function NewslettersPage() {
                   size="md"
                   aria-label="New Newsletter"
                   title="New Newsletter"
-                  onClick={() => {
-                    setCreateModalTitle("");
-                    setCreateModalRecipient("");
-                    setCreateModalError(null);
-                    setIsCreateModalOpen(true);
-                  }}
+                  onClick={openCreateModal}
                 >
                   <IconPlus size={16} />
                 </ActionIcon>

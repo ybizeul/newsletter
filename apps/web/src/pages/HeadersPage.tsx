@@ -1,5 +1,6 @@
 import { type MouseEvent as ReactMouseEvent, useEffect, useRef, useState } from "react";
 import {
+  ActionIcon,
   Button,
   Group,
   Loader,
@@ -10,6 +11,7 @@ import {
   TextInput
 } from "@mantine/core";
 import { useMediaQuery } from "@mantine/hooks";
+import { IconPlus } from "@tabler/icons-react";
 import { createHeader, deleteHeader, listHeaders, renderMarkdown, updateHeader } from "../lib/api";
 import { useAuth } from "../lib/auth";
 import type { Header } from "../types/domain";
@@ -496,16 +498,18 @@ export default function HeadersPage() {
                 </Button>
               ) : null}
               {isMobile && selectedHeaderId ? (
-                <Button
+                <ActionIcon
                   variant="light"
-                  size="xs"
+                  size="md"
+                  aria-label="New Header"
+                  title="New Header"
                   onClick={() => {
                     setIsManualNewHeaderMode(true);
                     resetForm();
                   }}
                 >
-                  New
-                </Button>
+                  <IconPlus size={16} />
+                </ActionIcon>
               ) : null}
               <Text fw={700}>{selectedHeaderId ? "Edit Header" : "New Header"}</Text>
               {selectedHeaderId && (autosaveStatus === "saving" || autosaveStatus === "error") ? (
