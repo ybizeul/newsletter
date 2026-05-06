@@ -25,6 +25,7 @@ import {
   IconEye,
   IconFiles,
   IconGripVertical,
+  IconPlus,
   IconSend,
   IconStar,
   IconTrash,
@@ -649,6 +650,13 @@ export default function NewslettersPage() {
     }, 1200);
   };
 
+  const openCreateModal = () => {
+    setCreateModalTitle("");
+    setCreateModalRecipient("");
+    setCreateModalError(null);
+    setIsCreateModalOpen(true);
+  };
+
   const onCreateNewsletter = async () => {
     if (!createModalTitle.trim()) {
       setCreateModalError("Title is required");
@@ -1035,12 +1043,7 @@ export default function NewslettersPage() {
             <Button
               variant="light"
               size="xs"
-              onClick={() => {
-                setCreateModalTitle("");
-                setCreateModalRecipient("");
-                setCreateModalError(null);
-                setIsCreateModalOpen(true);
-              }}
+              onClick={openCreateModal}
             >
               New
             </Button>
@@ -1143,6 +1146,17 @@ export default function NewslettersPage() {
               {isMobile ? (
                 <ActionIcon variant="light" size="md" aria-label="Back" onClick={() => setIsMobileEditorOpen(false)}>
                   <IconChevronLeft size={18} />
+                </ActionIcon>
+              ) : null}
+              {isMobile && selectedNewsletterId ? (
+                <ActionIcon
+                  variant="light"
+                  size="md"
+                  aria-label="New Newsletter"
+                  title="New Newsletter"
+                  onClick={openCreateModal}
+                >
+                  <IconPlus size={16} />
                 </ActionIcon>
               ) : null}
               <Text fw={700} style={{ whiteSpace: "nowrap", flexShrink: 0 }}>{selectedNewsletterId ? "Edit Newsletter" : "New Newsletter"}</Text>

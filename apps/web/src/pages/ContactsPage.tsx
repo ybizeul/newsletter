@@ -15,7 +15,7 @@ import {
   TextInput
 } from "@mantine/core";
 import { useMediaQuery } from "@mantine/hooks";
-import { IconUserPlus, IconX } from "@tabler/icons-react";
+import { IconPlus, IconUserPlus, IconX } from "@tabler/icons-react";
 import { bulkImportContacts, createContact, deleteContact, listContacts, updateContact } from "../lib/api";
 import type { Contact } from "../types/domain";
 
@@ -347,6 +347,17 @@ export default function ContactsPage() {
                   <Button variant="subtle" size="xs" onClick={() => setIsMobileEditorOpen(false)}>
                     Back
                   </Button>
+                ) : null}
+                {isMobile && isEditing ? (
+                  <ActionIcon
+                    variant="light"
+                    size="md"
+                    aria-label="New Contact"
+                    title="New Contact"
+                    onClick={openNew}
+                  >
+                    <IconPlus size={16} />
+                  </ActionIcon>
                 ) : null}
                 <Text fw={700}>{rightPanelTitle}</Text>
               </Group>
