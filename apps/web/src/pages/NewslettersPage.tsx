@@ -1,4 +1,4 @@
-import { type MouseEvent as ReactMouseEvent, useEffect, useMemo, useRef, useState } from "react";
+import { type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActionIcon,
   Box,
@@ -85,6 +85,19 @@ function getStoredFavoriteNewsletterId(): string | null {
   }
   const trimmed = raw.trim();
   return trimmed.length > 0 ? trimmed : null;
+}
+
+function isValidRecipientAddress(value: string): boolean {
+  const trimmed = value.trim();
+  if (!trimmed) return false;
+  // Basic structural check for client-side feedback. The backend performs
+  // authoritative RFC 5322 validation via mail.ParseAddress.
+  // Accepts plain "email@domain.com" or "First Last <email@domain.com>" format.
+  const hasAt = trimmed.includes("@");
+  if (!hasAt) return false;
+  const namedEmail = /^[^<]*<[^>]+@[^>]+>$/;
+  if (namedEmail.test(trimmed)) return true;
+  return /^[^<>\s]+@[^<>\s]+\.[^<>\s]+$/.test(trimmed);
 }
 
 function formatNewsletterCreatedAt(value: string): string {
@@ -245,6 +258,12 @@ export default function NewslettersPage() {
   const [autosaveStatus, setAutosaveStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const [favoriteNewsletterId, setFavoriteNewsletterId] = useState<string | null>(getStoredFavoriteNewsletterId);
   const [isManualNewNewsletterMode, setIsManualNewNewsletterMode] = useState(false);
+
+  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  const [createModalTitle, setCreateModalTitle] = useState("");
+  const [createModalRecipient, setCreateModalRecipient] = useState("");
+  const [isCreatingNewsletter, setIsCreatingNewsletter] = useState(false);
+  const [createModalError, setCreateModalError] = useState<string | null>(null);
 
   const withFavoriteFlag = (newsletter: NewsletterSummary): NewsletterSummary => ({
     ...newsletter,
@@ -630,6 +649,44 @@ export default function NewslettersPage() {
     }, 1200);
   };
 
+  const onCreateNewsletter = async () => {
+    if (!createModalTitle.trim()) {
+      setCreateModalError("Title is required");
+      return;
+    }
+    const recipient = createModalRecipient.trim();
+    if (recipient && !isValidRecipientAddress(recipient)) {
+      setCreateModalError("Invalid email address. Use email@domain.com or First Last <email@domain.com>");
+      return;
+    }
+    setIsCreatingNewsletter(true);
+    setCreateModalError(null);
+    try {
+      const created = await createNewsletter({
+        creatorId: oidcEnabled ? undefined : FALLBACK_CREATOR_ID,
+        title: createModalTitle.trim(),
+        introMarkdown: "",
+        includeIndex: false,
+        articleIds: [],
+        recipientIds: recipient ? [recipient] : [],
+      });
+      setIsCreateModalOpen(false);
+      const summary = withFavoriteFlag(toNewsletterSummary(created));
+      setNewsletters((current) => [summary, ...current]);
+      await onSelectNewsletter(summary);
+    } catch (err) {
+      setCreateModalError(err instanceof Error ? err.message : "Failed to create newsletter");
+    } finally {
+      setIsCreatingNewsletter(false);
+    }
+  };
+
+  const onCreateModalKeyDown = (e: ReactKeyboardEvent) => {
+    if (e.key === "Enter") {
+      void onCreateNewsletter();
+    }
+  };
+
   const onSave = async () => {
     if (!title.trim()) {
       setError("Title is required");
@@ -979,12 +1036,10 @@ export default function NewslettersPage() {
               variant="light"
               size="xs"
               onClick={() => {
-                pendingEditRef.current = null;
-                setIsManualNewNewsletterMode(true);
-                resetForm();
-                if (isMobile) {
-                  setIsMobileEditorOpen(true);
-                }
+                setCreateModalTitle("");
+                setCreateModalRecipient("");
+                setCreateModalError(null);
+                setIsCreateModalOpen(true);
               }}
             >
               New
@@ -1473,6 +1528,43 @@ export default function NewslettersPage() {
         </Stack>
         )}
       </div>
+
+      <Modal
+        opened={isCreateModalOpen}
+        onClose={() => setIsCreateModalOpen(false)}
+        title="New Newsletter"
+        centered
+      >
+        <Stack>
+          <TextInput
+            label="Title"
+            placeholder="Newsletter title"
+            required
+            value={createModalTitle}
+            onChange={(e) => setCreateModalTitle(e.currentTarget.value)}
+            onKeyDown={onCreateModalKeyDown}
+            disabled={isCreatingNewsletter}
+          />
+          <TextInput
+            label="Recipient Email"
+            description="email@domain.com or First Last <email@domain.com>"
+            placeholder="email@example.com"
+            value={createModalRecipient}
+            onChange={(e) => setCreateModalRecipient(e.currentTarget.value)}
+            onKeyDown={onCreateModalKeyDown}
+            disabled={isCreatingNewsletter}
+          />
+          {createModalError ? <Text c="red" size="sm">{createModalError}</Text> : null}
+          <Group justify="flex-end" mt="xs">
+            <Button variant="default" onClick={() => setIsCreateModalOpen(false)} disabled={isCreatingNewsletter}>
+              Cancel
+            </Button>
+            <Button onClick={() => void onCreateNewsletter()} loading={isCreatingNewsletter}>
+              Create
+            </Button>
+          </Group>
+        </Stack>
+      </Modal>
 
       <Modal
         opened={Boolean(deleteNewsletterId)}

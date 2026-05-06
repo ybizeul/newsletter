@@ -758,7 +758,14 @@ func normalizeRecipientIDs(recipientIDs []string) ([]string, error) {
 			continue
 		}
 
-		key := strings.ToLower(recipient)
+		// Validate as a plain email address or "First Last <email>" format.
+		parsed, err := mail.ParseAddress(recipient)
+		if err != nil {
+			return nil, fmt.Errorf("invalid recipient address %q", recipient)
+		}
+
+		// Deduplicate by parsed email address (case-insensitive).
+		key := strings.ToLower(parsed.Address)
 		if _, ok := seen[key]; ok {
 			continue
 		}
@@ -1588,9 +1595,17 @@ func (h *Handler) processScheduledNewsletter(ctx context.Context, newsletter mod
 		}
 	} else {
 		for _, r := range loadedNewsletter.RecipientIDs {
-			email := strings.TrimSpace(r)
-			if email != "" {
-				recipients = append(recipients, email)
+			// Extract the plain email address from "First Last <email>" or plain "email" format.
+			if parsed, err := mail.ParseAddress(strings.TrimSpace(r)); err == nil {
+				if parsed.Address != "" {
+					recipients = append(recipients, parsed.Address)
+				}
+			} else {
+				// Fallback: use the raw value for backward compatibility with legacy entries.
+				email := strings.TrimSpace(r)
+				if email != "" {
+					recipients = append(recipients, email)
+				}
 			}
 		}
 	}
