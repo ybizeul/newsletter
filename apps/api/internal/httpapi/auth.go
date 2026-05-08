@@ -132,7 +132,7 @@ func redirectURI(r *http.Request) string {
 }
 
 func (a *OIDCAuth) oauth2Config(redirectURL string) oauth2.Config {
-	scopes := []string{oidc.ScopeOpenID, "profile", "email"}
+	scopes := []string{oidc.ScopeOpenID, "profile", "email", oidc.ScopeOfflineAccess}
 	if a.smtpXoauth2 {
 		if a.useGraphAPI {
 			scopes = append(scopes, "https://graph.microsoft.com/Mail.Send")
