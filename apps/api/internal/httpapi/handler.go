@@ -984,6 +984,7 @@ type updateNewsletterRequest struct {
 	FooterHTML      string   `json:"footerHTML"`
 	IncludeIndex    bool     `json:"includeIndex"`
 	ContentWidth    int      `json:"contentWidth"`
+	Archived        bool     `json:"archived"`
 	ArticleIDs      []string `json:"articleIds"`
 	RecipientIDs    []string `json:"recipientIds"`
 	ContactTags     []string `json:"contactTags"`
@@ -1059,6 +1060,7 @@ func (h *Handler) ListNewsletters(w http.ResponseWriter, r *http.Request) {
 			"articleIds":     1,
 			"recipientIds":   1,
 			"isFavorite":     1,
+			"archived":       1,
 			"status":         1,
 			"deliveryError":  1,
 			"scheduledAt":    1,
@@ -1080,6 +1082,7 @@ func (h *Handler) ListNewsletters(w http.ResponseWriter, r *http.Request) {
 			ArticleIDs     []string               `bson:"articleIds"`
 			RecipientIDs   []string               `bson:"recipientIds"`
 			IsFavorite     bool                   `bson:"isFavorite"`
+			Archived       bool                   `bson:"archived"`
 			Status         model.NewsletterStatus `bson:"status"`
 			DeliveryError  string                 `bson:"deliveryError,omitempty"`
 			ScheduledAt    *time.Time             `bson:"scheduledAt,omitempty"`
@@ -1097,6 +1100,7 @@ func (h *Handler) ListNewsletters(w http.ResponseWriter, r *http.Request) {
 			ArticleIDs    []string               `json:"articleIds"`
 			RecipientIDs  []string               `json:"recipientIds"`
 			IsFavorite    bool                   `json:"isFavorite"`
+			Archived      bool                   `json:"archived"`
 			Status        model.NewsletterStatus `json:"status"`
 			DeliveryError string                 `json:"deliveryError,omitempty"`
 			ScheduledAt   *time.Time             `json:"scheduledAt,omitempty"`
@@ -1130,6 +1134,7 @@ func (h *Handler) ListNewsletters(w http.ResponseWriter, r *http.Request) {
 				ArticleIDs:    raw.ArticleIDs,
 				RecipientIDs:  raw.RecipientIDs,
 				IsFavorite:    raw.IsFavorite,
+				Archived:      raw.Archived,
 				Status:        raw.Status,
 				DeliveryError: raw.DeliveryError,
 				ScheduledAt:   raw.ScheduledAt,
@@ -1299,6 +1304,7 @@ func (h *Handler) UpdateNewsletter(w http.ResponseWriter, r *http.Request, id st
 			"footerHTML":      req.FooterHTML,
 			"includeIndex":    req.IncludeIndex,
 			"contentWidth":    req.ContentWidth,
+			"archived":        req.Archived,
 			"articleIds":      req.ArticleIDs,
 			"recipientIds":    recipientIDs,
 			"contactTags":     normalizeContactTags(req.ContactTags),

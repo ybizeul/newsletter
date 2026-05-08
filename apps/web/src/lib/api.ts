@@ -44,6 +44,7 @@ type UpdateNewsletterPayload = {
   introHTML?: string;
   includeIndex: boolean;
   contentWidth: number;
+  archived: boolean;
   articleIds: string[];
   recipientIds: string[];
   contactTags?: string[];

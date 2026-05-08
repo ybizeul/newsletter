@@ -29,6 +29,7 @@ type Newsletter struct {
 	ContactTagsMode string           `bson:"contactTagsMode,omitempty" json:"contactTagsMode,omitempty"`
 	ContentWidth    int              `bson:"contentWidth,omitempty" json:"contentWidth"`
 	IsFavorite      bool             `bson:"isFavorite" json:"isFavorite"`
+	Archived        bool             `bson:"archived" json:"archived"`
 	Status          NewsletterStatus `bson:"status" json:"status"`
 	DeliveryError   string           `bson:"deliveryError,omitempty" json:"deliveryError,omitempty"`
 	ScheduledAt     *time.Time       `bson:"scheduledAt,omitempty" json:"scheduledAt,omitempty"`

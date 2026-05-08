@@ -182,6 +182,7 @@ function toNewsletterSummary(newsletter: Newsletter): NewsletterSummary {
     articleIds: newsletter.articleIds,
     recipientIds: newsletter.recipientIds,
     isFavorite: newsletter.isFavorite,
+    archived: newsletter.archived,
     status: newsletter.status,
     deliveryError: newsletter.deliveryError,
     scheduledAt: newsletter.scheduledAt,
@@ -238,6 +239,7 @@ export default function NewslettersPage() {
   const [footerContentHTML, setFooterContentHTML] = useState("");
   const [footerEditorKey, setFooterEditorKey] = useState("");
   const [includeIndex, setIncludeIndex] = useState(false);
+  const [archived, setArchived] = useState(false);
   const [contentWidth, setContentWidth] = useState(680);
   const [articleIds, setArticleIDs] = useState<string[]>([]);
   const [draggedArticleId, setDraggedArticleId] = useState<string | null>(null);
@@ -424,6 +426,7 @@ export default function NewslettersPage() {
     setFooterEditorKey("");
     setFooterMarkdown("");
     setIncludeIndex(false);
+    setArchived(false);
     setContentWidth(680);
     setArticleIDs([]);
     setDraggedArticleId(null);
@@ -471,6 +474,7 @@ export default function NewslettersPage() {
       setFooterContentHTML(footerHTML || "");
       setFooterEditorKey(fullNewsletter.id + "-footer");
       setIncludeIndex(Boolean(fullNewsletter.includeIndex));
+      setArchived(Boolean(fullNewsletter.archived));
       setContentWidth(fullNewsletter.contentWidth || 680);
       setArticleIDs(fullNewsletter.articleIds);
       setRecipientRaw(fullNewsletter.recipientIds.join(","));
@@ -635,6 +639,7 @@ export default function NewslettersPage() {
     footerHTML: footerContentHTML,
     includeIndex,
     contentWidth,
+    archived,
     articleIds,
     recipientIds: recipientMode === "emails" ? parseRecipients() : [],
     contactTags: recipientMode === "contacts" ? contactTags : [],
@@ -1052,7 +1057,7 @@ export default function NewslettersPage() {
 
         <ScrollArea h="calc(100% - 52px)" offsetScrollbars>
           <Stack gap={0}>
-            {newsletters.map((newsletter) => (
+            {[...newsletters].sort((a, b) => (a.archived === b.archived ? 0 : a.archived ? 1 : -1)).map((newsletter) => (
               (() => {
                 const titleText = cutByChars(newsletter.title, 72);
                 const previewText = newsletter.preview;
@@ -1064,7 +1069,8 @@ export default function NewslettersPage() {
                   padding: 12,
                   borderBottom: "1px solid var(--mantine-color-default-border)",
                   cursor: "pointer",
-                  backgroundColor: selectedNewsletterId === newsletter.id ? "var(--mantine-primary-color-light)" : "transparent"
+                  backgroundColor: selectedNewsletterId === newsletter.id ? "var(--mantine-primary-color-light)" : "transparent",
+                  opacity: newsletter.archived ? 0.5 : 1
                 }}
               >
                 <Stack gap={6} style={{ flex: 1 }}>
@@ -1239,6 +1245,12 @@ export default function NewslettersPage() {
               </Group>
             ) : null}
           </Group>
+
+          <Checkbox
+            label="Archived"
+            checked={archived}
+            onChange={(event) => setArchived(event.currentTarget.checked)}
+          />
 
           <TextInput
             label="Title"

@@ -61,6 +61,7 @@ export interface Newsletter {
   contactTags?: string[];
   contactTagsMode?: string;
   isFavorite: boolean;
+  archived: boolean;
   status: NewsletterStatus;
   deliveryError?: string;
   scheduledAt?: string;
@@ -80,6 +81,7 @@ export interface NewsletterSummary {
   contactTags?: string[];
   contactTagsMode?: string;
   isFavorite: boolean;
+  archived: boolean;
   status: NewsletterStatus;
   deliveryError?: string;
   scheduledAt?: string;
