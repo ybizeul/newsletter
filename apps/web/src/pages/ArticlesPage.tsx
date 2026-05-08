@@ -674,6 +674,7 @@ export default function ArticlesPage() {
         introMarkdown: newsletter.introMarkdown,
         includeIndex: newsletter.includeIndex,
         contentWidth: newsletter.contentWidth || 680,
+        archived: newsletter.archived,
         articleIds: nextArticleIds,
         recipientIds: newsletter.recipientIds
       });

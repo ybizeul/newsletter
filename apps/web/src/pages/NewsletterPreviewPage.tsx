@@ -47,6 +47,7 @@ export default function NewsletterPreviewPage() {
             introMarkdown: newsletter.introMarkdown,
             includeIndex: newsletter.includeIndex,
             contentWidth: value,
+            archived: newsletter.archived,
             articleIds: newsletter.articleIds,
             recipientIds: newsletter.recipientIds
           });
