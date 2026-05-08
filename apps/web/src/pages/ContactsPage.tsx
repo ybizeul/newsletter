@@ -15,7 +15,7 @@ import {
   TextInput
 } from "@mantine/core";
 import { useMediaQuery } from "@mantine/hooks";
-import { IconPlus, IconUserPlus, IconX } from "@tabler/icons-react";
+import { IconPlus, IconSearch, IconUserPlus, IconX } from "@tabler/icons-react";
 import { bulkImportContacts, createContact, deleteContact, listContacts, updateContact } from "../lib/api";
 import type { Contact } from "../types/domain";
 
@@ -58,6 +58,8 @@ export default function ContactsPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [deleteContactId, setDeleteContactId] = useState<string | null>(null);
 
+  const [contactSearchQuery, setContactSearchQuery] = useState("");
+
   // Bulk import state
   const [importText, setImportText] = useState("");
   const [importError, setImportError] = useState<string | null>(null);
@@ -73,6 +75,16 @@ export default function ContactsPage() {
     }
     return Array.from(set).sort();
   }, [contacts]);
+
+  const filteredContacts = useMemo(() => {
+    const query = contactSearchQuery.trim().toLowerCase();
+    if (!query) return contacts;
+    const words = query.split(/\s+/).filter(Boolean);
+    return contacts.filter((contact) => {
+      const haystack = [contact.firstName, contact.lastName, contact.email].join(" ").toLowerCase();
+      return words.every((word) => haystack.includes(word));
+    });
+  }, [contactSearchQuery, contacts]);
 
   const loadContacts = async () => {
     setIsLoading(true);
@@ -263,17 +275,27 @@ export default function ContactsPage() {
             </Button>
           </Group>
 
-          <ScrollArea h="calc(100% - 52px)" offsetScrollbars>
+          <div style={{ padding: "8px 12px", borderBottom: "1px solid var(--mantine-color-default-border)" }}>
+            <TextInput
+              radius="xl"
+              leftSection={<IconSearch size={14} />}
+              placeholder="Search"
+              value={contactSearchQuery}
+              onChange={(event) => setContactSearchQuery(event.currentTarget.value)}
+            />
+          </div>
+
+          <ScrollArea h="calc(100% - 96px)" offsetScrollbars>
             <Stack gap={0}>
               {isLoading && contacts.length === 0 ? (
                 <Group justify="center" p="md" gap="xs">
                   <Loader size="sm" />
                   <Text c="dimmed" size="sm">Loading contacts...</Text>
                 </Group>
-              ) : contacts.length === 0 ? (
-                <Text c="dimmed" size="sm" p="md">No contacts yet.</Text>
+              ) : filteredContacts.length === 0 ? (
+                <Text c="dimmed" size="sm" p="md">{contacts.length === 0 ? "No contacts yet." : "No matching contacts."}</Text>
               ) : (
-                contacts.map((contact) => (
+                filteredContacts.map((contact) => (
                   <div
                     key={contact.id}
                     onClick={() => openEdit(contact)}
