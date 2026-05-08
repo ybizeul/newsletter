@@ -794,7 +794,7 @@ export default function NewslettersPage() {
         window.clearTimeout(autosaveTimerRef.current);
       }
     };
-  }, [selectedNewsletterId, title, headerId, introContentHTML, footerContentHTML, includeIndex, contentWidth, articleIds, recipientRaw, recipientMode, contactTags, contactTagsMode, hasTooManyRecipients, isSubmitting]);
+  }, [selectedNewsletterId, title, headerId, introContentHTML, footerContentHTML, includeIndex, contentWidth, archived, articleIds, recipientRaw, recipientMode, contactTags, contactTagsMode, hasTooManyRecipients, isSubmitting]);
 
   useEffect(() => () => {
     if (autosaveTimerRef.current !== null) {
