@@ -59,7 +59,6 @@ const NEWSLETTERS_PANE_WIDTH_STORAGE_KEY = "newsletter.newsletters.pane.width";
 const FAVORITE_NEWSLETTER_ID_STORAGE_KEY = "newsletter.favorite.id";
 const PENDING_SEND_NEWSLETTER_ID_KEY = "newsletter.pending_send.id";
 const MAX_RECIPIENTS = 3;
-const ARTICLE_REUSE_WARNING_SYMBOL = "⚠️";
 const ARTICLE_REUSE_WARNING_TEXT = "already used in another newsletter";
 
 type NewslettersDataCache = {
@@ -306,11 +305,9 @@ export default function NewslettersPage() {
     () =>
       articles.map((article) => ({
         value: article.id,
-        label: articleIdsUsedInOtherNewsletters.has(article.id)
-          ? `${article.title} ${ARTICLE_REUSE_WARNING_SYMBOL}`
-          : article.title
+        label: article.title
       })),
-    [articles, articleIdsUsedInOtherNewsletters]
+    [articles]
   );
 
   const headerOptions = useMemo(
@@ -334,8 +331,15 @@ export default function NewslettersPage() {
   );
 
   const articleOptionsForAdd = useMemo(
-    () => availableArticleOptions.filter((option) => !articleIds.includes(option.value)),
-    [availableArticleOptions, articleIds]
+    () =>
+      availableArticleOptions
+        .filter((option) => !articleIds.includes(option.value))
+        .sort((a, b) => {
+          const aUsed = articleIdsUsedInOtherNewsletters.has(a.value) ? 1 : 0;
+          const bUsed = articleIdsUsedInOtherNewsletters.has(b.value) ? 1 : 0;
+          return aUsed - bUsed;
+        }),
+    [availableArticleOptions, articleIds, articleIdsUsedInOtherNewsletters]
   );
 
   const allContactTags = useMemo(() => {
@@ -1332,9 +1336,14 @@ export default function NewslettersPage() {
             <Group align="end" grow>
               <Select
                 label="Add existing article"
-                description={`Choose an article from the library to append to this newsletter. ${ARTICLE_REUSE_WARNING_SYMBOL} means ${ARTICLE_REUSE_WARNING_TEXT}.`}
+                description="Choose an article from the library to append to this newsletter. Articles already used in another newsletter appear last."
                 placeholder="Choose an article"
                 data={articleOptionsForAdd}
+                renderOption={({ option }) => (
+                  <span style={articleIdsUsedInOtherNewsletters.has(option.value) ? { color: "var(--mantine-color-dimmed)" } : undefined}>
+                    {option.label}
+                  </span>
+                )}
                 value={null}
                 onChange={(value) => {
                   if (!value || articleIds.includes(value)) {
@@ -1426,19 +1435,14 @@ export default function NewslettersPage() {
                           </Text>
                         )}
                       </Box>
-                      <Text size="sm" c={article.exists ? undefined : "dimmed"} truncate="end">
+                      <Text
+                        size="sm"
+                        c={!article.exists ? "dimmed" : article.usedInAnotherNewsletter ? "red.9" : undefined}
+                        truncate="end"
+                        title={article.usedInAnotherNewsletter ? ARTICLE_REUSE_WARNING_TEXT : undefined}
+                      >
                         {article.title}
                       </Text>
-                      {article.usedInAnotherNewsletter ? (
-                        <Text
-                          size="sm"
-                          c="yellow.7"
-                          style={{ flexShrink: 0 }}
-                          title={ARTICLE_REUSE_WARNING_TEXT}
-                        >
-                          {ARTICLE_REUSE_WARNING_SYMBOL}
-                        </Text>
-                      ) : null}
                     </Group>
                     <Group gap={4} wrap="nowrap">
                       {isMobile ? (
