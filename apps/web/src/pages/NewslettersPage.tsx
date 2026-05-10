@@ -59,6 +59,8 @@ const NEWSLETTERS_PANE_WIDTH_STORAGE_KEY = "newsletter.newsletters.pane.width";
 const FAVORITE_NEWSLETTER_ID_STORAGE_KEY = "newsletter.favorite.id";
 const PENDING_SEND_NEWSLETTER_ID_KEY = "newsletter.pending_send.id";
 const MAX_RECIPIENTS = 3;
+const ARTICLE_REUSE_WARNING_SYMBOL = "⚠️";
+const ARTICLE_REUSE_WARNING_TEXT = "already used in another newsletter";
 
 type NewslettersDataCache = {
   articles: ArticleSummary[];
@@ -304,7 +306,9 @@ export default function NewslettersPage() {
     () =>
       articles.map((article) => ({
         value: article.id,
-        label: articleIdsUsedInOtherNewsletters.has(article.id) ? `${article.title} ⚠️` : article.title
+        label: articleIdsUsedInOtherNewsletters.has(article.id)
+          ? `${article.title} ${ARTICLE_REUSE_WARNING_SYMBOL}`
+          : article.title
       })),
     [articles, articleIdsUsedInOtherNewsletters]
   );
@@ -1328,7 +1332,7 @@ export default function NewslettersPage() {
             <Group align="end" grow>
               <Select
                 label="Add existing article"
-                description="Choose an article from the library to append to this newsletter. ⚠️ means already used in another newsletter."
+                description={`Choose an article from the library to append to this newsletter. ${ARTICLE_REUSE_WARNING_SYMBOL} means ${ARTICLE_REUSE_WARNING_TEXT}.`}
                 placeholder="Choose an article"
                 data={articleOptionsForAdd}
                 value={null}
@@ -1430,9 +1434,9 @@ export default function NewslettersPage() {
                           size="sm"
                           c="yellow.7"
                           style={{ flexShrink: 0 }}
-                          title="Already used in another newsletter"
+                          title={ARTICLE_REUSE_WARNING_TEXT}
                         >
-                          ⚠️
+                          {ARTICLE_REUSE_WARNING_SYMBOL}
                         </Text>
                       ) : null}
                     </Group>
