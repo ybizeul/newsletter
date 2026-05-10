@@ -194,7 +194,7 @@ function toNewsletterSummary(newsletter: Newsletter): NewsletterSummary {
 }
 
 export default function NewslettersPage() {
-  const { oidcEnabled, contactsDisabled, scheduleDisabled } = useAuth();
+  const { user, oidcEnabled, contactsDisabled, scheduleDisabled } = useAuth();
   const containerRef = useRef<HTMLDivElement | null>(null);
   const headerRowRef = useRef<HTMLDivElement | null>(null);
   const headerLeftRef = useRef<HTMLDivElement | null>(null);
@@ -273,9 +273,40 @@ export default function NewslettersPage() {
     isFavorite: newsletter.id === favoriteNewsletterId
   });
 
+  const normalizedUserEmail = useMemo(
+    () => (user?.email ?? "").trim().toLowerCase(),
+    [user?.email]
+  );
+
+  const articleIdsUsedInOtherNewsletters = useMemo(() => {
+    const used = new Set<string>();
+    for (const newsletter of newsletters) {
+      if (newsletter.id === selectedNewsletterId) {
+        continue;
+      }
+      if (oidcEnabled) {
+        if (!normalizedUserEmail) {
+          continue;
+        }
+        const normalizedOwner = (newsletter.owner ?? "").trim().toLowerCase();
+        if (normalizedOwner !== normalizedUserEmail) {
+          continue;
+        }
+      }
+      for (const articleId of newsletter.articleIds ?? []) {
+        used.add(articleId);
+      }
+    }
+    return used;
+  }, [newsletters, selectedNewsletterId, oidcEnabled, normalizedUserEmail]);
+
   const availableArticleOptions = useMemo(
-    () => articles.map((article) => ({ value: article.id, label: article.title })),
-    [articles]
+    () =>
+      articles.map((article) => ({
+        value: article.id,
+        label: articleIdsUsedInOtherNewsletters.has(article.id) ? `${article.title} ⚠️` : article.title
+      })),
+    [articles, articleIdsUsedInOtherNewsletters]
   );
 
   const headerOptions = useMemo(
@@ -291,10 +322,11 @@ export default function NewslettersPage() {
           id: articleId,
           title: article?.title ?? "(missing article)",
           illustration: article?.illustration ?? "",
-          exists: Boolean(article)
+          exists: Boolean(article),
+          usedInAnotherNewsletter: articleIdsUsedInOtherNewsletters.has(articleId)
         };
       }),
-    [articleIds, articles]
+    [articleIds, articles, articleIdsUsedInOtherNewsletters]
   );
 
   const articleOptionsForAdd = useMemo(
@@ -1296,7 +1328,7 @@ export default function NewslettersPage() {
             <Group align="end" grow>
               <Select
                 label="Add existing article"
-                description="Choose an article from the library to append to this newsletter."
+                description="Choose an article from the library to append to this newsletter. ⚠️ means already used in another newsletter."
                 placeholder="Choose an article"
                 data={articleOptionsForAdd}
                 value={null}
@@ -1393,6 +1425,16 @@ export default function NewslettersPage() {
                       <Text size="sm" c={article.exists ? undefined : "dimmed"} truncate="end">
                         {article.title}
                       </Text>
+                      {article.usedInAnotherNewsletter ? (
+                        <Text
+                          size="sm"
+                          c="yellow.7"
+                          style={{ flexShrink: 0 }}
+                          title="Already used in another newsletter"
+                        >
+                          ⚠️
+                        </Text>
+                      ) : null}
                     </Group>
                     <Group gap={4} wrap="nowrap">
                       {isMobile ? (
