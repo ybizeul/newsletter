@@ -30,6 +30,8 @@ type CreateNewsletterPayload = {
   headerId?: string;
   introMarkdown: string;
   introHTML?: string;
+  footerMarkdown?: string;
+  footerHTML?: string;
   includeIndex: boolean;
   articleIds: string[];
   recipientIds: string[];
