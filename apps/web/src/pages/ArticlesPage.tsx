@@ -1754,7 +1754,7 @@ export default function ArticlesPage() {
             </Stack>
           </Center>
         ) : (
-        <Stack>
+        <Stack style={isReadOnlyArticleView ? { width: "100%", maxWidth: favoriteNewsletterContentWidth, margin: "0 auto" } : undefined}>
           <Group justify="space-between" wrap="nowrap" ref={headerRowRef} style={{ overflow: "hidden", minWidth: 0 }}>
             <Group gap="xs" wrap="nowrap" ref={headerLeftRef}>
               {isMobile ? (
@@ -1777,14 +1777,17 @@ export default function ArticlesPage() {
                   <IconPlus size={16} />
                 </ActionIcon>
               ) : null}
-              <Text fw={700} style={{ whiteSpace: "nowrap", flexShrink: 0 }}>
-                {editingId ? (isReadOnlyArticleView ? "View Article" : "Edit Article") : "New Article"}
-              </Text>
               {editingId && !isEditingOwnedByCurrentUser ? (
-                <Text size="xs" c="dimmed">
-                  Read-only (not owner)
+                <Tooltip label="Read only (not owner)" position="bottom" withArrow>
+                  <Text fw={700} style={{ whiteSpace: "nowrap", flexShrink: 0, cursor: "help" }}>
+                    View Article
+                  </Text>
+                </Tooltip>
+              ) : (
+                <Text fw={700} style={{ whiteSpace: "nowrap", flexShrink: 0 }}>
+                  {editingId ? "Edit Article" : "New Article"}
                 </Text>
-              ) : null}
+              )}
               {editingId && isEditingOwnedByCurrentUser && (autosaveStatus === "saving" || autosaveStatus === "error") ? (
                 <Text size="xs" c={autosaveStatus === "error" ? "red" : "dimmed"}>
                   {autosaveStatus === "saving" ? "Saving..." : "Autosave failed"}
@@ -1879,7 +1882,6 @@ export default function ArticlesPage() {
 
           {isReadOnlyArticleView ? (
             <Stack gap="xs">
-              <Text size="sm" fw={500}>Title</Text>
               <Group align="center" gap="sm" wrap="nowrap">
                 <Box
                   style={{
@@ -1977,7 +1979,6 @@ export default function ArticlesPage() {
 
           {isReadOnlyArticleView ? (
             <Stack gap={6}>
-              <Text size="sm" fw={500}>Tags</Text>
               {(tags ?? []).length > 0 ? (
                 <Group gap={6} wrap="wrap">
                   {(tags ?? []).map((tag) => (
@@ -2078,20 +2079,13 @@ export default function ArticlesPage() {
           )}
 
           {isReadOnlyArticleView ? (
-            <Input.Wrapper
-              label="Content"
-              description="Read-only HTML view"
-            >
-              <Box style={{ width: "100%", display: "flex", justifyContent: "center" }}>
-                <Box style={{ width: "100%", maxWidth: favoriteNewsletterContentWidth, minHeight: 240 }}>
-                  {articleContentHTML?.trim() ? (
-                    <div className="article-readonly-preview" dangerouslySetInnerHTML={{ __html: articleContentHTML }} />
-                  ) : (
-                    <Text size="sm" c="dimmed">No content</Text>
-                  )}
-                </Box>
-              </Box>
-            </Input.Wrapper>
+            <Box style={{ width: "100%", minHeight: 240 }}>
+              {articleContentHTML?.trim() ? (
+                <div className="article-readonly-preview" dangerouslySetInnerHTML={{ __html: articleContentHTML }} />
+              ) : (
+                <Text size="sm" c="dimmed">No content</Text>
+              )}
+            </Box>
           ) : (
             <Input.Wrapper
               label="Content"
