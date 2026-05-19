@@ -206,119 +206,120 @@ function App() {
 
       <AppShell.Navbar p="sm">
         <Stack h="100%" justify="space-between" gap="xs">
-        <Box mb="xs">
-          <Group gap="xs" px="sm" py={6} style={{ borderRadius: 6, background: "transparent" }}>
-            <IconArticle size={16} />
-            <Text size="sm" fw={500}>Articles</Text>
-          </Group>
-          <Box pl="md">
-          <NavLink
-            component="button"
-            label="All"
-            active={location.pathname === "/articles" || location.pathname === "/articles/all"}
-            variant="subtle"
-            color="blue"
-            style={{ backgroundColor: "transparent" }}
-            leftSection={<IconList size={14} />}
-            onClick={() => {
-              navigate("/articles/all");
-              close();
-            }}
-          />
-          <NavLink
-            component="button"
-            label="Mine"
-            active={location.pathname === "/articles/mine"}
-            variant="subtle"
-            color="blue"
-            style={{ backgroundColor: "transparent" }}
-            leftSection={<IconUser size={14} />}
-            onClick={() => {
-              navigate("/articles/mine");
-              close();
-            }}
-          />
-          <NavLink
-            component="button"
-            label="Private"
-            active={location.pathname === "/articles/private"}
-            variant="subtle"
-            color="blue"
-            style={{ backgroundColor: "transparent" }}
-            leftSection={<IconLock size={14} />}
-            onClick={() => {
-              navigate("/articles/private");
-              close();
-            }}
-          />
-          {oidcEnabled && (
-          <NavLink
-            component="button"
-            label="Public"
-            active={location.pathname === "/articles/public"}
-            variant="subtle"
-            color="blue"
-            style={{ backgroundColor: "transparent" }}
-            leftSection={<IconWorld size={14} />}
-            onClick={() => {
-              navigate("/articles/public");
-              close();
-            }}
-          />
-          )}
-          <NavLink
-            component="button"
-            label="Recent"
-            active={location.pathname === "/articles/recent"}
-            variant="subtle"
-            color="blue"
-            style={{ backgroundColor: "transparent" }}
-            leftSection={<IconClock size={14} />}
-            onClick={() => {
-              navigate("/articles/recent");
-              close();
-            }}
-          />
+          <Box>
+            <Box mb="xs">
+              <Group gap="xs" px="sm" py={6} style={{ borderRadius: 6, background: "transparent" }}>
+                <IconArticle size={16} />
+                <Text size="sm" fw={500}>Articles</Text>
+              </Group>
+              <Box pl="md">
+                <NavLink
+                  component="button"
+                  label="All"
+                  active={location.pathname === "/articles" || location.pathname === "/articles/all"}
+                  variant="subtle"
+                  color="blue"
+                  style={{ backgroundColor: "transparent" }}
+                  leftSection={<IconList size={14} />}
+                  onClick={() => {
+                    navigate("/articles/all");
+                    close();
+                  }}
+                />
+                <NavLink
+                  component="button"
+                  label="Mine"
+                  active={location.pathname === "/articles/mine"}
+                  variant="subtle"
+                  color="blue"
+                  style={{ backgroundColor: "transparent" }}
+                  leftSection={<IconUser size={14} />}
+                  onClick={() => {
+                    navigate("/articles/mine");
+                    close();
+                  }}
+                />
+                <NavLink
+                  component="button"
+                  label="Private"
+                  active={location.pathname === "/articles/private"}
+                  variant="subtle"
+                  color="blue"
+                  style={{ backgroundColor: "transparent" }}
+                  leftSection={<IconLock size={14} />}
+                  onClick={() => {
+                    navigate("/articles/private");
+                    close();
+                  }}
+                />
+                {oidcEnabled && (
+                  <NavLink
+                    component="button"
+                    label="Public"
+                    active={location.pathname === "/articles/public"}
+                    variant="subtle"
+                    color="blue"
+                    style={{ backgroundColor: "transparent" }}
+                    leftSection={<IconWorld size={14} />}
+                    onClick={() => {
+                      navigate("/articles/public");
+                      close();
+                    }}
+                  />
+                )}
+                <NavLink
+                  component="button"
+                  label="Recent"
+                  active={location.pathname === "/articles/recent"}
+                  variant="subtle"
+                  color="blue"
+                  style={{ backgroundColor: "transparent" }}
+                  leftSection={<IconClock size={14} />}
+                  onClick={() => {
+                    navigate("/articles/recent");
+                    close();
+                  }}
+                />
+              </Box>
+            </Box>
+            <NavLink
+              component="button"
+              label="Newsletters"
+              active={location.pathname.startsWith("/newsletters")}
+              leftSection={<IconMail size={16} />}
+              onClick={() => {
+                navigate("/newsletters");
+                close();
+              }}
+            />
+            <NavLink
+              component="button"
+              label="Headers"
+              active={location.pathname.startsWith("/headers")}
+              leftSection={<IconAlignBoxCenterTop size={16} />}
+              onClick={() => {
+                navigate("/headers");
+                close();
+              }}
+            />
+            {!contactsDisabled ? (
+              <NavLink
+                component="button"
+                label="Contacts"
+                active={location.pathname.startsWith("/contacts")}
+                leftSection={<IconAddressBook size={16} />}
+                onClick={() => {
+                  navigate("/contacts");
+                  close();
+                }}
+              />
+            ) : null}
           </Box>
-        </Box>
-        <NavLink
-          component="button"
-          label="Newsletters"
-          active={location.pathname.startsWith("/newsletters")}
-          leftSection={<IconMail size={16} />}
-          onClick={() => {
-            navigate("/newsletters");
-            close();
-          }}
-        />
-        <NavLink
-          component="button"
-          label="Headers"
-          active={location.pathname.startsWith("/headers")}
-          leftSection={<IconAlignBoxCenterTop size={16} />}
-          onClick={() => {
-            navigate("/headers");
-            close();
-          }}
-        />
-        {!contactsDisabled ? (
-          <NavLink
-            component="button"
-            label="Contacts"
-            active={location.pathname.startsWith("/contacts")}
-            leftSection={<IconAddressBook size={16} />}
-            onClick={() => {
-              navigate("/contacts");
-              close();
-            }}
-          />
-        ) : null}
-        </Box>
-        <Center>
-          <Text size="xs" c="dimmed" ta="center">
-            {appVersion || "dev"}
-          </Text>
-        </Center>
+          <Center>
+            <Text size="xs" c="dimmed" ta="center">
+              {appVersion || "dev"}
+            </Text>
+          </Center>
         </Stack>
       </AppShell.Navbar>
 
