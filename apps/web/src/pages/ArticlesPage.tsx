@@ -47,6 +47,7 @@ const SAVED_ICONS_STORAGE_KEY = "newsletter.articles.savedIcons";
 const MAX_SAVED_ICONS = 24;
 const ICON_PNG_RASTER_SIZE = 90;
 const RECENT_ARTICLES_WINDOW_MS = 30 * 24 * 60 * 60 * 1000;
+const DEFAULT_NEWSLETTER_CONTENT_WIDTH = 680;
 const TAG_COLORS = ["blue", "teal", "cyan", "grape", "indigo", "violet", "lime", "orange", "pink"] as const;
 
 let cachedArticleSummaries: ArticleSummary[] | null = null;
@@ -511,6 +512,7 @@ export default function ArticlesPage() {
   const [autosaveStatus, setAutosaveStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const [favoriteNewsletterId, setFavoriteNewsletterId] = useState<string | null>(getStoredFavoriteNewsletterId);
   const [favoriteNewsletterName, setFavoriteNewsletterName] = useState<string>("");
+  const [favoriteNewsletterContentWidth, setFavoriteNewsletterContentWidth] = useState<number>(DEFAULT_NEWSLETTER_CONTENT_WIDTH);
   const [favoriteNewsletterArticleIds, setFavoriteNewsletterArticleIds] = useState<string[]>([]);
   const [isAddingToFavorite, setIsAddingToFavorite] = useState(false);
   const [isFavoriteMembershipLoading, setIsFavoriteMembershipLoading] = useState(false);
@@ -555,6 +557,7 @@ export default function ArticlesPage() {
     (selectedArticleOwner !== "" && currentUserEmail !== "" && selectedArticleOwner === currentUserEmail);
   const canEditVisibility =
     !editingId || isEditingOwnedByCurrentUser;
+  const isReadOnlyArticleView = Boolean(editingId && !isEditingOwnedByCurrentUser);
 
   const loadArticles = async () => {
     setIsLoading(true);
@@ -598,6 +601,7 @@ export default function ArticlesPage() {
 
       if (!currentFavoriteId) {
         setFavoriteNewsletterName("");
+        setFavoriteNewsletterContentWidth(DEFAULT_NEWSLETTER_CONTENT_WIDTH);
         setFavoriteNewsletterArticleIds([]);
         return;
       }
@@ -609,15 +613,18 @@ export default function ArticlesPage() {
           window.localStorage.removeItem(FAVORITE_NEWSLETTER_ID_STORAGE_KEY);
           setFavoriteNewsletterId(null);
           setFavoriteNewsletterName("");
+          setFavoriteNewsletterContentWidth(DEFAULT_NEWSLETTER_CONTENT_WIDTH);
           setFavoriteNewsletterArticleIds([]);
           return;
         }
         setFavoriteNewsletterName(favorite.title);
 
         const favoriteDetails = await getNewsletter(currentFavoriteId);
+        setFavoriteNewsletterContentWidth(favoriteDetails.contentWidth || DEFAULT_NEWSLETTER_CONTENT_WIDTH);
         setFavoriteNewsletterArticleIds(favoriteDetails.articleIds);
       } catch {
         setFavoriteNewsletterName("");
+        setFavoriteNewsletterContentWidth(DEFAULT_NEWSLETTER_CONTENT_WIDTH);
         setFavoriteNewsletterArticleIds([]);
       }
     };
@@ -638,11 +645,13 @@ export default function ArticlesPage() {
       try {
         const newsletter = await getNewsletter(favoriteNewsletterId);
         if (!cancelled) {
+          setFavoriteNewsletterContentWidth(newsletter.contentWidth || DEFAULT_NEWSLETTER_CONTENT_WIDTH);
           setIsEditingArticleInFavorite(newsletter.articleIds.includes(editingId));
           setFavoriteNewsletterArticleIds(newsletter.articleIds);
         }
       } catch {
         if (!cancelled) {
+          setFavoriteNewsletterContentWidth(DEFAULT_NEWSLETTER_CONTENT_WIDTH);
           setIsEditingArticleInFavorite(false);
         }
       } finally {
@@ -1769,7 +1778,7 @@ export default function ArticlesPage() {
                 </ActionIcon>
               ) : null}
               <Text fw={700} style={{ whiteSpace: "nowrap", flexShrink: 0 }}>
-                {editingId ? "Edit Article" : "New Article"}
+                {editingId ? (isReadOnlyArticleView ? "View Article" : "Edit Article") : "New Article"}
               </Text>
               {editingId && !isEditingOwnedByCurrentUser ? (
                 <Text size="xs" c="dimmed">
@@ -1855,7 +1864,7 @@ export default function ArticlesPage() {
                     </Button>
                   )
                 ) : null}
-                {isCompactActions || isMobile ? (
+                {isReadOnlyArticleView ? null : (isCompactActions || isMobile ? (
                   <ActionIcon variant="light" color="red" size="md" aria-label="Delete" title="Delete" onClick={() => requestDeleteArticle(editingId)}>
                     <IconTrash size={16} />
                   </ActionIcon>
@@ -1863,60 +1872,99 @@ export default function ArticlesPage() {
                   <Button color="red" variant="light" size="xs" onClick={() => requestDeleteArticle(editingId)}>
                     Delete
                   </Button>
-                )}
+                ))}
               </Group>
             ) : null}
           </Group>
 
-          <Group align="flex-end" wrap="nowrap">
-            <UnstyledButton
-                onClick={() => {
-                  setIsIconBrowserOpen(true);
-                  void loadTablerIcons();
-                }}
-              aria-label="Select topic icon"
-              style={{
-                width: 40,
-                height: 40,
-                borderRadius: 9999,
-                border: "1px solid var(--mantine-color-default-border)",
-                display: "inline-flex",
-                alignItems: "center",
-                justifyContent: "center",
-                  background: topicIconIllustration ? "var(--mantine-color-body)" : "var(--mantine-color-default)",
-                cursor: "pointer",
-                padding: 0,
-                overflow: "hidden",
-                flexShrink: 0
-              }}
-            >
-              {topicIconIllustration ? (
+          {isReadOnlyArticleView ? (
+            <Stack gap="xs">
+              <Text size="sm" fw={500}>Title</Text>
+              <Group align="center" gap="sm" wrap="nowrap">
                 <Box
-                  component="img"
-                  src={topicIconIllustration}
-                  alt="Topic icon preview"
-                  w={40}
-                  h={40}
-                  width={40}
-                  height={40}
-                  style={{ display: "block" }}
-                />
-              ) : (
-                <Text size="xs" c="dimmed">
-                  +
-                </Text>
-              )}
-            </UnstyledButton>
+                  style={{
+                    width: 40,
+                    height: 40,
+                    borderRadius: 9999,
+                    border: "1px solid var(--mantine-color-default-border)",
+                    display: "inline-flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    background: topicIconIllustration ? "var(--mantine-color-body)" : "var(--mantine-color-default)",
+                    padding: 0,
+                    overflow: "hidden",
+                    flexShrink: 0
+                  }}
+                >
+                  {topicIconIllustration ? (
+                    <Box
+                      component="img"
+                      src={topicIconIllustration}
+                      alt="Topic icon preview"
+                      w={40}
+                      h={40}
+                      width={40}
+                      height={40}
+                      style={{ display: "block" }}
+                    />
+                  ) : (
+                    <Text size="xs" c="dimmed">No icon</Text>
+                  )}
+                </Box>
+                <Text>{title || "Untitled article"}</Text>
+              </Group>
+            </Stack>
+          ) : (
+            <Group align="flex-end" wrap="nowrap">
+              <UnstyledButton
+                  onClick={() => {
+                    setIsIconBrowserOpen(true);
+                    void loadTablerIcons();
+                  }}
+                aria-label="Select topic icon"
+                style={{
+                  width: 40,
+                  height: 40,
+                  borderRadius: 9999,
+                  border: "1px solid var(--mantine-color-default-border)",
+                  display: "inline-flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                    background: topicIconIllustration ? "var(--mantine-color-body)" : "var(--mantine-color-default)",
+                  cursor: "pointer",
+                  padding: 0,
+                  overflow: "hidden",
+                  flexShrink: 0
+                }}
+              >
+                {topicIconIllustration ? (
+                  <Box
+                    component="img"
+                    src={topicIconIllustration}
+                    alt="Topic icon preview"
+                    w={40}
+                    h={40}
+                    width={40}
+                    height={40}
+                    style={{ display: "block" }}
+                  />
+                ) : (
+                  <Text size="xs" c="dimmed">
+                    +
+                  </Text>
+                )}
+              </UnstyledButton>
 
-            <TextInput
-              style={{ flex: 1 }}
-              label="Title"
-              description="Article title used in the article list and newsletter sections."
-              placeholder="Article title"
-              value={title}
-              onChange={(event) => setTitle(event.currentTarget.value)}
-            />
-          </Group>
+              <TextInput
+                style={{ flex: 1 }}
+                label="Title"
+                description="Article title used in the article list and newsletter sections."
+                placeholder="Article title"
+                value={title}
+                onChange={(event) => setTitle(event.currentTarget.value)}
+              />
+            </Group>
+          )}
 
           {canEditVisibility ? (
             <Checkbox
@@ -1927,101 +1975,135 @@ export default function ArticlesPage() {
             />
           ) : null}
 
-          <Combobox
-            store={tagCombobox}
-            onOptionSubmit={(value) => {
-              addTag(value);
-              setTagSearch("");
-              tagCombobox.closeDropdown();
-            }}
-          >
-            <Combobox.DropdownTarget>
-              <PillsInput
-                label="Tags"
-                description="Optional tags for organizing and searching articles."
-                onClick={() => tagCombobox.openDropdown()}
-                style={{ fontFamily: "var(--mantine-font-family)" }}
-              >
-                <Pill.Group>
-                  {tags.map((tag) => {
-                    const color = colorForTag(tag);
-                    return (
-                      <Pill
-                        key={`edit-tag-${tag}`}
-                        size="xs"
-                        withRemoveButton
-                        onRemove={() => setTags((current) => current.filter((item) => item !== tag))}
-                        style={{
-                          backgroundColor: `var(--mantine-color-${color}-1)`,
-                          color: `var(--mantine-color-${color}-8)`,
-                          fontWeight: 700,
-                          textTransform: "uppercase"
-                        }}
-                      >
-                        {tag}
-                      </Pill>
-                    );
-                  })}
+          {isReadOnlyArticleView ? (
+            <Stack gap={6}>
+              <Text size="sm" fw={500}>Tags</Text>
+              {(tags ?? []).length > 0 ? (
+                <Group gap={6} wrap="wrap">
+                  {(tags ?? []).map((tag) => (
+                    <Badge key={`readonly-tag-${tag}`} size="xs" variant="light" color={colorForTag(tag)}>
+                      {tag}
+                    </Badge>
+                  ))}
+                </Group>
+              ) : (
+                <Text size="sm" c="dimmed">No tags</Text>
+              )}
+            </Stack>
+          ) : (
+            <Combobox
+              store={tagCombobox}
+              onOptionSubmit={(value) => {
+                addTag(value);
+                setTagSearch("");
+                tagCombobox.closeDropdown();
+              }}
+            >
+              <Combobox.DropdownTarget>
+                <PillsInput
+                  label="Tags"
+                  description="Optional tags for organizing and searching articles."
+                  onClick={() => tagCombobox.openDropdown()}
+                  style={{ fontFamily: "var(--mantine-font-family)" }}
+                >
+                  <Pill.Group>
+                    {tags.map((tag) => {
+                      const color = colorForTag(tag);
+                      return (
+                        <Pill
+                          key={`edit-tag-${tag}`}
+                          size="xs"
+                          withRemoveButton
+                          onRemove={() => setTags((current) => current.filter((item) => item !== tag))}
+                          style={{
+                            backgroundColor: `var(--mantine-color-${color}-1)`,
+                            color: `var(--mantine-color-${color}-8)`,
+                            fontWeight: 700,
+                            textTransform: "uppercase"
+                          }}
+                        >
+                          {tag}
+                        </Pill>
+                      );
+                    })}
 
-                  <Combobox.EventsTarget>
-                    <PillsInput.Field
-                      style={{ fontFamily: "var(--mantine-font-family)" }}
-                      value={tagSearch}
-                      placeholder={tags.length === 0 ? "Add tag and press Enter" : "Add tag"}
-                      onFocus={() => tagCombobox.openDropdown()}
-                      onBlur={() => {
-                        addTag(tagSearch);
-                        setTagSearch("");
-                        tagCombobox.closeDropdown();
-                      }}
-                      onChange={(event) => {
-                        tagCombobox.openDropdown();
-                        tagCombobox.updateSelectedOptionIndex();
-                        setTagSearch(event.currentTarget.value);
-                      }}
-                      onKeyDown={(event) => {
-                        if (event.key === "Backspace" && tagSearch.length === 0) {
-                          event.preventDefault();
-                          setTags((current) => current.slice(0, -1));
-                        }
-
-                        if (event.key === "Enter" || event.key === ",") {
-                          event.preventDefault();
+                    <Combobox.EventsTarget>
+                      <PillsInput.Field
+                        style={{ fontFamily: "var(--mantine-font-family)" }}
+                        value={tagSearch}
+                        placeholder={tags.length === 0 ? "Add tag and press Enter" : "Add tag"}
+                        onFocus={() => tagCombobox.openDropdown()}
+                        onBlur={() => {
                           addTag(tagSearch);
                           setTagSearch("");
-                        }
-                      }}
-                    />
-                  </Combobox.EventsTarget>
-                </Pill.Group>
-              </PillsInput>
-            </Combobox.DropdownTarget>
+                          tagCombobox.closeDropdown();
+                        }}
+                        onChange={(event) => {
+                          tagCombobox.openDropdown();
+                          tagCombobox.updateSelectedOptionIndex();
+                          setTagSearch(event.currentTarget.value);
+                        }}
+                        onKeyDown={(event) => {
+                          if (event.key === "Backspace" && tagSearch.length === 0) {
+                            event.preventDefault();
+                            setTags((current) => current.slice(0, -1));
+                          }
 
-            <Combobox.Dropdown>
-              <Combobox.Options>
-                {filteredTagOptions.length > 0 ? (
-                  filteredTagOptions.map((tag) => (
-                    <Combobox.Option value={tag} key={`tag-option-${tag}`}>
-                      {tag}
-                    </Combobox.Option>
-                  ))
-                ) : (
-                  <Combobox.Empty>No matching tags</Combobox.Empty>
-                )}
-              </Combobox.Options>
-            </Combobox.Dropdown>
-          </Combobox>
+                          if (event.key === "Enter" || event.key === ",") {
+                            event.preventDefault();
+                            addTag(tagSearch);
+                            setTagSearch("");
+                          }
+                        }}
+                      />
+                    </Combobox.EventsTarget>
+                  </Pill.Group>
+                </PillsInput>
+              </Combobox.DropdownTarget>
 
-          <Input.Wrapper
-            label="Content"
-            description="Compose the article body. Paste images to embed inline."
-          >
-            <SimpleEditor
-              key={articleEditorKey}
-              initialContent={articleContentHTML || undefined}
-              onContentChange={setArticleContentHTML}
-            />
-          </Input.Wrapper>
+              <Combobox.Dropdown>
+                <Combobox.Options>
+                  {filteredTagOptions.length > 0 ? (
+                    filteredTagOptions.map((tag) => (
+                      <Combobox.Option value={tag} key={`tag-option-${tag}`}>
+                        {tag}
+                      </Combobox.Option>
+                    ))
+                  ) : (
+                    <Combobox.Empty>No matching tags</Combobox.Empty>
+                  )}
+                </Combobox.Options>
+              </Combobox.Dropdown>
+            </Combobox>
+          )}
+
+          {isReadOnlyArticleView ? (
+            <Input.Wrapper
+              label="Content"
+              description="Read-only HTML view"
+            >
+              <Box style={{ width: "100%", display: "flex", justifyContent: "center" }}>
+                <Box style={{ width: "100%", maxWidth: favoriteNewsletterContentWidth, minHeight: 240 }}>
+                  {articleContentHTML?.trim() ? (
+                    <div className="article-readonly-preview" dangerouslySetInnerHTML={{ __html: articleContentHTML }} />
+                  ) : (
+                    <Text size="sm" c="dimmed">No content</Text>
+                  )}
+                </Box>
+              </Box>
+            </Input.Wrapper>
+          ) : (
+            <Input.Wrapper
+              label="Content"
+              description="Compose the article body. Paste images to embed inline."
+            >
+              <SimpleEditor
+                key={articleEditorKey}
+                initialContent={articleContentHTML || undefined}
+                onContentChange={setArticleContentHTML}
+              />
+            </Input.Wrapper>
+          )}
 
           <Group justify="space-between">
             <div />
@@ -2036,6 +2118,13 @@ export default function ArticlesPage() {
         </Stack>
         )}
       </div>
+
+      <style>{`
+        .article-readonly-preview img {
+          max-width: 100% !important;
+          height: auto !important;
+        }
+      `}</style>
 
       <Modal
         opened={Boolean(deleteArticleId)}
