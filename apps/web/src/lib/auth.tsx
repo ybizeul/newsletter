@@ -12,6 +12,7 @@ interface AuthState {
   oidcEnabled: boolean;
   contactsDisabled: boolean;
   scheduleDisabled: boolean;
+  appVersion: string;
   logout: () => void;
 }
 
@@ -21,6 +22,7 @@ const AuthContext = createContext<AuthState>({
   oidcEnabled: false,
   contactsDisabled: false,
   scheduleDisabled: false,
+  appVersion: "",
   logout: () => {},
 });
 
@@ -34,6 +36,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [oidcEnabled, setOidcEnabled] = useState(false);
   const [contactsDisabled, setContactsDisabled] = useState(false);
   const [scheduleDisabled, setScheduleDisabled] = useState(false);
+  const [appVersion, setAppVersion] = useState("");
 
   useEffect(() => {
     let cancelled = false;
@@ -43,10 +46,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         // Fetch runtime config to determine if OIDC is enabled.
         const cfgRes = await fetch("/api/runtime-config");
         if (cfgRes.ok) {
-          const cfg = (await cfgRes.json()) as { oidcEnabled?: boolean; contactsDisabled?: boolean; scheduleDisabled?: boolean };
+          const cfg = (await cfgRes.json()) as { oidcEnabled?: boolean; contactsDisabled?: boolean; scheduleDisabled?: boolean; appVersion?: string };
           if (!cancelled) setOidcEnabled(!!cfg.oidcEnabled);
           if (!cancelled) setContactsDisabled(!!cfg.contactsDisabled);
           if (!cancelled) setScheduleDisabled(!!cfg.scheduleDisabled);
+          if (!cancelled) setAppVersion((cfg.appVersion ?? "").trim());
 
           if (cfg.oidcEnabled) {
             // Attempt to load current user session.
@@ -76,7 +80,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider value={{ user, loading, oidcEnabled, contactsDisabled, scheduleDisabled, logout }}>
+    <AuthContext.Provider value={{ user, loading, oidcEnabled, contactsDisabled, scheduleDisabled, appVersion, logout }}>
       {children}
     </AuthContext.Provider>
   );

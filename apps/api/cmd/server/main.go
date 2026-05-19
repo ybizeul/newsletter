@@ -4,6 +4,7 @@ import (
 	"context"
 	"log"
 	"net/http"
+	"strings"
 	"time"
 
 	"newsletter/api/internal/config"
@@ -14,6 +15,8 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 )
+
+var AppVersion = "dev"
 
 func main() {
 	cfg := config.Load()
@@ -40,7 +43,7 @@ func main() {
 		log.Fatalf("failed to initialise oidc: %v", err)
 	}
 
-	h := httpapi.NewHandler(mongoClient.Database(cfg.MongoDatabase), cfg)
+	h := httpapi.NewHandler(mongoClient.Database(cfg.MongoDatabase), cfg, strings.TrimSpace(AppVersion))
 	webHandler := webui.Handler()
 	go startScheduler(h, cfg.ScheduleTick)
 

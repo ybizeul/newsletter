@@ -24,7 +24,7 @@ function getStoredNavbarWidth(): number {
 }
 
 function App() {
-  const { user, loading, oidcEnabled, contactsDisabled, logout } = useAuth();
+  const { user, loading, oidcEnabled, contactsDisabled, appVersion, logout } = useAuth();
   const { toggleColorScheme } = useMantineColorScheme();
   const computedColorScheme = useComputedColorScheme("light");
   const [opened, { toggle, close }] = useDisclosure();
@@ -205,6 +205,7 @@ function App() {
       </Modal>
 
       <AppShell.Navbar p="sm">
+        <Stack h="100%" justify="space-between" gap="xs">
         <Box mb="xs">
           <Group gap="xs" px="sm" py={6} style={{ borderRadius: 6, background: "transparent" }}>
             <IconArticle size={16} />
@@ -312,6 +313,13 @@ function App() {
             }}
           />
         ) : null}
+        </Box>
+        <Center>
+          <Text size="xs" c="dimmed" ta="center">
+            {appVersion || "dev"}
+          </Text>
+        </Center>
+        </Stack>
       </AppShell.Navbar>
 
       <Box

@@ -1,11 +1,13 @@
 FROM golang:1.25-alpine AS builder
 WORKDIR /app
 
+ARG APP_VERSION=dev
+
 COPY apps/api/go.mod ./go.mod
 RUN go mod download
 
 COPY apps/api ./
-RUN CGO_ENABLED=0 GOOS=linux go build -o /bin/api ./cmd/server
+RUN CGO_ENABLED=0 GOOS=linux go build -ldflags "-X main.AppVersion=${APP_VERSION}" -o /bin/api ./cmd/server
 
 FROM alpine:3.21
 WORKDIR /srv

@@ -42,6 +42,7 @@ type Handler struct {
 	contacts    *mongo.Collection
 	userPrefs   *mongo.Collection
 	cfg         config.Config
+	appVersion  string
 }
 
 var errNewsletterAlreadySending = errors.New("newsletter is already sending")
@@ -49,7 +50,7 @@ var errTokenExpired = errors.New("access token expired")
 
 const maxNewsletterRecipients = 3
 
-func NewHandler(db *mongo.Database, cfg config.Config) *Handler {
+func NewHandler(db *mongo.Database, cfg config.Config, appVersion string) *Handler {
 	return &Handler{
 		articles:    db.Collection("articles"),
 		headers:     db.Collection("headers"),
@@ -57,6 +58,7 @@ func NewHandler(db *mongo.Database, cfg config.Config) *Handler {
 		contacts:    db.Collection("contacts"),
 		userPrefs:   db.Collection("user_preferences"),
 		cfg:         cfg,
+		appVersion:  strings.TrimSpace(appVersion),
 	}
 }
 
@@ -1390,6 +1392,7 @@ func (h *Handler) GetRuntimeConfig(w http.ResponseWriter, r *http.Request) {
 		"oidcEnabled":      h.cfg.OIDCEnabled(),
 		"contactsDisabled": h.cfg.ContactsDisabled,
 		"scheduleDisabled": h.cfg.OIDCEnabled(),
+		"appVersion":       h.appVersion,
 	})
 }
 
