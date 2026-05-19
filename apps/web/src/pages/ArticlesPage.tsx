@@ -549,8 +549,12 @@ export default function ArticlesPage() {
       : "All";
   const selectedArticleOwner = (selectedArticleSummary?.owner ?? "").trim().toLowerCase();
   const currentUserEmail = (user?.email ?? "").trim().toLowerCase();
+  const isEditingOwnedByCurrentUser =
+    !editingId ||
+    !oidcEnabled ||
+    (selectedArticleOwner !== "" && currentUserEmail !== "" && selectedArticleOwner === currentUserEmail);
   const canEditVisibility =
-    !editingId || selectedArticleOwner === "" || (currentUserEmail !== "" && selectedArticleOwner === currentUserEmail);
+    !editingId || isEditingOwnedByCurrentUser;
 
   const loadArticles = async () => {
     setIsLoading(true);
@@ -771,18 +775,37 @@ export default function ArticlesPage() {
       setArticles((current) =>
         current.map((item) => (item.id === fullSummary.id ? fullSummary : item))
       );
+      const loadedTopicIcon = (fullArticle.topicIcon ?? "").trim();
+      const loadedIconSource = fullArticle.iconSource ?? "";
+      const loadedCustomIconImageDataUrl = loadedTopicIcon
+        ? ""
+        : (loadedIconSource.startsWith("data:image/svg+xml") ? loadedIconSource : "");
+      const loadedIconZoom = typeof fullArticle.iconZoom === "number" ? fullArticle.iconZoom : 0;
+      const loadedIconBgColor = fullArticle.iconBgColor || extractTopicIconBackgroundColor(iconStyleSource);
+      const loadedIconStrokeColor = fullArticle.iconStrokeColor || extractTopicIconStrokeColor(iconStyleSource);
+      const loadedIconFillColor = fullArticle.iconFillColor || "";
+
       lastSavedDraftRef.current = JSON.stringify({
-        title: fullArticle.title,
-        contentHTML: htmlContent,
+        title: fullArticle.title.trim(),
+        markdown: "",
+        contentHTML: htmlContent || "",
         public: fullArticle.public !== false,
         tags: fullArticle.tags ?? [],
-        topicIcon: fullArticle.topicIcon ?? "",
+        topicIcon: loadedTopicIcon,
         illustration: fullArticle.illustration ?? "",
-        iconSource: fullArticle.iconSource ?? "",
-        iconZoom: typeof fullArticle.iconZoom === "number" ? fullArticle.iconZoom : 0,
-        iconBgColor: fullArticle.iconBgColor || "",
-        iconStrokeColor: fullArticle.iconStrokeColor || "",
-        iconFillColor: fullArticle.iconFillColor || ""
+        iconSource: loadedCustomIconImageDataUrl.trim()
+          ? loadedCustomIconImageDataUrl.trim()
+          : buildTopicIconIllustration(
+              tablerIconMap,
+              resolveTablerIconName(tablerIconMap, loadedTopicIcon),
+              loadedIconBgColor,
+              loadedIconStrokeColor,
+              loadedIconFillColor
+            ),
+        iconZoom: loadedCustomIconImageDataUrl.trim() ? loadedIconZoom : 0,
+        iconBgColor: loadedIconBgColor,
+        iconStrokeColor: loadedIconStrokeColor,
+        iconFillColor: loadedIconFillColor
       });
       setAutosaveStatus("idle");
       if (isMobile) {
@@ -1066,6 +1089,11 @@ export default function ArticlesPage() {
       return;
     }
 
+    if (editingId && !isEditingOwnedByCurrentUser) {
+      setError("You cannot save an article you do not own.");
+      return;
+    }
+
     setIsSubmitting(true);
     setError(null);
 
@@ -1104,6 +1132,11 @@ export default function ArticlesPage() {
 
   useEffect(() => {
     if (!editingId) {
+      return;
+    }
+
+    if (!isEditingOwnedByCurrentUser) {
+      setAutosaveStatus("idle");
       return;
     }
 
@@ -1147,7 +1180,7 @@ export default function ArticlesPage() {
         window.clearTimeout(autosaveTimerRef.current);
       }
     };
-  }, [editingId, title, articleContentHTML, isPublic, tags, topicIcon, topicIconIllustration]);
+  }, [editingId, isEditingOwnedByCurrentUser, title, articleContentHTML, isPublic, tags, topicIcon, topicIconIllustration]);
 
   useEffect(() => () => {
     if (autosaveTimerRef.current !== null) {
@@ -1738,7 +1771,12 @@ export default function ArticlesPage() {
               <Text fw={700} style={{ whiteSpace: "nowrap", flexShrink: 0 }}>
                 {editingId ? "Edit Article" : "New Article"}
               </Text>
-              {editingId && (autosaveStatus === "saving" || autosaveStatus === "error") ? (
+              {editingId && !isEditingOwnedByCurrentUser ? (
+                <Text size="xs" c="dimmed">
+                  Read-only (not owner)
+                </Text>
+              ) : null}
+              {editingId && isEditingOwnedByCurrentUser && (autosaveStatus === "saving" || autosaveStatus === "error") ? (
                 <Text size="xs" c={autosaveStatus === "error" ? "red" : "dimmed"}>
                   {autosaveStatus === "saving" ? "Saving..." : "Autosave failed"}
                 </Text>

@@ -348,9 +348,18 @@ func (h *Handler) UpdateArticle(w http.ResponseWriter, r *http.Request, id strin
 		return
 	}
 
+	currentOwner := strings.TrimSpace(strings.ToLower(existing.Owner))
+	requester := resolveOwnerEmail(UserFromContext(r.Context()), existing.AuthorID)
+	if currentOwner != "" && currentOwner != requester {
+		h.writeError(w, http.StatusForbidden, "only the owner can update this article")
+		return
+	}
+	if currentOwner == "" && UserFromContext(r.Context()) != nil {
+		h.writeError(w, http.StatusForbidden, "claim the article before saving changes")
+		return
+	}
+
 	if req.Public != nil {
-		currentOwner := strings.TrimSpace(strings.ToLower(existing.Owner))
-		requester := resolveOwnerEmail(UserFromContext(r.Context()), "")
 		if currentOwner != "" && currentOwner != requester {
 			h.writeError(w, http.StatusForbidden, "only the owner can change article visibility")
 			return
@@ -372,8 +381,6 @@ func (h *Handler) UpdateArticle(w http.ResponseWriter, r *http.Request, id strin
 		"updatedAt":       time.Now().UTC(),
 	}
 	if req.Public != nil {
-		currentOwner := strings.TrimSpace(strings.ToLower(existing.Owner))
-		requester := resolveOwnerEmail(UserFromContext(r.Context()), "")
 		currentVisibility := existing.Public
 		if currentOwner == "" {
 			// Legacy unowned articles are effectively public even when the field is absent.
