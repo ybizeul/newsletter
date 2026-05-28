@@ -2482,10 +2482,15 @@ func enforceContentTableStyles(input string) string {
 		return strings.Replace(tag, ">", ` style="`+additions+`">`, 1)
 	}
 
-	// Tables: border-collapse
+	// Tables: full-width + fixed layout + border-collapse
 	tableRe := regexp.MustCompile(`(?i)<table\b[^>]*>`)
 	input = tableRe.ReplaceAllStringFunc(input, func(tag string) string {
-		return ensureStyleIfMissing(tag, map[string]string{"border-collapse": "collapse"})
+		return ensureStyleIfMissing(tag, map[string]string{
+			"border-collapse": "collapse",
+			"width":           "100%",
+			"max-width":       "100%",
+			"table-layout":    "fixed",
+		})
 	})
 
 	// Table cells: border + padding

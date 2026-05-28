@@ -97,3 +97,34 @@ func TestEnforceTableCellAlignment_SwitchesImageDisplayToInlineBlockInAlignedCel
 		t.Fatalf("expected no display:block images remaining in aligned cells, got: %s", output)
 	}
 }
+
+func TestEnforceContentTableStyles_SetsTableFullWidth(t *testing.T) {
+	input := `<table><tr><td>cell</td></tr></table>`
+
+	output := enforceContentTableStyles(input)
+
+	lower := strings.ToLower(output)
+	if !strings.Contains(lower, "width:100%") {
+		t.Fatalf("expected table to have width:100%%, got: %s", output)
+	}
+	if !strings.Contains(lower, "max-width:100%") {
+		t.Fatalf("expected table to have max-width:100%%, got: %s", output)
+	}
+	if !strings.Contains(lower, "table-layout:fixed") {
+		t.Fatalf("expected table to have table-layout:fixed, got: %s", output)
+	}
+	if !strings.Contains(lower, "border-collapse:collapse") {
+		t.Fatalf("expected table to have border-collapse:collapse, got: %s", output)
+	}
+}
+
+func TestEnforceContentTableStyles_PreservesExistingTableWidth(t *testing.T) {
+	input := `<table style="width:50%;border-collapse:collapse;"><tr><td>cell</td></tr></table>`
+
+	output := enforceContentTableStyles(input)
+
+	// ensureStyleIfMissing should not override an already-set width
+	if !strings.Contains(output, "width:50%") {
+		t.Fatalf("expected existing table width to be preserved, got: %s", output)
+	}
+}
