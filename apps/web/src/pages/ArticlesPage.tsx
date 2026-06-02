@@ -1813,6 +1813,9 @@ export default function ArticlesPage() {
               (() => {
                 const titleText = cutByChars(article.title, 72);
                 const previewText = article.preview;
+                const articleLanguageCodes = ARTICLE_LANGUAGES
+                  .map((language) => language.code)
+                  .filter((languageCode) => (article.availableLanguages ?? []).includes(languageCode));
                 return (
               <div
                 key={article.id}
@@ -1897,7 +1900,7 @@ export default function ArticlesPage() {
                       ) : null}
                     </Group>
                   ) : null}
-                  {(article.public === false && (article.owner ?? "").trim() !== "") || (article.tags && article.tags.length > 0) ? (
+                  {(article.public === false && (article.owner ?? "").trim() !== "") || (article.tags && article.tags.length > 0) || articleLanguageCodes.length > 0 ? (
                     <Group gap={4} wrap="wrap">
                       {(article.owner ?? "").trim() !== "" && article.public === false ? (
                         <Badge size="xs" color="gray" variant="light">
@@ -1908,6 +1911,17 @@ export default function ArticlesPage() {
                         <Badge key={`${article.id}-${tag}`} size="xs" variant="light" color={colorForTag(tag)}>
                           {tag}
                         </Badge>
+                      ))}
+                      {articleLanguageCodes.map((languageCode) => (
+                        <Text
+                          key={`${article.id}-lang-${languageCode}`}
+                          component="span"
+                          size="sm"
+                          title={languageLabel(languageCode)}
+                          style={{ lineHeight: 1.1 }}
+                        >
+                          {languageFlag(languageCode)}
+                        </Text>
                       ))}
                     </Group>
                   ) : null}
