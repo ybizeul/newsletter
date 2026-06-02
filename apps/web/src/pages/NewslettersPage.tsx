@@ -381,7 +381,7 @@ export default function NewslettersPage() {
     setError(null);
     try {
       const [articleItems, headerItems, newsletterItems, runtimeConfig, contactItems, templateItems] = await Promise.all([
-        listArticleSummaries(),
+        listArticleSummaries(newsletterLanguage),
         listHeaders(),
         listNewsletterSummaries(),
         getRuntimeConfig(),
@@ -456,7 +456,7 @@ export default function NewslettersPage() {
 
     void (async () => {
       try {
-        const latestArticles = await listArticleSummaries();
+        const latestArticles = await listArticleSummaries(newsletterLanguage);
         setArticles(latestArticles);
         cachedNewslettersData = {
           articles: latestArticles,
@@ -470,7 +470,33 @@ export default function NewslettersPage() {
         setError(err instanceof Error ? err.message : "Failed to refresh articles");
       }
     })();
-  }, [location.pathname, headers, newsletterTemplates, newsletters, smtpConfigured, contacts]);
+  }, [location.pathname, newsletterLanguage, headers, newsletterTemplates, newsletters, smtpConfigured, contacts]);
+
+  const refreshArticleOptions = async (language: ArticleLanguageCode = newsletterLanguage) => {
+    const latestArticles = await listArticleSummaries(language);
+    setArticles(latestArticles);
+    cachedNewslettersData = {
+      articles: latestArticles,
+      headers,
+      newsletterTemplates,
+      newsletters,
+      smtpConfigured,
+      contacts
+    };
+  };
+
+  useEffect(() => {
+    if (!hasLoadedNewslettersData) {
+      return;
+    }
+    void (async () => {
+      try {
+        await refreshArticleOptions(newsletterLanguage);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Failed to refresh articles");
+      }
+    })();
+  }, [newsletterLanguage, hasLoadedNewslettersData]);
 
   const resetForm = () => {
     setSelectedNewsletterID(null);
@@ -1381,6 +1407,15 @@ export default function NewslettersPage() {
                     return;
                   }
                   setArticleIDs((current) => [...current, value]);
+                }}
+                onDropdownOpen={() => {
+                  void (async () => {
+                    try {
+                      await refreshArticleOptions(newsletterLanguage);
+                    } catch (err) {
+                      setError(err instanceof Error ? err.message : "Failed to refresh articles");
+                    }
+                  })();
                 }}
                 searchable
                 nothingFoundMessage="No more articles available"

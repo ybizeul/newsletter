@@ -81,23 +81,49 @@ func (h *Handler) loadArticleTranslations(ctx context.Context, articleIDs []stri
 	return result, nil
 }
 
+func isBlankArticleTranslation(translation model.ArticleTranslation) bool {
+	return strings.TrimSpace(translation.Title) == "" &&
+		strings.TrimSpace(translation.Markdown) == "" &&
+		strings.TrimSpace(translation.ContentHTML) == ""
+}
+
 func pickArticleTranslation(byLang map[model.LanguageCode]model.ArticleTranslation, preferred model.LanguageCode, strictPreferred bool, secondaryFallback model.LanguageCode) (model.ArticleTranslation, bool) {
 	if len(byLang) == 0 {
 		return model.ArticleTranslation{}, false
 	}
 
+	preferredTranslation, hasPreferred := byLang[preferred]
+	secondaryTranslation, hasSecondary := byLang[secondaryFallback]
+
 	if preferred != "" {
-		if translation, ok := byLang[preferred]; ok {
-			return translation, true
+		if hasPreferred {
+			if !isBlankArticleTranslation(preferredTranslation) || strictPreferred {
+				return preferredTranslation, true
+			}
 		}
 		if strictPreferred {
 			return model.ArticleTranslation{}, false
 		}
 	}
 	if secondaryFallback != "" {
-		if translation, ok := byLang[secondaryFallback]; ok {
+		if hasSecondary && !isBlankArticleTranslation(secondaryTranslation) {
+			return secondaryTranslation, true
+		}
+	}
+	for _, supported := range model.SupportedArticleLanguages {
+		if translation, ok := byLang[supported]; ok {
+			if isBlankArticleTranslation(translation) {
+				continue
+			}
 			return translation, true
 		}
+	}
+
+	if preferred != "" && hasPreferred {
+		return preferredTranslation, true
+	}
+	if secondaryFallback != "" && hasSecondary {
+		return secondaryTranslation, true
 	}
 	for _, supported := range model.SupportedArticleLanguages {
 		if translation, ok := byLang[supported]; ok {
