@@ -1,0 +1,13 @@
+{{ define "newsletter" }}<!doctype html><html><body style="margin:0;padding:0;font-family:Arial,Helvetica,sans-serif;line-height:1.5;color:#111">
+<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="border-collapse:collapse;margin:0;padding:0;mso-table-lspace:0pt;mso-table-rspace:0pt;">
+<tr><td align="center" style="padding:24px 25px;mso-line-height-rule:exactly">
+<!--[if mso]><table role="presentation" cellpadding="0" cellspacing="0" border="0" width="{{ .ContentWidth }}" align="center" style="border-collapse:collapse;"><tr><td width="{{ .ContentWidth }}" style="width:{{ .ContentWidth }}px;"><![endif]-->
+<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" align="center" style="width:100%;max-width:{{ .ContentWidth }}px;border-collapse:collapse;margin:0 auto;table-layout:fixed;mso-table-lspace:0pt;mso-table-rspace:0pt;">
+<tr><td style="padding:0;text-align:left;width:100%;word-break:break-word;overflow-wrap:anywhere;">
+{{ if .HeaderHTML }}<div style="margin-bottom:20px">{{ safeHTML .HeaderHTML }}</div>
+{{ end }}<div style="margin-bottom:28px">{{ safeHTML .IntroHTML }}</div>
+{{ if and .IncludeIndex (gt (len .Articles) 0) }}{{ template "index" .Articles }}{{ end }}{{ range .Articles }}{{ template "article" . }}{{ end }}{{ if .FooterHTML }}{{ if gt (len .Articles) 0 }}<table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="border-collapse:collapse;margin:0 0 20px;table-layout:fixed"><tr><td style="border-top:1px solid #e5e7eb;font-size:0;line-height:0;height:0">&nbsp;</td></tr></table>
+{{ end }}<div style="margin-top:28px">{{ safeHTML .FooterHTML }}</div>
+{{ end }}</td></tr></table>
+<!--[if mso]></td></tr></table><![endif]-->
+</td></tr></table></body></html>{{ end }}

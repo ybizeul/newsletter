@@ -17,6 +17,7 @@ type Newsletter struct {
 	CreatorID       string           `bson:"creatorId" json:"creatorId"`
 	Owner           string           `bson:"owner,omitempty" json:"owner,omitempty"`
 	Title           string           `bson:"title" json:"title"`
+	Template        string           `bson:"template,omitempty" json:"template,omitempty"`
 	HeaderID        string           `bson:"headerId,omitempty" json:"headerId,omitempty"`
 	IntroMarkdown   string           `bson:"introMarkdown" json:"introMarkdown"`
 	IntroHTML       string           `bson:"introHTML,omitempty" json:"introHTML,omitempty"`

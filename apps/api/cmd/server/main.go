@@ -116,6 +116,7 @@ func main() {
 
 			protected.Route("/newsletters", func(newsletter chi.Router) {
 				newsletter.Post("/", h.CreateNewsletter)
+				newsletter.Get("/templates", h.ListNewsletterTemplates)
 				newsletter.Get("/", h.ListNewsletters)
 				newsletter.Get("/{id}", func(w http.ResponseWriter, r *http.Request) {
 					h.GetNewsletter(w, r, chi.URLParam(r, "id"))
