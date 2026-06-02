@@ -762,15 +762,15 @@ export default function ArticlesPage() {
   };
 
   const resolveArticleOpenLanguage = (article: ArticleSummary, languageOverride?: ArticleLanguageCode): ArticleLanguageCode => {
+    if (languageOverride) {
+      return languageOverride;
+    }
     const available = (article.availableLanguages ?? []).filter((language) =>
       ARTICLE_LANGUAGES.some((supported) => supported.code === language)
     );
-    const preferred = languageOverride ?? selectedLanguage;
+    const preferred = selectedLanguage;
     if (available.length === 0) {
       return preferred || articleListLanguage;
-    }
-    if (languageOverride && available.includes(languageOverride)) {
-      return languageOverride;
     }
     if (available.includes(selectedLanguage)) {
       return selectedLanguage;
