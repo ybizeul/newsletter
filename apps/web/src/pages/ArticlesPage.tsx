@@ -815,7 +815,17 @@ export default function ArticlesPage() {
     setAutosaveStatus("idle");
   };
 
-  const onEdit = async (article: ArticleSummary, languageOverride?: ArticleLanguageCode) => {
+  type LanguageSeedDraft = {
+    language: ArticleLanguageCode;
+    title: string;
+    contentHTML: string;
+  };
+
+  const onEdit = async (
+    article: ArticleSummary,
+    languageOverride?: ArticleLanguageCode,
+    seedDraft?: LanguageSeedDraft
+  ) => {
     pendingEditRef.current = article.id;
     setIsManualNewArticleMode(false);
     setSelectedArticleID(article.id);
@@ -826,13 +836,22 @@ export default function ArticlesPage() {
       if (pendingEditRef.current !== article.id) return;
       setEditingID(fullArticle.id);
       setSelectedArticleID(fullArticle.id);
+      const hasRequestedLanguageTranslation = (article.availableLanguages ?? []).includes(requestedLanguage);
+      const useSeedDraft =
+        !!seedDraft &&
+        seedDraft.language !== requestedLanguage &&
+        !hasRequestedLanguageTranslation;
+      const editorTitle = useSeedDraft ? seedDraft.title : fullArticle.title;
+
       setSelectedLanguage(requestedLanguage);
-      setTitle(fullArticle.title);
+      setTitle(editorTitle);
       setIsPublic(fullArticle.public !== false);
       setTags(fullArticle.tags ?? []);
 
       let htmlContent: string;
-      if (fullArticle.contentHTML?.trim()) {
+      if (useSeedDraft) {
+        htmlContent = seedDraft.contentHTML;
+      } else if (fullArticle.contentHTML?.trim()) {
         htmlContent = fullArticle.contentHTML;
       } else if (fullArticle.markdown?.trim()) {
         try {
@@ -871,7 +890,7 @@ export default function ArticlesPage() {
 
       lastSavedDraftRef.current = JSON.stringify({
         language: requestedLanguage,
-        title: fullArticle.title.trim(),
+        title: editorTitle.trim(),
         markdown: "",
         contentHTML: htmlContent || "",
         public: fullArticle.public !== false,
@@ -906,7 +925,11 @@ export default function ArticlesPage() {
       return;
     }
     if (editingId && selectedArticleSummary) {
-      void onEdit(selectedArticleSummary, language);
+      void onEdit(selectedArticleSummary, language, {
+        language: selectedLanguage,
+        title,
+        contentHTML: articleContentHTML
+      });
       return;
     }
     setSelectedLanguage(language);
