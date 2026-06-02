@@ -59,6 +59,15 @@ const ARTICLE_LANGUAGES: Array<{ code: ArticleLanguageCode; label: string }> = [
   { code: "ja", label: "Japanese" },
   { code: "zh", label: "Chinese" }
 ];
+const ARTICLE_LANGUAGE_FLAGS: Record<ArticleLanguageCode, string> = {
+  en: "🇬🇧",
+  fr: "🇫🇷",
+  de: "🇩🇪",
+  es: "🇪🇸",
+  it: "🇮🇹",
+  ja: "🇯🇵",
+  zh: "🇨🇳"
+};
 
 function languageLabel(code?: ArticleLanguageCode): string {
   if (!code) {
@@ -68,14 +77,8 @@ function languageLabel(code?: ArticleLanguageCode): string {
 }
 
 function languageFlag(code?: ArticleLanguageCode): string {
-  if (code === "en") return "🇬🇧";
-  if (code === "fr") return "🇫🇷";
-  if (code === "de") return "🇩🇪";
-  if (code === "es") return "🇪🇸";
-  if (code === "it") return "🇮🇹";
-  if (code === "ja") return "🇯🇵";
-  if (code === "zh") return "🇨🇳";
-  return "🇫🇷";
+  if (!code) return ARTICLE_LANGUAGE_FLAGS.fr;
+  return ARTICLE_LANGUAGE_FLAGS[code] ?? ARTICLE_LANGUAGE_FLAGS.fr;
 }
 
 function browserArticleListLanguage(): ArticleLanguageCode {
