@@ -514,7 +514,7 @@ export default function ArticlesPage() {
   );
   const [selectedArticleId, setSelectedArticleID] = useState<string | null>(null);
   const [articleListLanguage] = useState<ArticleLanguageCode>(browserArticleListLanguage);
-  const [selectedLanguage, setSelectedLanguage] = useState<ArticleLanguageCode>(DEFAULT_ARTICLE_LANGUAGE);
+  const [selectedLanguage, setSelectedLanguage] = useState<ArticleLanguageCode>(articleListLanguage);
   const [title, setTitle] = useState("");
   const [articleContentHTML, setArticleContentHTML] = useState("");
   const [articleEditorKey, setArticleEditorKey] = useState("");
@@ -761,8 +761,28 @@ export default function ArticlesPage() {
     }
   };
 
+  const resolveArticleOpenLanguage = (article: ArticleSummary, languageOverride?: ArticleLanguageCode): ArticleLanguageCode => {
+    const available = (article.availableLanguages ?? []).filter((language) =>
+      ARTICLE_LANGUAGES.some((supported) => supported.code === language)
+    );
+    const preferred = languageOverride ?? selectedLanguage;
+    if (available.length === 0) {
+      return preferred || articleListLanguage;
+    }
+    if (languageOverride && available.includes(languageOverride)) {
+      return languageOverride;
+    }
+    if (available.includes(selectedLanguage)) {
+      return selectedLanguage;
+    }
+    if (available.includes(articleListLanguage)) {
+      return articleListLanguage;
+    }
+    return available[0];
+  };
+
   const resetForm = () => {
-    setSelectedLanguage(DEFAULT_ARTICLE_LANGUAGE);
+    setSelectedLanguage(articleListLanguage);
     setTitle("");
     setArticleContentHTML("");
     setArticleEditorKey("");
@@ -787,12 +807,12 @@ export default function ArticlesPage() {
     setSelectedArticleID(article.id);
     setError(null);
     try {
-      const requestedLanguage = languageOverride ?? selectedLanguage;
+      const requestedLanguage = resolveArticleOpenLanguage(article, languageOverride);
       const fullArticle = await getArticle(article.id, requestedLanguage);
       if (pendingEditRef.current !== article.id) return;
       setEditingID(fullArticle.id);
       setSelectedArticleID(fullArticle.id);
-      setSelectedLanguage(requestedLanguage ?? DEFAULT_ARTICLE_LANGUAGE);
+      setSelectedLanguage(requestedLanguage);
       setTitle(fullArticle.title);
       setIsPublic(fullArticle.public !== false);
       setTags(fullArticle.tags ?? []);
@@ -811,7 +831,7 @@ export default function ArticlesPage() {
         htmlContent = "<p></p>";
       }
       setArticleContentHTML(htmlContent || "");
-      setArticleEditorKey(`${fullArticle.id}:${requestedLanguage ?? DEFAULT_ARTICLE_LANGUAGE}`);
+      setArticleEditorKey(`${fullArticle.id}:${requestedLanguage}`);
 
       setTopicIcon(fullArticle.topicIcon ?? "");
       setCustomIconImageDataUrl(
@@ -836,7 +856,7 @@ export default function ArticlesPage() {
       const loadedIconFillColor = fullArticle.iconFillColor || "";
 
       lastSavedDraftRef.current = JSON.stringify({
-        language: requestedLanguage ?? DEFAULT_ARTICLE_LANGUAGE,
+        language: requestedLanguage,
         title: fullArticle.title.trim(),
         markdown: "",
         contentHTML: htmlContent || "",
