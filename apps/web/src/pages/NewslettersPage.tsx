@@ -15,7 +15,8 @@ import {
   Stack,
   TagsInput,
   Text,
-  TextInput
+  TextInput,
+  Tooltip
 } from "@mantine/core";
 import { useMediaQuery } from "@mantine/hooks";
 import {
@@ -26,6 +27,7 @@ import {
   IconFiles,
   IconGripVertical,
   IconPlus,
+  IconRefresh,
   IconSend,
   IconStar,
   IconTrash,
@@ -1242,14 +1244,31 @@ export default function NewslettersPage() {
                 </ActionIcon>
               ) : null}
               <Text fw={700} style={{ whiteSpace: "nowrap", flexShrink: 0 }}>{selectedNewsletterId ? "Edit Newsletter" : "New Newsletter"}</Text>
-              {selectedNewsletterId && (autosaveStatus === "saving" || autosaveStatus === "error") ? (
+              {selectedNewsletterId && autosaveStatus === "error" ? (
                 <Text size="xs" c={autosaveStatus === "error" ? "red" : "dimmed"}>
-                  {autosaveStatus === "saving" ? "Saving..." : "Autosave failed"}
+                  Autosave failed
                 </Text>
               ) : null}
             </Group>
             {selectedNewsletterId ? (
               <Group gap="xs" wrap="nowrap" ref={headerActionsRef}>
+                {autosaveStatus === "saving" ? (
+                  <Tooltip label="Saving changes" position="bottom" withArrow>
+                    <Box
+                      aria-label="Saving changes"
+                      style={{
+                        display: "inline-flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        width: 28,
+                        height: 28,
+                        color: "var(--mantine-color-blue-6)"
+                      }}
+                    >
+                      <IconRefresh size={14} className="newsletter-autosave-refresh" />
+                    </Box>
+                  </Tooltip>
+                ) : null}
                 <ActionIcon
                   variant={selectedNewsletter?.isFavorite ? "light" : "default"}
                   color={selectedNewsletter?.isFavorite ? "yellow" : "gray"}
@@ -1670,6 +1689,21 @@ export default function NewslettersPage() {
         </Stack>
         )}
       </div>
+
+      <style>{`
+        .newsletter-autosave-refresh {
+          animation: newsletter-autosave-spin 0.9s linear infinite;
+        }
+
+        @keyframes newsletter-autosave-spin {
+          from {
+            transform: rotate(0deg);
+          }
+          to {
+            transform: rotate(360deg);
+          }
+        }
+      `}</style>
 
       <Modal
         opened={Boolean(deleteNewsletterId)}
