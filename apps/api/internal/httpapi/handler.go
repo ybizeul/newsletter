@@ -347,7 +347,8 @@ func (h *Handler) UpdateArticle(w http.ResponseWriter, r *http.Request, id strin
 		return
 	}
 
-	if req.Title == "" {
+	removeTranslation := isBlankArticleTranslationInput(req.Title, req.Markdown, req.ContentHTML)
+	if strings.TrimSpace(req.Title) == "" && !removeTranslation {
 		h.writeError(w, http.StatusBadRequest, "title is required")
 		return
 	}
@@ -409,9 +410,16 @@ func (h *Handler) UpdateArticle(w http.ResponseWriter, r *http.Request, id strin
 		h.writeError(w, http.StatusNotFound, "article not found")
 		return
 	}
-	if err := h.upsertArticleTranslation(r.Context(), id, language, req.Title, req.Markdown, req.ContentHTML, now); err != nil {
-		h.writeError(w, http.StatusInternalServerError, "failed to update article translation")
-		return
+	if removeTranslation {
+		if err := h.deleteArticleTranslation(r.Context(), id, language); err != nil {
+			h.writeError(w, http.StatusInternalServerError, "failed to remove article translation")
+			return
+		}
+	} else {
+		if err := h.upsertArticleTranslation(r.Context(), id, language, req.Title, req.Markdown, req.ContentHTML, now); err != nil {
+			h.writeError(w, http.StatusInternalServerError, "failed to update article translation")
+			return
+		}
 	}
 
 	var article model.Article
