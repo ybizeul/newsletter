@@ -67,6 +67,17 @@ function languageLabel(code?: ArticleLanguageCode): string {
   return ARTICLE_LANGUAGES.find((language) => language.code === code)?.label ?? "French";
 }
 
+function languageFlag(code?: ArticleLanguageCode): string {
+  if (code === "en") return "🇬🇧";
+  if (code === "fr") return "🇫🇷";
+  if (code === "de") return "🇩🇪";
+  if (code === "es") return "🇪🇸";
+  if (code === "it") return "🇮🇹";
+  if (code === "ja") return "🇯🇵";
+  if (code === "zh") return "🇨🇳";
+  return "🇫🇷";
+}
+
 function browserArticleListLanguage(): ArticleLanguageCode {
   const languageCandidates: string[] = [];
   if (typeof window !== "undefined") {
@@ -1870,9 +1881,22 @@ export default function ArticlesPage() {
               ) : null}
               <Menu position="bottom-start" withArrow>
                 <Menu.Target>
-                  <Button variant="default" size="xs" leftSection={<IconLanguage size={14} />} rightSection={<IconChevronDown size={12} />}>
-                    Language: {languageLabel(selectedLanguage)}
-                  </Button>
+                  {isMobile ? (
+                    <ActionIcon
+                      variant="default"
+                      size="md"
+                      aria-label={`Language: ${languageLabel(selectedLanguage)}`}
+                      title={`Language: ${languageLabel(selectedLanguage)}`}
+                    >
+                      <Text component="span" size="sm">
+                        {languageFlag(selectedLanguage)}
+                      </Text>
+                    </ActionIcon>
+                  ) : (
+                    <Button variant="default" size="xs" leftSection={<IconLanguage size={14} />} rightSection={<IconChevronDown size={12} />}>
+                      Language: {languageLabel(selectedLanguage)}
+                    </Button>
+                  )}
                 </Menu.Target>
                 <Menu.Dropdown>
                   {ARTICLE_LANGUAGES.map((language) => (
