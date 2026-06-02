@@ -66,6 +66,7 @@ const MAX_RECIPIENTS = 3;
 const ARTICLE_REUSE_WARNING_TEXT = "already used in another newsletter";
 const DEFAULT_NEWSLETTER_TEMPLATE = "default";
 const DEFAULT_NEWSLETTER_LANGUAGE: ArticleLanguageCode = "fr";
+const NO_HEADER_OPTION_VALUE = "__none__";
 const NEWSLETTER_LANGUAGE_OPTIONS: Array<{ value: ArticleLanguageCode; label: string }> = [
   { value: "en", label: "English" },
   { value: "fr", label: "French" },
@@ -1374,7 +1375,7 @@ export default function NewslettersPage() {
               <Menu.Dropdown>
                 <Menu.RadioGroup
                   value={newsletterLanguage}
-                  onChange={(value) => setNewsletterLanguage((value as ArticleLanguageCode) ?? DEFAULT_NEWSLETTER_LANGUAGE)}
+                  onChange={(value) => setNewsletterLanguage(value as ArticleLanguageCode)}
                 >
                   {NEWSLETTER_LANGUAGE_OPTIONS.map((option) => (
                     <Menu.RadioItem key={option.value} value={option.value}>
@@ -1400,7 +1401,7 @@ export default function NewslettersPage() {
                 <Menu.Dropdown>
                   <Menu.RadioGroup
                     value={newsletterTemplate}
-                    onChange={(value) => setNewsletterTemplate((value ?? DEFAULT_NEWSLETTER_TEMPLATE).trim() || DEFAULT_NEWSLETTER_TEMPLATE)}
+                    onChange={setNewsletterTemplate}
                   >
                     {newsletterTemplateOptions.map((option) => (
                       <Menu.RadioItem key={option.value} value={option.value}>
@@ -1424,8 +1425,11 @@ export default function NewslettersPage() {
                 </Button>
               </Menu.Target>
               <Menu.Dropdown>
-                <Menu.RadioGroup value={headerId ?? ""} onChange={(value) => setHeaderId(value || null)}>
-                  <Menu.RadioItem value="">No header</Menu.RadioItem>
+                <Menu.RadioGroup
+                  value={headerId ?? NO_HEADER_OPTION_VALUE}
+                  onChange={(value) => setHeaderId(value === NO_HEADER_OPTION_VALUE ? null : value)}
+                >
+                  <Menu.RadioItem value={NO_HEADER_OPTION_VALUE}>No header</Menu.RadioItem>
                   {headerOptions.length > 0 ? (
                     headerOptions.map((option) => (
                       <Menu.RadioItem key={option.value} value={option.value}>
