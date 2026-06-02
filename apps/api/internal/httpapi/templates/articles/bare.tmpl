@@ -1,0 +1,5 @@
+{{ define "article" }}<div style="margin:0 0 20px;font-family:'Courier New',Consolas,Menlo,Monaco,'Liberation Mono','DejaVu Sans Mono',monospace;">
+<div style="margin:0 0 8px;font-family:'Courier New',Consolas,Menlo,Monaco,'Liberation Mono','DejaVu Sans Mono',monospace;"><b>{{ .Title }}</b></div>
+{{ safeHTML .BodyHTML }}
+</div>
+{{ end }}

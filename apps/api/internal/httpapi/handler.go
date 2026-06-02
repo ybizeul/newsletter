@@ -1916,10 +1916,25 @@ func mustParseNewsletterTemplates(names []string) map[string]*htmltemplate.Templ
 	templates := make(map[string]*htmltemplate.Template, len(names))
 	for _, name := range names {
 		newsletterPath := "templates/newsletter/" + name + ".tmpl"
+		articlePath := "templates/articles/" + name + ".tmpl"
+		indexPath := "templates/index/" + name + ".tmpl"
+		if _, err := fs.Stat(newsletterTemplateFiles, articlePath); err != nil {
+			if !errors.Is(err, fs.ErrNotExist) {
+				panic(err)
+			}
+			articlePath = "templates/articles/default.tmpl"
+		}
+		if _, err := fs.Stat(newsletterTemplateFiles, indexPath); err != nil {
+			if !errors.Is(err, fs.ErrNotExist) {
+				panic(err)
+			}
+			indexPath = "templates/index/default.tmpl"
+		}
 		tpl, err := htmltemplate.New("newsletter").Funcs(newsletterTemplateFuncMap).ParseFS(
 			newsletterTemplateFiles,
 			newsletterPath,
-			"templates/articles/default.tmpl",
+			articlePath,
+			indexPath,
 		)
 		if err != nil {
 			panic(err)

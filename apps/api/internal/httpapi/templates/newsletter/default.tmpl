@@ -6,14 +6,7 @@
 <tr><td style="padding:0;text-align:left;width:100%;word-break:break-word;overflow-wrap:anywhere;">
 {{ if .HeaderHTML }}<div style="margin-bottom:20px">{{ safeHTML .HeaderHTML }}</div>
 {{ end }}<div style="margin-bottom:28px">{{ safeHTML .IntroHTML }}</div>
-{{ if and .IncludeIndex (gt (len .Articles) 0) }}<table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="margin:0 0 24px;border-collapse:collapse;background:#f1f3f5;border:1px solid #e9ecef">
-<tr><td style="padding:14px 16px">
-<p style="margin:0 0 10px;font-size:14px;line-height:20px;font-weight:700;color:#343a40">In this issue</p>
-<table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="border-collapse:collapse">
-{{ range .Articles }}<tr><td style="width:16px;vertical-align:top;font-size:14px;line-height:20px;color:#343a40">&bull;</td><td style="vertical-align:top;font-size:14px;line-height:20px;color:#343a40;padding:0 0 6px">{{ .Title }}</td></tr>
-{{ end }}</table>
-</td></tr></table>
-{{ end }}{{ range .Articles }}{{ template "article" . }}{{ end }}{{ if .FooterHTML }}{{ if gt (len .Articles) 0 }}<table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="border-collapse:collapse;margin:0 0 20px;table-layout:fixed"><tr><td style="border-top:1px solid #e5e7eb;font-size:0;line-height:0;height:0">&nbsp;</td></tr></table>
+{{ if and .IncludeIndex (gt (len .Articles) 0) }}{{ template "index" .Articles }}{{ end }}{{ range .Articles }}{{ template "article" . }}{{ end }}{{ if .FooterHTML }}{{ if gt (len .Articles) 0 }}<table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="border-collapse:collapse;margin:0 0 20px;table-layout:fixed"><tr><td style="border-top:1px solid #e5e7eb;font-size:0;line-height:0;height:0">&nbsp;</td></tr></table>
 {{ end }}<div style="margin-top:28px">{{ safeHTML .FooterHTML }}</div>
 {{ end }}</td></tr></table>
 <!--[if mso]></td></tr></table><![endif]-->
