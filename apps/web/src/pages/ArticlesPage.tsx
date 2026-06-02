@@ -560,6 +560,7 @@ export default function ArticlesPage() {
   const autosaveClearSavedRef = useRef<number | null>(null);
   const lastSavedDraftRef = useRef<string>("");
   const pendingEditRef = useRef<string | null>(null);
+  const editRequestSeqRef = useRef(0);
   const [leftPaneWidth, setLeftPaneWidth] = useState(getStoredArticlesPaneWidth);
   const isMobile = useMediaQuery("(max-width: 48em)");
   const [isMobileEditorOpen, setIsMobileEditorOpen] = useState(false);
@@ -884,6 +885,8 @@ export default function ArticlesPage() {
   };
 
   const resetForm = () => {
+    editRequestSeqRef.current += 1;
+    pendingEditRef.current = null;
     setSelectedLanguage(articleListLanguage);
     setTitle("");
     setArticleContentHTML("");
@@ -914,6 +917,8 @@ export default function ArticlesPage() {
     languageOverride?: ArticleLanguageCode,
     seedDraft?: LanguageSeedDraft
   ) => {
+    const editRequestSeq = editRequestSeqRef.current + 1;
+    editRequestSeqRef.current = editRequestSeq;
     pendingEditRef.current = article.id;
     setIsManualNewArticleMode(false);
     setSelectedArticleID(article.id);
@@ -921,7 +926,7 @@ export default function ArticlesPage() {
     try {
       const requestedLanguage = resolveArticleOpenLanguage(article, languageOverride);
       const fullArticle = await getArticle(article.id, requestedLanguage);
-      if (pendingEditRef.current !== article.id) return;
+      if (pendingEditRef.current !== article.id || editRequestSeqRef.current !== editRequestSeq) return;
       setEditingID(fullArticle.id);
       setSelectedArticleID(fullArticle.id);
       const hasRequestedLanguageTranslation = (article.availableLanguages ?? []).includes(requestedLanguage);
@@ -944,7 +949,7 @@ export default function ArticlesPage() {
       } else if (fullArticle.markdown?.trim()) {
         try {
           htmlContent = await renderMarkdown(fullArticle.markdown);
-          if (pendingEditRef.current !== article.id) return;
+          if (pendingEditRef.current !== article.id || editRequestSeqRef.current !== editRequestSeq) return;
         } catch {
           htmlContent = "<p></p>";
         }
@@ -1006,6 +1011,9 @@ export default function ArticlesPage() {
         setIsMobileEditorOpen(true);
       }
     } catch (err) {
+      if (pendingEditRef.current !== article.id || editRequestSeqRef.current !== editRequestSeq) {
+        return;
+      }
       setError(err instanceof Error ? err.message : "Failed to load article details");
     }
   };
