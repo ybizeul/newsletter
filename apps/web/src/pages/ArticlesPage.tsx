@@ -59,12 +59,26 @@ const ARTICLE_LANGUAGES: Array<{ code: ArticleLanguageCode; label: string }> = [
   { code: "ja", label: "Japanese" },
   { code: "zh", label: "Chinese" }
 ];
+const ARTICLE_LANGUAGE_FLAGS: Record<ArticleLanguageCode, string> = {
+  en: "🇬🇧",
+  fr: "🇫🇷",
+  de: "🇩🇪",
+  es: "🇪🇸",
+  it: "🇮🇹",
+  ja: "🇯🇵",
+  zh: "🇨🇳"
+};
 
 function languageLabel(code?: ArticleLanguageCode): string {
   if (!code) {
     return "French";
   }
   return ARTICLE_LANGUAGES.find((language) => language.code === code)?.label ?? "French";
+}
+
+function languageFlag(code?: ArticleLanguageCode): string {
+  if (!code) return ARTICLE_LANGUAGE_FLAGS.fr;
+  return ARTICLE_LANGUAGE_FLAGS[code] ?? ARTICLE_LANGUAGE_FLAGS.fr;
 }
 
 function browserArticleListLanguage(): ArticleLanguageCode {
@@ -1870,9 +1884,22 @@ export default function ArticlesPage() {
               ) : null}
               <Menu position="bottom-start" withArrow>
                 <Menu.Target>
-                  <Button variant="default" size="xs" leftSection={<IconLanguage size={14} />} rightSection={<IconChevronDown size={12} />}>
-                    Language: {languageLabel(selectedLanguage)}
-                  </Button>
+                  {isMobile ? (
+                    <ActionIcon
+                      variant="default"
+                      size="md"
+                      aria-label={`Language: ${languageLabel(selectedLanguage)}`}
+                      title={`Language: ${languageLabel(selectedLanguage)}`}
+                    >
+                      <Text component="span" size="sm">
+                        {languageFlag(selectedLanguage)}
+                      </Text>
+                    </ActionIcon>
+                  ) : (
+                    <Button variant="default" size="xs" leftSection={<IconLanguage size={14} />} rightSection={<IconChevronDown size={12} />}>
+                      Language: {languageLabel(selectedLanguage)}
+                    </Button>
+                  )}
                 </Menu.Target>
                 <Menu.Dropdown>
                   {ARTICLE_LANGUAGES.map((language) => (
