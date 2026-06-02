@@ -976,7 +976,7 @@ export default function ArticlesPage() {
       const loadedIconStrokeColor = fullArticle.iconStrokeColor || extractTopicIconStrokeColor(iconStyleSource);
       const loadedIconFillColor = fullArticle.iconFillColor || "";
 
-      lastSavedDraftRef.current = JSON.stringify({
+      const loadedDraft = {
         language: requestedLanguage,
         title: editorTitle.trim(),
         markdown: "",
@@ -998,7 +998,9 @@ export default function ArticlesPage() {
         iconBgColor: loadedIconBgColor,
         iconStrokeColor: loadedIconStrokeColor,
         iconFillColor: loadedIconFillColor
-      });
+      };
+      // Keep newly seeded translations dirty so autosave creates the language variant.
+      lastSavedDraftRef.current = useSeedDraft ? "" : JSON.stringify(loadedDraft);
       setAutosaveStatus("idle");
       if (isMobile) {
         setIsMobileEditorOpen(true);
