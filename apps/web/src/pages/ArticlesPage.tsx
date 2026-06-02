@@ -912,11 +912,70 @@ export default function ArticlesPage() {
     contentHTML: string;
   };
 
+  const buildDraftPayloadSnapshot = () => ({
+    language: selectedLanguage,
+    title: title.trim(),
+    markdown: "",
+    contentHTML: articleContentHTML,
+    public: isPublic,
+    tags,
+    topicIcon: topicIcon.trim(),
+    illustration: topicIconIllustration,
+    iconSource: customIconImageDataUrl.trim()
+      ? customIconImageDataUrl.trim()
+      : buildTopicIconIllustration(
+          tablerIconMap,
+          resolveTablerIconName(tablerIconMap, topicIcon),
+          topicIconBgColor,
+          topicIconStrokeColor,
+          topicIconFillColor
+        ),
+    iconZoom: customIconImageDataUrl.trim() ? customIconImageSizeDelta : 0,
+    iconBgColor: topicIconBgColor,
+    iconStrokeColor: topicIconStrokeColor,
+    iconFillColor: topicIconFillColor
+  });
+
+  const flushPendingDraftBeforeSwitch = async (nextArticleId: string) => {
+    if (!editingId || editingId === nextArticleId || !isEditingOwnedByCurrentUser) {
+      return;
+    }
+
+    if (autosaveTimerRef.current !== null) {
+      window.clearTimeout(autosaveTimerRef.current);
+      autosaveTimerRef.current = null;
+    }
+
+    const currentEditingId = editingId;
+    const payload = buildDraftPayloadSnapshot();
+    const serializedPayload = JSON.stringify(payload);
+    if (serializedPayload === lastSavedDraftRef.current) {
+      return;
+    }
+
+    const emptyBody = isEmptyArticleBodyContent(payload.contentHTML);
+    if (!payload.title && !emptyBody) {
+      return;
+    }
+
+    try {
+      const updated = await updateArticle(currentEditingId, payload);
+      const updatedSummary = await resolveListSummaryAfterMutation(updated);
+      setArticles((current) =>
+        current.map((article) => (article.id === currentEditingId ? updatedSummary : article))
+      );
+      lastSavedDraftRef.current = serializedPayload;
+    } catch {
+      // Keep navigation responsive; autosave error UI remains the fallback.
+    }
+  };
+
   const onEdit = async (
     article: ArticleSummary,
     languageOverride?: ArticleLanguageCode,
     seedDraft?: LanguageSeedDraft
   ) => {
+    await flushPendingDraftBeforeSwitch(article.id);
     const editRequestSeq = editRequestSeqRef.current + 1;
     editRequestSeqRef.current = editRequestSeq;
     pendingEditRef.current = article.id;
@@ -1060,7 +1119,8 @@ export default function ArticlesPage() {
         savedIconActiveRef.current = false;
         return;
       }
-      setTopicIconIllustration("");
+      // Keep the currently loaded illustration (for saved/manual icons) unless
+      // the user explicitly clears it.
       return;
     }
 
@@ -1283,23 +1343,7 @@ export default function ArticlesPage() {
     };
   }, [editingId, favoriteNewsletterId, favoriteNewsletterName, autosaveStatus, isCompactActions]);
 
-  const buildArticleDraftPayload = () => ({
-    language: selectedLanguage,
-    title: title.trim(),
-    markdown: "",
-    contentHTML: articleContentHTML,
-    public: isPublic,
-    tags,
-    topicIcon: topicIcon.trim(),
-    illustration: topicIconIllustration,
-    iconSource: customIconImageDataUrl.trim()
-      ? customIconImageDataUrl.trim()
-      : buildTopicIconIllustration(tablerIconMap, resolvedTopicIconName, topicIconBgColor, topicIconStrokeColor, topicIconFillColor),
-    iconZoom: customIconImageDataUrl.trim() ? customIconImageSizeDelta : 0,
-    iconBgColor: topicIconBgColor,
-    iconStrokeColor: topicIconStrokeColor,
-    iconFillColor: topicIconFillColor
-  });
+  const buildArticleDraftPayload = () => buildDraftPayloadSnapshot();
 
   const onSubmit = async () => {
     const emptyBody = isEmptyArticleBodyContent(articleContentHTML);
@@ -2437,6 +2481,7 @@ export default function ArticlesPage() {
                   setTopicIcon("");
                   setCustomIconImageDataUrl("");
                   setCustomIconImageSizeDelta(0);
+                  setTopicIconIllustration("");
                 }}
                 style={{
                   width: 96,
@@ -2506,6 +2551,7 @@ export default function ArticlesPage() {
                   setTopicIcon("");
                   setCustomIconImageDataUrl("");
                   setCustomIconImageSizeDelta(0);
+                  setTopicIconIllustration("");
                 }}
               >
                 Clear icon
