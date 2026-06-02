@@ -27,7 +27,7 @@ import {
   useCombobox
 } from "@mantine/core";
 import { useMediaQuery } from "@mantine/hooks";
-import { IconChevronDown, IconChevronLeft, IconFiles, IconLanguage, IconMail, IconPencil, IconPlus, IconPointFilled, IconRefresh, IconSearch, IconTrash, IconUpload, IconUserCheck, IconUserFilled, IconX } from "@tabler/icons-react";
+import { IconChevronDown, IconChevronLeft, IconFiles, IconMail, IconPencil, IconPlus, IconPointFilled, IconRefresh, IconSearch, IconTrash, IconUpload, IconUserCheck, IconUserFilled, IconX } from "@tabler/icons-react";
 import { SimpleEditor } from "@/components/tiptap-templates/simple/simple-editor";
 import { renderToStaticMarkup } from "react-dom/server";
 import { useParams } from "react-router-dom";
@@ -2000,22 +2000,16 @@ export default function ArticlesPage() {
               ) : null}
               <Menu position="bottom-start" withArrow>
                 <Menu.Target>
-                  {isMobile ? (
-                    <ActionIcon
-                      variant="default"
-                      size="md"
-                      aria-label={`Language: ${languageLabel(selectedLanguage)}`}
-                      title={`Language: ${languageLabel(selectedLanguage)}`}
-                    >
-                      <Text component="span" size="sm">
-                        {languageFlag(selectedLanguage)}
-                      </Text>
-                    </ActionIcon>
-                  ) : (
-                    <Button variant="default" size="xs" leftSection={<IconLanguage size={14} />} rightSection={<IconChevronDown size={12} />}>
-                      Language: {languageLabel(selectedLanguage)}
-                    </Button>
-                  )}
+                  <ActionIcon
+                    variant="default"
+                    size="md"
+                    aria-label={`Language: ${languageLabel(selectedLanguage)}`}
+                    title={`Language: ${languageLabel(selectedLanguage)}`}
+                  >
+                    <Text component="span" size="sm">
+                      {languageFlag(selectedLanguage)}
+                    </Text>
+                  </ActionIcon>
                 </Menu.Target>
                 <Menu.Dropdown>
                   {ARTICLE_LANGUAGES.map((language) => (
