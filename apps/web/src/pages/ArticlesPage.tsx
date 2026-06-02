@@ -27,7 +27,7 @@ import {
   useCombobox
 } from "@mantine/core";
 import { useMediaQuery } from "@mantine/hooks";
-import { IconCheck, IconChevronDown, IconChevronLeft, IconFiles, IconLanguage, IconMail, IconPencil, IconPlus, IconPointFilled, IconRefresh, IconSearch, IconTrash, IconUpload, IconUserCheck, IconUserFilled, IconX } from "@tabler/icons-react";
+import { IconChevronDown, IconChevronLeft, IconFiles, IconLanguage, IconMail, IconPencil, IconPlus, IconPointFilled, IconRefresh, IconSearch, IconTrash, IconUpload, IconUserCheck, IconUserFilled, IconX } from "@tabler/icons-react";
 import { SimpleEditor } from "@/components/tiptap-templates/simple/simple-editor";
 import { renderToStaticMarkup } from "react-dom/server";
 import { useParams } from "react-router-dom";
@@ -100,6 +100,33 @@ function browserArticleListLanguage(): ArticleLanguageCode {
   }
 
   return DEFAULT_ARTICLE_LANGUAGE;
+}
+
+function articleLanguageFallbackOrder(
+  preferred: ArticleLanguageCode,
+  availableLanguages?: ArticleLanguageCode[]
+): ArticleLanguageCode[] {
+  const fromAvailable = (availableLanguages ?? []).filter((language) =>
+    ARTICLE_LANGUAGES.some((supported) => supported.code === language)
+  );
+
+  const order: ArticleLanguageCode[] = [];
+  const pushUnique = (language: ArticleLanguageCode) => {
+    if (!order.includes(language)) {
+      order.push(language);
+    }
+  };
+
+  pushUnique(preferred);
+  pushUnique("en");
+  for (const language of fromAvailable) {
+    pushUnique(language);
+  }
+  for (const language of ARTICLE_LANGUAGES.map((language) => language.code)) {
+    pushUnique(language);
+  }
+
+  return order;
 }
 
 function isEmptyArticleBodyContent(contentHTML: string): boolean {
@@ -635,8 +662,9 @@ export default function ArticlesPage() {
         listArticleSummaries(articleListLanguage).then((a) => a.map(normalizeArticleSummaryVisibility)),
         listNewsletterSummaries(),
       ]);
-      cachedArticleSummaries = items;
-      setArticles(items);
+      const hydratedItems = await Promise.all(items.map((item) => resolveListSummaryWithTitleFallback(item)));
+      cachedArticleSummaries = hydratedItems;
+      setArticles(hydratedItems);
       setAllNewsletterSummaries(newsletters);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load articles");
@@ -805,6 +833,54 @@ export default function ArticlesPage() {
       return "en";
     }
     return available[0];
+  };
+
+  const resolveListSummaryWithTitleFallback = async (
+    summary: ArticleSummary
+  ): Promise<ArticleSummary> => {
+    if (summary.title.trim()) {
+      return summary;
+    }
+
+    const languageOrder = articleLanguageFallbackOrder(articleListLanguage, summary.availableLanguages);
+    let firstFetchedSummary: ArticleSummary | null = null;
+
+    for (const language of languageOrder) {
+      try {
+        const article = await getArticle(summary.id, language);
+        const fallbackSummary = normalizeArticleSummaryVisibility(toArticleSummary(article));
+        if (!firstFetchedSummary) {
+          firstFetchedSummary = fallbackSummary;
+        }
+        if (fallbackSummary.title.trim()) {
+          return {
+            ...summary,
+            ...fallbackSummary,
+            id: summary.id
+          };
+        }
+      } catch {
+        // Ignore per-language errors and continue trying fallbacks.
+      }
+    }
+
+    if (firstFetchedSummary) {
+      return {
+        ...summary,
+        ...firstFetchedSummary,
+        id: summary.id
+      };
+    }
+
+    return summary;
+  };
+
+  const resolveListSummaryAfterMutation = async (article: Article): Promise<ArticleSummary> => {
+    const primarySummary = normalizeArticleSummaryVisibility(toArticleSummary(article));
+    if (primarySummary.title.trim()) {
+      return primarySummary;
+    }
+    return resolveListSummaryWithTitleFallback(primarySummary);
   };
 
   const resetForm = () => {
@@ -1235,9 +1311,10 @@ export default function ArticlesPage() {
 
       if (editingId) {
         const updated = await updateArticle(editingId, payload);
+        const updatedSummary = await resolveListSummaryAfterMutation(updated);
 
         setArticles((current) =>
-          current.map((article) => (article.id === editingId ? toArticleSummary(updated) : article))
+          current.map((article) => (article.id === editingId ? updatedSummary : article))
         );
         setSelectedArticleID(updated.id);
         lastSavedDraftRef.current = JSON.stringify(payload);
@@ -1293,8 +1370,9 @@ export default function ArticlesPage() {
       setAutosaveStatus("saving");
       try {
         const updated = await updateArticle(editingId, payload);
+        const updatedSummary = await resolveListSummaryAfterMutation(updated);
         setArticles((current) =>
-          current.map((article) => (article.id === editingId ? toArticleSummary(updated) : article))
+          current.map((article) => (article.id === editingId ? updatedSummary : article))
         );
         lastSavedDraftRef.current = serializedPayload;
         if (autosaveClearSavedRef.current !== null) {
@@ -1402,8 +1480,9 @@ export default function ArticlesPage() {
     setError(null);
     try {
       const claimed = await claimArticle(editingId);
+      const claimedSummary = await resolveListSummaryAfterMutation(claimed);
       setArticles((current) =>
-        current.map((article) => (article.id === editingId ? toArticleSummary(claimed) : article))
+        current.map((article) => (article.id === editingId ? claimedSummary : article))
       );
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to claim article");
@@ -1663,48 +1742,48 @@ export default function ArticlesPage() {
                 </Menu.Target>
                 <Menu.Dropdown>
                   <Menu.Label>Filter</Menu.Label>
-                  <Menu.Item
+                  <Menu.CheckboxItem
                     closeMenuOnClick={false}
-                    onClick={() => toggleSearchFilter("title")}
-                    leftSection={<IconCheck size={14} style={{ opacity: articleSearchCriteria.title ? 1 : 0 }} />}
+                    checked={articleSearchCriteria.title}
+                    onChange={() => toggleSearchFilter("title")}
                   >
                     Title
-                  </Menu.Item>
-                  <Menu.Item
+                  </Menu.CheckboxItem>
+                  <Menu.CheckboxItem
                     closeMenuOnClick={false}
-                    onClick={() => toggleSearchFilter("content")}
-                    leftSection={<IconCheck size={14} style={{ opacity: articleSearchCriteria.content ? 1 : 0 }} />}
+                    checked={articleSearchCriteria.content}
+                    onChange={() => toggleSearchFilter("content")}
                   >
                     Content
-                  </Menu.Item>
-                  <Menu.Item
+                  </Menu.CheckboxItem>
+                  <Menu.CheckboxItem
                     closeMenuOnClick={false}
-                    onClick={() => toggleSearchFilter("tag")}
-                    leftSection={<IconCheck size={14} style={{ opacity: articleSearchCriteria.tag ? 1 : 0 }} />}
+                    checked={articleSearchCriteria.tag}
+                    onChange={() => toggleSearchFilter("tag")}
                   >
                     Tag
-                  </Menu.Item>
+                  </Menu.CheckboxItem>
 
                   <Menu.Divider />
                   <Menu.Label>Sort</Menu.Label>
-                  <Menu.Item
-                    leftSection={<IconCheck size={14} style={{ opacity: articleSortMode === "recent" ? 1 : 0 }} />}
-                    onClick={() => setArticleSortMode("recent")}
+                  <Menu.CheckboxItem
+                    checked={articleSortMode === "recent"}
+                    onChange={() => setArticleSortMode("recent")}
                   >
                     Most recent
-                  </Menu.Item>
-                  <Menu.Item
-                    leftSection={<IconCheck size={14} style={{ opacity: articleSortMode === "last-used" ? 1 : 0 }} />}
-                    onClick={() => setArticleSortMode("last-used")}
+                  </Menu.CheckboxItem>
+                  <Menu.CheckboxItem
+                    checked={articleSortMode === "last-used"}
+                    onChange={() => setArticleSortMode("last-used")}
                   >
                     Last used
-                  </Menu.Item>
-                  <Menu.Item
-                    leftSection={<IconCheck size={14} style={{ opacity: articleSortMode === "most-sent" ? 1 : 0 }} />}
-                    onClick={() => setArticleSortMode("most-sent")}
+                  </Menu.CheckboxItem>
+                  <Menu.CheckboxItem
+                    checked={articleSortMode === "most-sent"}
+                    onChange={() => setArticleSortMode("most-sent")}
                   >
                     Most sent
-                  </Menu.Item>
+                  </Menu.CheckboxItem>
                 </Menu.Dropdown>
               </Menu>
             }
@@ -1940,13 +2019,13 @@ export default function ArticlesPage() {
                 </Menu.Target>
                 <Menu.Dropdown>
                   {ARTICLE_LANGUAGES.map((language) => (
-                    <Menu.Item
+                    <Menu.CheckboxItem
                       key={`article-language-${language.code}`}
-                      onClick={() => onSelectEditorLanguage(language.code)}
-                      leftSection={<IconCheck size={14} style={{ opacity: selectedLanguage === language.code ? 1 : 0 }} />}
+                      checked={selectedLanguage === language.code}
+                      onChange={() => onSelectEditorLanguage(language.code)}
                     >
                       {language.label}
-                    </Menu.Item>
+                    </Menu.CheckboxItem>
                   ))}
                 </Menu.Dropdown>
               </Menu>
