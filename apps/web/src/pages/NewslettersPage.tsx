@@ -41,6 +41,7 @@ import {
   listArticleSummaries,
   listContacts,
   listHeaders,
+  listNewsletterTemplates,
   listNewsletterSummaries,
   scheduleNewsletter,
   sendNewsletterNow,
@@ -60,10 +61,12 @@ const FAVORITE_NEWSLETTER_ID_STORAGE_KEY = "newsletter.favorite.id";
 const PENDING_SEND_NEWSLETTER_ID_KEY = "newsletter.pending_send.id";
 const MAX_RECIPIENTS = 3;
 const ARTICLE_REUSE_WARNING_TEXT = "already used in another newsletter";
+const DEFAULT_NEWSLETTER_TEMPLATE = "default";
 
 type NewslettersDataCache = {
   articles: ArticleSummary[];
   headers: Header[];
+  newsletterTemplates: string[];
   newsletters: NewsletterSummary[];
   smtpConfigured: boolean;
   contacts: Contact[];
@@ -170,6 +173,7 @@ function toNewsletterSummary(newsletter: Newsletter): NewsletterSummary {
     id: newsletter.id,
     owner: newsletter.owner,
     title: newsletter.title,
+    template: newsletter.template,
     headerId: newsletter.headerId,
     includeIndex: newsletter.includeIndex,
     articleIds: newsletter.articleIds,
@@ -207,6 +211,7 @@ export default function NewslettersPage() {
   const location = useLocation();
   const [articles, setArticles] = useState<ArticleSummary[]>(() => cachedNewslettersData?.articles ?? []);
   const [headers, setHeaders] = useState<Header[]>(() => cachedNewslettersData?.headers ?? []);
+  const [newsletterTemplates, setNewsletterTemplates] = useState<string[]>(() => cachedNewslettersData?.newsletterTemplates ?? [DEFAULT_NEWSLETTER_TEMPLATE]);
   const [newsletters, setNewsletters] = useState<NewsletterSummary[]>(() => {
     const favoriteId = getStoredFavoriteNewsletterId();
     return (cachedNewslettersData?.newsletters ?? []).map((newsletter) => ({
@@ -225,6 +230,7 @@ export default function NewslettersPage() {
   );
   const [title, setTitle] = useState("");
   const [headerId, setHeaderId] = useState<string | null>(null);
+  const [newsletterTemplate, setNewsletterTemplate] = useState(DEFAULT_NEWSLETTER_TEMPLATE);
   const [, setIntroMarkdown] = useState("");
   const [introContentHTML, setIntroContentHTML] = useState("");
   const [introEditorKey, setIntroEditorKey] = useState("");
@@ -303,6 +309,11 @@ export default function NewslettersPage() {
     [headers]
   );
 
+  const newsletterTemplateOptions = useMemo(
+    () => newsletterTemplates.map((templateName) => ({ value: templateName, label: templateName })),
+    [newsletterTemplates]
+  );
+
   const selectedArticleRows = useMemo(
     () =>
       articleIds.map((articleId) => {
@@ -357,22 +368,26 @@ export default function NewslettersPage() {
     setIsLoading(true);
     setError(null);
     try {
-      const [articleItems, headerItems, newsletterItems, runtimeConfig, contactItems] = await Promise.all([
+      const [articleItems, headerItems, newsletterItems, runtimeConfig, contactItems, templateItems] = await Promise.all([
         listArticleSummaries(),
         listHeaders(),
         listNewsletterSummaries(),
         getRuntimeConfig(),
-        listContacts()
+        listContacts(),
+        listNewsletterTemplates()
       ]);
+      const normalizedTemplates = templateItems.length > 0 ? templateItems : [DEFAULT_NEWSLETTER_TEMPLATE];
       cachedNewslettersData = {
         articles: articleItems,
         headers: headerItems,
+        newsletterTemplates: normalizedTemplates,
         newsletters: newsletterItems,
         smtpConfigured: runtimeConfig.smtpConfigured,
         contacts: contactItems
       };
       setArticles(articleItems);
       setHeaders(headerItems);
+      setNewsletterTemplates(normalizedTemplates);
       setNewsletters(newsletterItems.map(withFavoriteFlag));
       setSmtpConfigured(runtimeConfig.smtpConfigured);
       setContacts(contactItems);
@@ -391,11 +406,12 @@ export default function NewslettersPage() {
     cachedNewslettersData = {
       articles,
       headers,
+      newsletterTemplates,
       newsletters,
       smtpConfigured,
       contacts
     };
-  }, [articles, headers, newsletters, smtpConfigured, contacts, hasLoadedNewslettersData]);
+  }, [articles, headers, newsletterTemplates, newsletters, smtpConfigured, contacts, hasLoadedNewslettersData]);
 
   useEffect(() => {
     void loadData();
@@ -433,6 +449,7 @@ export default function NewslettersPage() {
         cachedNewslettersData = {
           articles: latestArticles,
           headers,
+          newsletterTemplates,
           newsletters,
           smtpConfigured,
           contacts
@@ -441,11 +458,12 @@ export default function NewslettersPage() {
         setError(err instanceof Error ? err.message : "Failed to refresh articles");
       }
     })();
-  }, [location.pathname, headers, newsletters, smtpConfigured, contacts]);
+  }, [location.pathname, headers, newsletterTemplates, newsletters, smtpConfigured, contacts]);
 
   const resetForm = () => {
     setSelectedNewsletterID(null);
     setTitle("");
+    setNewsletterTemplate(DEFAULT_NEWSLETTER_TEMPLATE);
     setHeaderId(null);
     setIntroContentHTML("");
     setIntroEditorKey("");
@@ -478,6 +496,7 @@ export default function NewslettersPage() {
       if (pendingEditRef.current !== newsletter.id) return;
       setSelectedNewsletterID(fullNewsletter.id);
       setTitle(fullNewsletter.title);
+      setNewsletterTemplate((fullNewsletter.template ?? DEFAULT_NEWSLETTER_TEMPLATE).trim() || DEFAULT_NEWSLETTER_TEMPLATE);
       setHeaderId(fullNewsletter.headerId ?? null);
       setIntroMarkdown(fullNewsletter.introMarkdown);
       let introHTML: string;
@@ -524,6 +543,7 @@ export default function NewslettersPage() {
       }
       lastSavedDraftRef.current = JSON.stringify({
         title: fullNewsletter.title.trim(),
+        template: (fullNewsletter.template ?? DEFAULT_NEWSLETTER_TEMPLATE).trim() || DEFAULT_NEWSLETTER_TEMPLATE,
         headerId: fullNewsletter.headerId ?? "",
         introMarkdown: "",
         introHTML: introHTML,
@@ -660,6 +680,7 @@ export default function NewslettersPage() {
 
   const buildNewsletterDraftPayload = () => ({
     title: title.trim(),
+    template: newsletterTemplate,
     headerId: headerId ?? "",
     introMarkdown: "",
     introHTML: introContentHTML,
@@ -690,6 +711,7 @@ export default function NewslettersPage() {
       const created = await createNewsletter({
         creatorId: oidcEnabled ? undefined : FALLBACK_CREATOR_ID,
         title: getDefaultNewsletterTitle(),
+        template: DEFAULT_NEWSLETTER_TEMPLATE,
         introMarkdown: "",
         includeIndex: false,
         articleIds: [],
@@ -799,7 +821,7 @@ export default function NewslettersPage() {
         window.clearTimeout(autosaveTimerRef.current);
       }
     };
-  }, [selectedNewsletterId, title, headerId, introContentHTML, footerContentHTML, includeIndex, contentWidth, archived, articleIds, recipientRaw, recipientMode, contactTags, contactTagsMode, hasTooManyRecipients, isSubmitting]);
+  }, [selectedNewsletterId, title, newsletterTemplate, headerId, introContentHTML, footerContentHTML, includeIndex, contentWidth, archived, articleIds, recipientRaw, recipientMode, contactTags, contactTagsMode, hasTooManyRecipients, isSubmitting]);
 
   useEffect(() => () => {
     if (autosaveTimerRef.current !== null) {
@@ -925,6 +947,7 @@ export default function NewslettersPage() {
       const created = await createNewsletter({
         creatorId: oidcEnabled ? undefined : FALLBACK_CREATOR_ID,
         title: `${source.title} (copy)`,
+        template: source.template ?? DEFAULT_NEWSLETTER_TEMPLATE,
         headerId: source.headerId ?? "",
         introMarkdown: source.introMarkdown ?? "",
         introHTML: source.introHTML ?? "",
@@ -1268,6 +1291,18 @@ export default function NewslettersPage() {
             value={title}
             onChange={(event) => setTitle(event.currentTarget.value)}
           />
+
+          {newsletterTemplateOptions.length > 1 ? (
+            <Select
+              label="Template"
+              description="Choose the newsletter layout template."
+              placeholder="Select a template"
+              data={newsletterTemplateOptions}
+              value={newsletterTemplate}
+              onChange={(value) => setNewsletterTemplate((value ?? DEFAULT_NEWSLETTER_TEMPLATE).trim() || DEFAULT_NEWSLETTER_TEMPLATE)}
+              allowDeselect={false}
+            />
+          ) : null}
 
           <Select
             label="Header"

@@ -27,6 +27,7 @@ type CreateArticlePayload = {
 type CreateNewsletterPayload = {
   creatorId?: string;
   title: string;
+  template?: string;
   headerId?: string;
   introMarkdown: string;
   introHTML?: string;
@@ -41,6 +42,7 @@ type CreateNewsletterPayload = {
 
 type UpdateNewsletterPayload = {
   title: string;
+  template?: string;
   headerId?: string;
   introMarkdown: string;
   introHTML?: string;
@@ -201,6 +203,11 @@ export async function createNewsletter(payload: CreateNewsletterPayload): Promis
     method: "POST",
     body: JSON.stringify(payload)
   });
+}
+
+export async function listNewsletterTemplates(): Promise<string[]> {
+  const data = await request<ListResponse<string>>("/newsletters/templates");
+  return data.items;
 }
 
 export async function updateNewsletter(id: string, payload: UpdateNewsletterPayload): Promise<Newsletter> {

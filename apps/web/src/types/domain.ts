@@ -49,6 +49,7 @@ export interface Newsletter {
   creatorId: string;
   owner?: string;
   title: string;
+  template?: string;
   headerId?: string;
   introMarkdown: string;
   introHTML?: string;
@@ -74,6 +75,7 @@ export interface NewsletterSummary {
   id: string;
   owner?: string;
   title: string;
+  template?: string;
   headerId?: string;
   includeIndex: boolean;
   articleIds: string[];

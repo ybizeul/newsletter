@@ -6,7 +6,7 @@ import (
 )
 
 func TestRenderNewsletterTemplate_AllowsDataImageIconURL(t *testing.T) {
-	htmlBody, err := renderNewsletterHTMLFromTemplate(newsletterTemplatePayload{
+	htmlBody, err := renderNewsletterHTMLFromTemplate(defaultNewsletterTemplateName, newsletterTemplatePayload{
 		ContentWidth: "680",
 		IntroHTML:    "<p>Intro</p>",
 		Articles: []newsletterTemplateArticle{
@@ -31,7 +31,7 @@ func TestRenderNewsletterTemplate_AllowsDataImageIconURL(t *testing.T) {
 }
 
 func TestRenderNewsletterTemplate_AllowsSVGDataImageIconURL(t *testing.T) {
-	htmlBody, err := renderNewsletterHTMLFromTemplate(newsletterTemplatePayload{
+	htmlBody, err := renderNewsletterHTMLFromTemplate(defaultNewsletterTemplateName, newsletterTemplatePayload{
 		ContentWidth: "680",
 		IntroHTML:    "<p>Intro</p>",
 		Articles: []newsletterTemplateArticle{

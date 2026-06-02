@@ -12,6 +12,7 @@ import (
 	htmltemplate "html/template"
 	"image"
 	"image/png"
+	"io/fs"
 	"log"
 	"net/http"
 	"net/mail"
@@ -51,6 +52,8 @@ var errNewsletterAlreadySending = errors.New("newsletter is already sending")
 var errTokenExpired = errors.New("access token expired")
 
 const maxNewsletterRecipients = 3
+
+const defaultNewsletterTemplateName = "default"
 
 func NewHandler(db *mongo.Database, cfg config.Config, appVersion string) *Handler {
 	return &Handler{
@@ -974,6 +977,7 @@ func (h *Handler) DeleteHeader(w http.ResponseWriter, r *http.Request, id string
 type createNewsletterRequest struct {
 	CreatorID       string   `json:"creatorId"`
 	Title           string   `json:"title"`
+	Template        string   `json:"template"`
 	HeaderID        string   `json:"headerId"`
 	IntroMarkdown   string   `json:"introMarkdown"`
 	IntroHTML       string   `json:"introHTML"`
@@ -988,6 +992,7 @@ type createNewsletterRequest struct {
 
 type updateNewsletterRequest struct {
 	Title           string   `json:"title"`
+	Template        string   `json:"template"`
 	HeaderID        string   `json:"headerId"`
 	IntroMarkdown   string   `json:"introMarkdown"`
 	IntroHTML       string   `json:"introHTML"`
@@ -1023,6 +1028,11 @@ func (h *Handler) CreateNewsletter(w http.ResponseWriter, r *http.Request) {
 		h.writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
+	templateName, err := validateNewsletterTemplateName(req.Template)
+	if err != nil {
+		h.writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
 
 	now := time.Now().UTC()
 	newsletter := model.Newsletter{
@@ -1030,6 +1040,7 @@ func (h *Handler) CreateNewsletter(w http.ResponseWriter, r *http.Request) {
 		CreatorID:       req.CreatorID,
 		Owner:           owner,
 		Title:           req.Title,
+		Template:        templateName,
 		HeaderID:        strings.TrimSpace(req.HeaderID),
 		IntroMarkdown:   req.IntroMarkdown,
 		IntroHTML:       req.IntroHTML,
@@ -1051,7 +1062,12 @@ func (h *Handler) CreateNewsletter(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	newsletter.Template = normalizeNewsletterTemplateName(newsletter.Template)
 	h.writeJSON(w, http.StatusCreated, newsletter)
+}
+
+func (h *Handler) ListNewsletterTemplates(w http.ResponseWriter, r *http.Request) {
+	h.writeJSON(w, http.StatusOK, map[string]any{"items": listNewsletterTemplateNames()})
 }
 
 func (h *Handler) ListNewsletters(w http.ResponseWriter, r *http.Request) {
@@ -1062,6 +1078,7 @@ func (h *Handler) ListNewsletters(w http.ResponseWriter, r *http.Request) {
 		findOptions.SetProjection(bson.M{
 			"owner":          1,
 			"title":          1,
+			"template":       1,
 			"headerId":       1,
 			"introMarkdown":  1,
 			"introHTML":      1,
@@ -1084,6 +1101,7 @@ func (h *Handler) ListNewsletters(w http.ResponseWriter, r *http.Request) {
 			ID             string                 `bson:"_id"`
 			Owner          string                 `bson:"owner,omitempty"`
 			Title          string                 `bson:"title"`
+			Template       string                 `bson:"template,omitempty"`
 			HeaderID       string                 `bson:"headerId,omitempty"`
 			IntroMarkdown  string                 `bson:"introMarkdown"`
 			IntroHTML      string                 `bson:"introHTML,omitempty"`
@@ -1106,6 +1124,7 @@ func (h *Handler) ListNewsletters(w http.ResponseWriter, r *http.Request) {
 			ID            string                 `json:"id"`
 			Owner         string                 `json:"owner,omitempty"`
 			Title         string                 `json:"title"`
+			Template      string                 `json:"template,omitempty"`
 			HeaderID      string                 `json:"headerId,omitempty"`
 			IncludeIndex  bool                   `json:"includeIndex"`
 			ArticleIDs    []string               `json:"articleIds"`
@@ -1140,6 +1159,7 @@ func (h *Handler) ListNewsletters(w http.ResponseWriter, r *http.Request) {
 				ID:            raw.ID,
 				Owner:         raw.Owner,
 				Title:         raw.Title,
+				Template:      normalizeNewsletterTemplateName(raw.Template),
 				HeaderID:      raw.HeaderID,
 				IncludeIndex:  raw.IncludeIndex,
 				ArticleIDs:    raw.ArticleIDs,
@@ -1175,6 +1195,9 @@ func (h *Handler) ListNewsletters(w http.ResponseWriter, r *http.Request) {
 	if newsletters == nil {
 		newsletters = []model.Newsletter{}
 	}
+	for i := range newsletters {
+		newsletters[i].Template = normalizeNewsletterTemplateName(newsletters[i].Template)
+	}
 
 	h.writeJSON(w, http.StatusOK, map[string]any{"items": newsletters})
 }
@@ -1189,7 +1212,7 @@ func (h *Handler) GetNewsletter(w http.ResponseWriter, r *http.Request, id strin
 		h.writeError(w, http.StatusInternalServerError, "failed to fetch newsletter")
 		return
 	}
-
+	newsletter.Template = normalizeNewsletterTemplateName(newsletter.Template)
 	h.writeJSON(w, http.StatusOK, newsletter)
 }
 
@@ -1235,6 +1258,7 @@ func (h *Handler) ClaimNewsletter(w http.ResponseWriter, r *http.Request, id str
 		return
 	}
 
+	newsletter.Template = normalizeNewsletterTemplateName(newsletter.Template)
 	h.writeJSON(w, http.StatusOK, newsletter)
 }
 
@@ -1284,6 +1308,7 @@ func (h *Handler) SetNewsletterFavorite(w http.ResponseWriter, r *http.Request, 
 		return
 	}
 
+	newsletter.Template = normalizeNewsletterTemplateName(newsletter.Template)
 	h.writeJSON(w, http.StatusOK, newsletter)
 }
 
@@ -1304,10 +1329,16 @@ func (h *Handler) UpdateNewsletter(w http.ResponseWriter, r *http.Request, id st
 		h.writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
+	templateName, err := validateNewsletterTemplateName(req.Template)
+	if err != nil {
+		h.writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
 
 	update := bson.M{
 		"$set": bson.M{
 			"title":           strings.TrimSpace(req.Title),
+			"template":        templateName,
 			"headerId":        strings.TrimSpace(req.HeaderID),
 			"introMarkdown":   req.IntroMarkdown,
 			"introHTML":       req.IntroHTML,
@@ -1836,7 +1867,7 @@ type newsletterTemplatePayload struct {
 //go:embed templates/**/*.tmpl
 var newsletterTemplateFiles embed.FS
 
-var newsletterHTMLTemplate = htmltemplate.Must(htmltemplate.New("newsletter").Funcs(htmltemplate.FuncMap{
+var newsletterTemplateFuncMap = htmltemplate.FuncMap{
 	"safeHTML": func(s string) htmltemplate.HTML { return htmltemplate.HTML(s) },
 	"safeImageURL": func(s string) htmltemplate.URL {
 		trimmed := strings.TrimSpace(s)
@@ -1849,11 +1880,91 @@ var newsletterHTMLTemplate = htmltemplate.Must(htmltemplate.New("newsletter").Fu
 		}
 		return htmltemplate.URL("")
 	},
-}).ParseFS(newsletterTemplateFiles, "templates/**/*.tmpl"))
+}
 
-func renderNewsletterHTMLFromTemplate(payload newsletterTemplatePayload) (string, error) {
+var newsletterTemplateNames = mustListNewsletterTemplateNames()
+var newsletterTemplateByName = mustParseNewsletterTemplates(newsletterTemplateNames)
+
+func mustListNewsletterTemplateNames() []string {
+	entries, err := fs.ReadDir(newsletterTemplateFiles, "templates/newsletter")
+	if err != nil {
+		panic(err)
+	}
+	names := make([]string, 0, len(entries))
+	for _, entry := range entries {
+		if entry.IsDir() {
+			continue
+		}
+		name := entry.Name()
+		if !strings.HasSuffix(strings.ToLower(name), ".tmpl") {
+			continue
+		}
+		templateName := strings.TrimSuffix(name, ".tmpl")
+		if strings.TrimSpace(templateName) == "" {
+			continue
+		}
+		names = append(names, templateName)
+	}
+	sort.Strings(names)
+	if len(names) == 0 {
+		panic("no newsletter templates found")
+	}
+	return names
+}
+
+func mustParseNewsletterTemplates(names []string) map[string]*htmltemplate.Template {
+	templates := make(map[string]*htmltemplate.Template, len(names))
+	for _, name := range names {
+		newsletterPath := "templates/newsletter/" + name + ".tmpl"
+		tpl, err := htmltemplate.New("newsletter").Funcs(newsletterTemplateFuncMap).ParseFS(
+			newsletterTemplateFiles,
+			newsletterPath,
+			"templates/articles/default.tmpl",
+		)
+		if err != nil {
+			panic(err)
+		}
+		templates[name] = tpl
+	}
+	return templates
+}
+
+func listNewsletterTemplateNames() []string {
+	out := make([]string, len(newsletterTemplateNames))
+	copy(out, newsletterTemplateNames)
+	return out
+}
+
+func normalizeNewsletterTemplateName(raw string) string {
+	name := strings.TrimSpace(raw)
+	if name == "" {
+		return defaultNewsletterTemplateName
+	}
+	return name
+}
+
+func resolveNewsletterTemplateName(raw string) (string, bool) {
+	name := normalizeNewsletterTemplateName(raw)
+	_, ok := newsletterTemplateByName[name]
+	return name, ok
+}
+
+func validateNewsletterTemplateName(raw string) (string, error) {
+	name, ok := resolveNewsletterTemplateName(raw)
+	if !ok {
+		return "", fmt.Errorf("template %q is not available", name)
+	}
+	return name, nil
+}
+
+func renderNewsletterHTMLFromTemplate(templateName string, payload newsletterTemplatePayload) (string, error) {
+	resolvedTemplate := normalizeNewsletterTemplateName(templateName)
+	tpl, ok := newsletterTemplateByName[resolvedTemplate]
+	if !ok {
+		return "", fmt.Errorf("template %q is not available", resolvedTemplate)
+	}
 	var buf strings.Builder
-	if err := newsletterHTMLTemplate.ExecuteTemplate(&buf, "newsletter", payload); err != nil {
+	if err := tpl.ExecuteTemplate(&buf, "newsletter", payload); err != nil {
 		return "", err
 	}
 	return buf.String(), nil
@@ -1978,7 +2089,13 @@ func (h *Handler) renderNewsletter(ctx context.Context, newsletter model.Newslet
 		}
 	}
 
-	htmlBody, err := renderNewsletterHTMLFromTemplate(newsletterTemplatePayload{
+	templateName, ok := resolveNewsletterTemplateName(newsletter.Template)
+	if !ok {
+		log.Printf("unknown newsletter template %q for newsletter_id=%s, falling back to %q", newsletter.Template, newsletter.ID, defaultNewsletterTemplateName)
+		templateName = defaultNewsletterTemplateName
+	}
+
+	htmlBody, err := renderNewsletterHTMLFromTemplate(templateName, newsletterTemplatePayload{
 		ContentWidth: widthStr,
 		HeaderHTML:   headerHTML,
 		IntroHTML:    introHTML,
