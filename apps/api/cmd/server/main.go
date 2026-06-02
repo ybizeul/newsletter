@@ -44,6 +44,9 @@ func main() {
 	}
 
 	h := httpapi.NewHandler(mongoClient.Database(cfg.MongoDatabase), cfg, strings.TrimSpace(AppVersion))
+	if err := h.EnsureArticleTranslations(ctx); err != nil {
+		log.Fatalf("failed to ensure article translations: %v", err)
+	}
 	webHandler := webui.Handler()
 	go startScheduler(h, cfg.ScheduleTick)
 

@@ -39,13 +39,14 @@ import (
 )
 
 type Handler struct {
-	articles    *mongo.Collection
-	headers     *mongo.Collection
-	newsletters *mongo.Collection
-	contacts    *mongo.Collection
-	userPrefs   *mongo.Collection
-	cfg         config.Config
-	appVersion  string
+	articles            *mongo.Collection
+	articleTranslations *mongo.Collection
+	headers             *mongo.Collection
+	newsletters         *mongo.Collection
+	contacts            *mongo.Collection
+	userPrefs           *mongo.Collection
+	cfg                 config.Config
+	appVersion          string
 }
 
 var errNewsletterAlreadySending = errors.New("newsletter is already sending")
@@ -57,19 +58,21 @@ const defaultNewsletterTemplateName = "default"
 
 func NewHandler(db *mongo.Database, cfg config.Config, appVersion string) *Handler {
 	return &Handler{
-		articles:    db.Collection("articles"),
-		headers:     db.Collection("headers"),
-		newsletters: db.Collection("newsletters"),
-		contacts:    db.Collection("contacts"),
-		userPrefs:   db.Collection("user_preferences"),
-		cfg:         cfg,
-		appVersion:  strings.TrimSpace(appVersion),
+		articles:            db.Collection("articles"),
+		articleTranslations: db.Collection("article_translations"),
+		headers:             db.Collection("headers"),
+		newsletters:         db.Collection("newsletters"),
+		contacts:            db.Collection("contacts"),
+		userPrefs:           db.Collection("user_preferences"),
+		cfg:                 cfg,
+		appVersion:          strings.TrimSpace(appVersion),
 	}
 }
 
 type createArticleRequest struct {
 	AuthorID        string   `json:"authorId"`
 	Public          *bool    `json:"public"`
+	Language        string   `json:"language"`
 	Title           string   `json:"title"`
 	Markdown        string   `json:"markdown"`
 	ContentHTML     string   `json:"contentHTML"`
@@ -83,19 +86,20 @@ type createArticleRequest struct {
 }
 
 type articleSummary struct {
-	ID           string              `json:"id"`
-	Owner        string              `json:"owner,omitempty"`
-	Public       bool                `json:"public"`
-	Title        string              `json:"title"`
-	Tags         []string            `json:"tags,omitempty"`
-	TopicIcon    string              `json:"topicIcon,omitempty"`
-	Illustration string              `json:"illustration,omitempty"`
-	SentCount    int64               `json:"sentCount"`
-	LastUsed     *time.Time          `json:"lastUsed,omitempty"`
-	Status       model.ArticleStatus `json:"status"`
-	CreatedAt    time.Time           `json:"createdAt"`
-	UpdatedAt    time.Time           `json:"updatedAt"`
-	Preview      string              `json:"preview"`
+	ID                 string               `json:"id"`
+	Owner              string               `json:"owner,omitempty"`
+	Public             bool                 `json:"public"`
+	AvailableLanguages []model.LanguageCode `json:"availableLanguages,omitempty"`
+	Title              string               `json:"title"`
+	Tags               []string             `json:"tags,omitempty"`
+	TopicIcon          string               `json:"topicIcon,omitempty"`
+	Illustration       string               `json:"illustration,omitempty"`
+	SentCount          int64                `json:"sentCount"`
+	LastUsed           *time.Time           `json:"lastUsed,omitempty"`
+	Status             model.ArticleStatus  `json:"status"`
+	CreatedAt          time.Time            `json:"createdAt"`
+	UpdatedAt          time.Time            `json:"updatedAt"`
+	Preview            string               `json:"preview"`
 }
 
 type articleSummarySource struct {
@@ -129,6 +133,7 @@ func (h *Handler) CreateArticle(w http.ResponseWriter, r *http.Request) {
 		h.writeError(w, http.StatusBadRequest, "authorId and title are required")
 		return
 	}
+	language := normalizeArticleLanguage(req.Language, model.LanguageFrench)
 
 	isPublic := true
 	if req.Public != nil {
@@ -141,9 +146,6 @@ func (h *Handler) CreateArticle(w http.ResponseWriter, r *http.Request) {
 		AuthorID:        req.AuthorID,
 		Owner:           owner,
 		Public:          isPublic,
-		Title:           req.Title,
-		Markdown:        req.Markdown,
-		ContentHTML:     req.ContentHTML,
 		Tags:            normalizeArticleTags(req.Tags),
 		TopicIcon:       req.TopicIcon,
 		Illustration:    req.Illustration,
@@ -163,6 +165,15 @@ func (h *Handler) CreateArticle(w http.ResponseWriter, r *http.Request) {
 		h.writeError(w, http.StatusInternalServerError, "failed to create article")
 		return
 	}
+	if err := h.upsertArticleTranslation(r.Context(), article.ID, language, req.Title, req.Markdown, req.ContentHTML, now); err != nil {
+		_, _ = h.articles.DeleteOne(r.Context(), bson.M{"_id": article.ID})
+		h.writeError(w, http.StatusInternalServerError, "failed to create article translation")
+		return
+	}
+	article.Title = strings.TrimSpace(req.Title)
+	article.Markdown = req.Markdown
+	article.ContentHTML = req.ContentHTML
+	article.AvailableLangs = []model.LanguageCode{language}
 
 	h.writeJSON(w, http.StatusCreated, article)
 }
@@ -170,64 +181,8 @@ func (h *Handler) CreateArticle(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) ListArticles(w http.ResponseWriter, r *http.Request) {
 	findOptions := options.Find().SetSort(bson.D{{Key: "createdAt", Value: -1}})
 	view := strings.ToLower(strings.TrimSpace(r.URL.Query().Get("view")))
+	preferredLanguage := normalizeArticleLanguage(r.URL.Query().Get("language"), "")
 	visibilityFilter := articleVisibilityFilter(UserFromContext(r.Context()))
-
-	if view != "full" {
-		findOptions.SetProjection(bson.M{
-			"owner":        1,
-			"public":       1,
-			"title":        1,
-			"tags":         1,
-			"topicIcon":    1,
-			"illustration": 1,
-			"sentCount":    1,
-			"last_used":    1,
-			"preview":      1,
-			"status":       1,
-			"createdAt":    1,
-			"updatedAt":    1,
-		})
-
-		cursor, err := h.articles.Find(r.Context(), visibilityFilter, findOptions)
-		if err != nil {
-			h.writeError(w, http.StatusInternalServerError, "failed to list articles")
-			return
-		}
-		defer cursor.Close(r.Context())
-
-		var rawItems []articleSummarySource
-		if err := cursor.All(r.Context(), &rawItems); err != nil {
-			h.writeError(w, http.StatusInternalServerError, "failed to decode articles")
-			return
-		}
-
-		items := make([]articleSummary, 0, len(rawItems))
-		for _, raw := range rawItems {
-			isPublic := true
-			if raw.Public != nil {
-				isPublic = *raw.Public
-			}
-
-			items = append(items, articleSummary{
-				ID:           raw.ID,
-				Owner:        raw.Owner,
-				Public:       isPublic,
-				Title:        raw.Title,
-				Tags:         raw.Tags,
-				TopicIcon:    raw.TopicIcon,
-				Illustration: raw.Illustration,
-				SentCount:    raw.SentCount,
-				LastUsed:     raw.LastUsed,
-				Status:       raw.Status,
-				CreatedAt:    raw.CreatedAt,
-				UpdatedAt:    raw.UpdatedAt,
-				Preview:      raw.Preview,
-			})
-		}
-
-		h.writeJSON(w, http.StatusOK, map[string]any{"items": items})
-		return
-	}
 
 	cursor, err := h.articles.Find(r.Context(), visibilityFilter, findOptions)
 	if err != nil {
@@ -250,6 +205,34 @@ func (h *Handler) ListArticles(w http.ResponseWriter, r *http.Request) {
 			articles[i].Public = true
 		}
 	}
+	if err := h.applyArticleTranslations(r.Context(), articles, preferredLanguage, false); err != nil {
+		h.writeError(w, http.StatusInternalServerError, "failed to hydrate article translations")
+		return
+	}
+
+	if view != "full" {
+		items := make([]articleSummary, 0, len(articles))
+		for _, article := range articles {
+			items = append(items, articleSummary{
+				ID:                 article.ID,
+				Owner:              article.Owner,
+				Public:             article.Public,
+				AvailableLanguages: article.AvailableLangs,
+				Title:              article.Title,
+				Tags:               article.Tags,
+				TopicIcon:          article.TopicIcon,
+				Illustration:       article.Illustration,
+				SentCount:          article.SentCount,
+				LastUsed:           article.LastUsed,
+				Status:             article.Status,
+				CreatedAt:          article.CreatedAt,
+				UpdatedAt:          article.UpdatedAt,
+				Preview:            contentPreview(article.Markdown, article.ContentHTML, 3, 180),
+			})
+		}
+		h.writeJSON(w, http.StatusOK, map[string]any{"items": items})
+		return
+	}
 
 	h.writeJSON(w, http.StatusOK, map[string]any{"items": articles})
 }
@@ -269,6 +252,13 @@ func (h *Handler) GetArticle(w http.ResponseWriter, r *http.Request, id string) 
 		// Legacy records may not have an explicit visibility flag; treat as public until claimed.
 		article.Public = true
 	}
+	preferredLanguage := normalizeArticleLanguage(r.URL.Query().Get("language"), "")
+	items := []model.Article{article}
+	if err := h.applyArticleTranslations(r.Context(), items, preferredLanguage, true); err != nil {
+		h.writeError(w, http.StatusInternalServerError, "failed to hydrate article translation")
+		return
+	}
+	article = items[0]
 
 	h.writeJSON(w, http.StatusOK, article)
 }
@@ -315,12 +305,19 @@ func (h *Handler) ClaimArticle(w http.ResponseWriter, r *http.Request, id string
 		h.writeError(w, http.StatusConflict, "article already claimed")
 		return
 	}
+	items := []model.Article{article}
+	if err := h.applyArticleTranslations(r.Context(), items, "", false); err != nil {
+		h.writeError(w, http.StatusInternalServerError, "failed to hydrate article translation")
+		return
+	}
+	article = items[0]
 
 	h.writeJSON(w, http.StatusOK, article)
 }
 
 type updateArticleRequest struct {
 	Public          *bool    `json:"public"`
+	Language        string   `json:"language"`
 	Title           string   `json:"title"`
 	Markdown        string   `json:"markdown"`
 	ContentHTML     string   `json:"contentHTML"`
@@ -372,11 +369,10 @@ func (h *Handler) UpdateArticle(w http.ResponseWriter, r *http.Request, id strin
 			return
 		}
 	}
+	language := normalizeArticleLanguage(req.Language, model.LanguageFrench)
+	now := time.Now().UTC()
 
 	setFields := bson.M{
-		"title":           strings.TrimSpace(req.Title),
-		"markdown":        req.Markdown,
-		"contentHTML":     req.ContentHTML,
 		"preview":         contentPreview(req.Markdown, req.ContentHTML, 3, 180),
 		"tags":            normalizeArticleTags(req.Tags),
 		"topicIcon":       strings.TrimSpace(req.TopicIcon),
@@ -385,7 +381,7 @@ func (h *Handler) UpdateArticle(w http.ResponseWriter, r *http.Request, id strin
 		"iconZoom":        normalizeIconZoom(req.IconZoom),
 		"iconBgColor":     strings.TrimSpace(req.IconBgColor),
 		"iconStrokeColor": strings.TrimSpace(req.IconStrokeColor),
-		"updatedAt":       time.Now().UTC(),
+		"updatedAt":       now,
 	}
 	if req.Public != nil {
 		currentVisibility := existing.Public
@@ -413,14 +409,23 @@ func (h *Handler) UpdateArticle(w http.ResponseWriter, r *http.Request, id strin
 		h.writeError(w, http.StatusNotFound, "article not found")
 		return
 	}
+	if err := h.upsertArticleTranslation(r.Context(), id, language, req.Title, req.Markdown, req.ContentHTML, now); err != nil {
+		h.writeError(w, http.StatusInternalServerError, "failed to update article translation")
+		return
+	}
 
 	var article model.Article
 	if err := h.articles.FindOne(r.Context(), bson.M{"_id": id}).Decode(&article); err != nil {
 		h.writeError(w, http.StatusInternalServerError, "failed to fetch updated article")
 		return
 	}
+	items := []model.Article{article}
+	if err := h.applyArticleTranslations(r.Context(), items, language, true); err != nil {
+		h.writeError(w, http.StatusInternalServerError, "failed to hydrate updated article translation")
+		return
+	}
 
-	h.writeJSON(w, http.StatusOK, article)
+	h.writeJSON(w, http.StatusOK, items[0])
 }
 
 func normalizeArticleTags(tags []string) []string {
@@ -838,6 +843,10 @@ func (h *Handler) DeleteArticle(w http.ResponseWriter, r *http.Request, id strin
 	}
 	if result.DeletedCount == 0 {
 		h.writeError(w, http.StatusNotFound, "article not found")
+		return
+	}
+	if _, err := h.articleTranslations.DeleteMany(r.Context(), bson.M{"articleId": id}); err != nil {
+		h.writeError(w, http.StatusInternalServerError, "failed to delete article translations")
 		return
 	}
 
@@ -1716,6 +1725,9 @@ func (h *Handler) loadNewsletterWithArticles(ctx context.Context, id string) (*m
 		if article, ok := byID[articleID]; ok {
 			ordered = append(ordered, article)
 		}
+	}
+	if err := h.applyArticleTranslations(ctx, ordered, "", false); err != nil {
+		return nil, nil, err
 	}
 
 	return &newsletter, ordered, nil

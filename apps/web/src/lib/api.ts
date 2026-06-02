@@ -1,4 +1,4 @@
-import type { Article, ArticleSummary, Contact, Header, ListResponse, Newsletter, NewsletterPreview, NewsletterSummary } from "../types/domain";
+import type { Article, ArticleLanguageCode, ArticleSummary, Contact, Header, ListResponse, Newsletter, NewsletterPreview, NewsletterSummary } from "../types/domain";
 
 const API_ROOT = "/api";
 
@@ -12,6 +12,7 @@ export class TokenExpiredError extends Error {
 type CreateArticlePayload = {
   authorId?: string;
   public?: boolean;
+  language?: ArticleLanguageCode;
   title: string;
   markdown: string;
   contentHTML?: string;
@@ -57,6 +58,7 @@ type UpdateNewsletterPayload = {
 
 type UpdateArticlePayload = {
   public?: boolean;
+  language?: ArticleLanguageCode;
   title: string;
   markdown: string;
   contentHTML?: string;
@@ -118,13 +120,15 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   return payload as T;
 }
 
-export async function listArticleSummaries(): Promise<ArticleSummary[]> {
-  const data = await request<ListResponse<ArticleSummary>>("/articles/");
+export async function listArticleSummaries(language?: ArticleLanguageCode): Promise<ArticleSummary[]> {
+  const query = language ? `?language=${encodeURIComponent(language)}` : "";
+  const data = await request<ListResponse<ArticleSummary>>(`/articles/${query}`);
   return data.items;
 }
 
-export async function getArticle(id: string): Promise<Article> {
-  return request<Article>(`/articles/${id}`);
+export async function getArticle(id: string, language?: ArticleLanguageCode): Promise<Article> {
+  const query = language ? `?language=${encodeURIComponent(language)}` : "";
+  return request<Article>(`/articles/${id}${query}`);
 }
 
 export async function claimArticle(id: string): Promise<Article> {

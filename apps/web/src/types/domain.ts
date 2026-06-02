@@ -1,5 +1,7 @@
 export type ArticleStatus = "draft" | "published" | "archived";
 
+export type ArticleLanguageCode = "en" | "fr" | "de" | "es" | "it" | "ja" | "zh";
+
 export type HeaderStatus = "draft" | "published" | "archived";
 
 export interface Article {
@@ -7,6 +9,7 @@ export interface Article {
   authorId: string;
   owner?: string;
   public: boolean;
+  availableLanguages?: ArticleLanguageCode[];
   title: string;
   markdown: string;
   contentHTML?: string;
@@ -30,6 +33,7 @@ export interface ArticleSummary {
   id: string;
   owner?: string;
   public: boolean;
+  availableLanguages?: ArticleLanguageCode[];
   title: string;
   tags?: string[];
   topicIcon?: string;

@@ -27,7 +27,7 @@ import {
   useCombobox
 } from "@mantine/core";
 import { useMediaQuery } from "@mantine/hooks";
-import { IconCheck, IconChevronDown, IconChevronLeft, IconFiles, IconMail, IconPencil, IconPlus, IconPointFilled, IconSearch, IconTrash, IconUpload, IconUserCheck, IconUserFilled, IconX } from "@tabler/icons-react";
+import { IconCheck, IconChevronDown, IconChevronLeft, IconFiles, IconLanguage, IconMail, IconPencil, IconPlus, IconPointFilled, IconRefresh, IconSearch, IconTrash, IconUpload, IconUserCheck, IconUserFilled, IconX } from "@tabler/icons-react";
 import { SimpleEditor } from "@/components/tiptap-templates/simple/simple-editor";
 import { renderToStaticMarkup } from "react-dom/server";
 import { useParams } from "react-router-dom";
@@ -35,7 +35,7 @@ import { createArticle, deleteArticle, getArticle, getNewsletter, getSavedIcons,
 import { claimArticle } from "../lib/api";
 import { useAuth } from "../lib/auth";
 import type { TablerIconMap } from "../lib/tablerIconsBrowser";
-import type { Article, ArticleSummary, NewsletterSummary } from "../types/domain";
+import type { Article, ArticleLanguageCode, ArticleSummary, NewsletterSummary } from "../types/domain";
 
 const FALLBACK_AUTHOR_ID = "demo-user";
 
@@ -49,6 +49,44 @@ const ICON_PNG_RASTER_SIZE = 90;
 const RECENT_ARTICLES_WINDOW_MS = 30 * 24 * 60 * 60 * 1000;
 const DEFAULT_NEWSLETTER_CONTENT_WIDTH = 680;
 const TAG_COLORS = ["blue", "teal", "cyan", "grape", "indigo", "violet", "lime", "orange", "pink"] as const;
+const DEFAULT_ARTICLE_LANGUAGE: ArticleLanguageCode = "fr";
+const ARTICLE_LANGUAGES: Array<{ code: ArticleLanguageCode; label: string }> = [
+  { code: "en", label: "English" },
+  { code: "fr", label: "French" },
+  { code: "de", label: "German" },
+  { code: "es", label: "Spanish" },
+  { code: "it", label: "Italian" },
+  { code: "ja", label: "Japanese" },
+  { code: "zh", label: "Chinese" }
+];
+
+function languageLabel(code?: ArticleLanguageCode): string {
+  if (!code) {
+    return "French";
+  }
+  return ARTICLE_LANGUAGES.find((language) => language.code === code)?.label ?? "French";
+}
+
+function browserArticleListLanguage(): ArticleLanguageCode {
+  const languageCandidates: string[] = [];
+  if (typeof window !== "undefined") {
+    if (Array.isArray(window.navigator.languages)) {
+      languageCandidates.push(...window.navigator.languages);
+    }
+    languageCandidates.push(window.navigator.language);
+  }
+
+  for (const raw of languageCandidates) {
+    const normalized = (raw ?? "").trim().toLowerCase();
+    if (!normalized) continue;
+    const base = normalized.split("-")[0] as ArticleLanguageCode;
+    if (ARTICLE_LANGUAGES.some((language) => language.code === base)) {
+      return base;
+    }
+  }
+
+  return DEFAULT_ARTICLE_LANGUAGE;
+}
 
 let cachedArticleSummaries: ArticleSummary[] | null = null;
 
@@ -438,6 +476,7 @@ function toArticleSummary(article: Article): ArticleSummary {
     id: article.id,
     owner: article.owner,
     public: article.public !== false,
+    availableLanguages: article.availableLanguages,
     title: article.title,
     tags: article.tags,
     topicIcon: article.topicIcon,
@@ -474,6 +513,8 @@ export default function ArticlesPage() {
     () => (cachedArticleSummaries ?? []).map(normalizeArticleSummaryVisibility)
   );
   const [selectedArticleId, setSelectedArticleID] = useState<string | null>(null);
+  const [articleListLanguage] = useState<ArticleLanguageCode>(browserArticleListLanguage);
+  const [selectedLanguage, setSelectedLanguage] = useState<ArticleLanguageCode>(DEFAULT_ARTICLE_LANGUAGE);
   const [title, setTitle] = useState("");
   const [articleContentHTML, setArticleContentHTML] = useState("");
   const [articleEditorKey, setArticleEditorKey] = useState("");
@@ -564,7 +605,7 @@ export default function ArticlesPage() {
     setError(null);
     try {
       const [items, newsletters] = await Promise.all([
-        listArticleSummaries().then((a) => a.map(normalizeArticleSummaryVisibility)),
+        listArticleSummaries(articleListLanguage).then((a) => a.map(normalizeArticleSummaryVisibility)),
         listNewsletterSummaries(),
       ]);
       cachedArticleSummaries = items;
@@ -720,6 +761,7 @@ export default function ArticlesPage() {
   };
 
   const resetForm = () => {
+    setSelectedLanguage(DEFAULT_ARTICLE_LANGUAGE);
     setTitle("");
     setArticleContentHTML("");
     setArticleEditorKey("");
@@ -738,17 +780,18 @@ export default function ArticlesPage() {
     setAutosaveStatus("idle");
   };
 
-  const onEdit = async (article: ArticleSummary) => {
+  const onEdit = async (article: ArticleSummary, languageOverride?: ArticleLanguageCode) => {
     pendingEditRef.current = article.id;
     setIsManualNewArticleMode(false);
     setSelectedArticleID(article.id);
     setError(null);
     try {
-      const fullArticle = await getArticle(article.id);
+      const requestedLanguage = languageOverride ?? selectedLanguage;
+      const fullArticle = await getArticle(article.id, requestedLanguage);
       if (pendingEditRef.current !== article.id) return;
-      const fullSummary = toArticleSummary(fullArticle);
       setEditingID(fullArticle.id);
       setSelectedArticleID(fullArticle.id);
+      setSelectedLanguage(requestedLanguage ?? DEFAULT_ARTICLE_LANGUAGE);
       setTitle(fullArticle.title);
       setIsPublic(fullArticle.public !== false);
       setTags(fullArticle.tags ?? []);
@@ -767,7 +810,7 @@ export default function ArticlesPage() {
         htmlContent = "<p></p>";
       }
       setArticleContentHTML(htmlContent || "");
-      setArticleEditorKey(fullArticle.id);
+      setArticleEditorKey(`${fullArticle.id}:${requestedLanguage ?? DEFAULT_ARTICLE_LANGUAGE}`);
 
       setTopicIcon(fullArticle.topicIcon ?? "");
       setCustomIconImageDataUrl(
@@ -781,9 +824,6 @@ export default function ArticlesPage() {
       setTopicIconStrokeColor(fullArticle.iconStrokeColor || extractTopicIconStrokeColor(iconStyleSource));
       setTopicIconFillColor(fullArticle.iconFillColor || "");
       setTopicIconIllustration(fullArticle.illustration ?? "");
-      setArticles((current) =>
-        current.map((item) => (item.id === fullSummary.id ? fullSummary : item))
-      );
       const loadedTopicIcon = (fullArticle.topicIcon ?? "").trim();
       const loadedIconSource = fullArticle.iconSource ?? "";
       const loadedCustomIconImageDataUrl = loadedTopicIcon
@@ -795,6 +835,7 @@ export default function ArticlesPage() {
       const loadedIconFillColor = fullArticle.iconFillColor || "";
 
       lastSavedDraftRef.current = JSON.stringify({
+        language: requestedLanguage ?? DEFAULT_ARTICLE_LANGUAGE,
         title: fullArticle.title.trim(),
         markdown: "",
         contentHTML: htmlContent || "",
@@ -823,6 +864,17 @@ export default function ArticlesPage() {
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load article details");
     }
+  };
+
+  const onSelectEditorLanguage = (language: ArticleLanguageCode) => {
+    if (language === selectedLanguage) {
+      return;
+    }
+    if (editingId && selectedArticleSummary) {
+      void onEdit(selectedArticleSummary, language);
+      return;
+    }
+    setSelectedLanguage(language);
   };
 
   useEffect(() => {
@@ -1076,6 +1128,7 @@ export default function ArticlesPage() {
   }, [editingId, favoriteNewsletterId, favoriteNewsletterName, autosaveStatus, isCompactActions]);
 
   const buildArticleDraftPayload = () => ({
+    language: selectedLanguage,
     title: title.trim(),
     markdown: "",
     contentHTML: articleContentHTML,
@@ -1189,7 +1242,7 @@ export default function ArticlesPage() {
         window.clearTimeout(autosaveTimerRef.current);
       }
     };
-  }, [editingId, isEditingOwnedByCurrentUser, title, articleContentHTML, isPublic, tags, topicIcon, topicIconIllustration]);
+  }, [editingId, isEditingOwnedByCurrentUser, selectedLanguage, title, articleContentHTML, isPublic, tags, topicIcon, topicIconIllustration]);
 
   useEffect(() => () => {
     if (autosaveTimerRef.current !== null) {
@@ -1198,7 +1251,7 @@ export default function ArticlesPage() {
     if (autosaveClearSavedRef.current !== null) {
       window.clearTimeout(autosaveClearSavedRef.current);
     }
-  }, []);
+  }, [articleListLanguage]);
 
   const requestDeleteArticle = (articleId: string) => {
     setDeleteArticleId(articleId);
@@ -1241,9 +1294,10 @@ export default function ArticlesPage() {
     setError(null);
 
     try {
-      const source = await getArticle(editingId);
+      const source = await getArticle(editingId, selectedLanguage);
       const created = await createArticle({
         authorId: oidcEnabled ? undefined : FALLBACK_AUTHOR_ID,
+        language: selectedLanguage,
         public: source.public !== false,
         title: `${source.title} (copy)`,
         markdown: source.markdown,
@@ -1788,14 +1842,49 @@ export default function ArticlesPage() {
                   {editingId ? "Edit Article" : "New Article"}
                 </Text>
               )}
-              {editingId && isEditingOwnedByCurrentUser && (autosaveStatus === "saving" || autosaveStatus === "error") ? (
-                <Text size="xs" c={autosaveStatus === "error" ? "red" : "dimmed"}>
-                  {autosaveStatus === "saving" ? "Saving..." : "Autosave failed"}
+              {editingId && isEditingOwnedByCurrentUser && autosaveStatus === "error" ? (
+                <Text size="xs" c="red">
+                  Autosave failed
                 </Text>
               ) : null}
+              <Menu position="bottom-start" withArrow>
+                <Menu.Target>
+                  <Button variant="default" size="xs" leftSection={<IconLanguage size={14} />} rightSection={<IconChevronDown size={12} />}>
+                    Language: {languageLabel(selectedLanguage)}
+                  </Button>
+                </Menu.Target>
+                <Menu.Dropdown>
+                  {ARTICLE_LANGUAGES.map((language) => (
+                    <Menu.Item
+                      key={`article-language-${language.code}`}
+                      onClick={() => onSelectEditorLanguage(language.code)}
+                      leftSection={<IconCheck size={14} style={{ opacity: selectedLanguage === language.code ? 1 : 0 }} />}
+                    >
+                      {language.label}
+                    </Menu.Item>
+                  ))}
+                </Menu.Dropdown>
+              </Menu>
             </Group>
             {editingId ? (
               <Group gap="xs" wrap="nowrap" ref={headerActionsRef}>
+                {isEditingOwnedByCurrentUser && autosaveStatus === "saving" ? (
+                  <Tooltip label="Saving changes" position="bottom" withArrow>
+                    <Box
+                      aria-label="Saving changes"
+                      style={{
+                        display: "inline-flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        width: 28,
+                        height: 28,
+                        color: "var(--mantine-color-blue-6)"
+                      }}
+                    >
+                      <IconRefresh size={14} className="article-autosave-refresh" />
+                    </Box>
+                  </Tooltip>
+                ) : null}
                 {favoriteNewsletterId ? (
                   isCompactActions || isMobile ? (
                     <ActionIcon
@@ -2117,6 +2206,19 @@ export default function ArticlesPage() {
         .article-readonly-preview img {
           max-width: 100% !important;
           height: auto !important;
+        }
+
+        .article-autosave-refresh {
+          animation: article-autosave-spin 0.9s linear infinite;
+        }
+
+        @keyframes article-autosave-spin {
+          from {
+            transform: rotate(0deg);
+          }
+          to {
+            transform: rotate(360deg);
+          }
         }
       `}</style>
 
