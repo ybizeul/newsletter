@@ -53,6 +53,7 @@ export interface Newsletter {
   creatorId: string;
   owner?: string;
   title: string;
+  language?: ArticleLanguageCode;
   template?: string;
   headerId?: string;
   introMarkdown: string;
@@ -79,6 +80,7 @@ export interface NewsletterSummary {
   id: string;
   owner?: string;
   title: string;
+  language?: ArticleLanguageCode;
   template?: string;
   headerId?: string;
   includeIndex: boolean;

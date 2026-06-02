@@ -28,6 +28,7 @@ type CreateArticlePayload = {
 type CreateNewsletterPayload = {
   creatorId?: string;
   title: string;
+  language?: ArticleLanguageCode;
   template?: string;
   headerId?: string;
   introMarkdown: string;
@@ -43,6 +44,7 @@ type CreateNewsletterPayload = {
 
 type UpdateNewsletterPayload = {
   title: string;
+  language?: ArticleLanguageCode;
   template?: string;
   headerId?: string;
   introMarkdown: string;

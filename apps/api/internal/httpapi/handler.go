@@ -205,7 +205,7 @@ func (h *Handler) ListArticles(w http.ResponseWriter, r *http.Request) {
 			articles[i].Public = true
 		}
 	}
-	if err := h.applyArticleTranslations(r.Context(), articles, preferredLanguage, false); err != nil {
+	if err := h.applyArticleTranslations(r.Context(), articles, preferredLanguage, false, model.LanguageFrench); err != nil {
 		h.writeError(w, http.StatusInternalServerError, "failed to hydrate article translations")
 		return
 	}
@@ -254,7 +254,7 @@ func (h *Handler) GetArticle(w http.ResponseWriter, r *http.Request, id string) 
 	}
 	preferredLanguage := normalizeArticleLanguage(r.URL.Query().Get("language"), "")
 	items := []model.Article{article}
-	if err := h.applyArticleTranslations(r.Context(), items, preferredLanguage, true); err != nil {
+	if err := h.applyArticleTranslations(r.Context(), items, preferredLanguage, true, ""); err != nil {
 		h.writeError(w, http.StatusInternalServerError, "failed to hydrate article translation")
 		return
 	}
@@ -306,7 +306,7 @@ func (h *Handler) ClaimArticle(w http.ResponseWriter, r *http.Request, id string
 		return
 	}
 	items := []model.Article{article}
-	if err := h.applyArticleTranslations(r.Context(), items, "", false); err != nil {
+	if err := h.applyArticleTranslations(r.Context(), items, "", false, model.LanguageFrench); err != nil {
 		h.writeError(w, http.StatusInternalServerError, "failed to hydrate article translation")
 		return
 	}
@@ -420,7 +420,7 @@ func (h *Handler) UpdateArticle(w http.ResponseWriter, r *http.Request, id strin
 		return
 	}
 	items := []model.Article{article}
-	if err := h.applyArticleTranslations(r.Context(), items, language, true); err != nil {
+	if err := h.applyArticleTranslations(r.Context(), items, language, true, ""); err != nil {
 		h.writeError(w, http.StatusInternalServerError, "failed to hydrate updated article translation")
 		return
 	}
@@ -986,6 +986,7 @@ func (h *Handler) DeleteHeader(w http.ResponseWriter, r *http.Request, id string
 type createNewsletterRequest struct {
 	CreatorID       string   `json:"creatorId"`
 	Title           string   `json:"title"`
+	Language        string   `json:"language"`
 	Template        string   `json:"template"`
 	HeaderID        string   `json:"headerId"`
 	IntroMarkdown   string   `json:"introMarkdown"`
@@ -1001,6 +1002,7 @@ type createNewsletterRequest struct {
 
 type updateNewsletterRequest struct {
 	Title           string   `json:"title"`
+	Language        string   `json:"language"`
 	Template        string   `json:"template"`
 	HeaderID        string   `json:"headerId"`
 	IntroMarkdown   string   `json:"introMarkdown"`
@@ -1031,6 +1033,7 @@ func (h *Handler) CreateNewsletter(w http.ResponseWriter, r *http.Request) {
 		h.writeError(w, http.StatusBadRequest, "creatorId and title are required")
 		return
 	}
+	newsletterLanguage := normalizeArticleLanguage(req.Language, model.LanguageFrench)
 
 	recipientIDs, err := normalizeRecipientIDs(req.RecipientIDs)
 	if err != nil {
@@ -1049,6 +1052,7 @@ func (h *Handler) CreateNewsletter(w http.ResponseWriter, r *http.Request) {
 		CreatorID:       req.CreatorID,
 		Owner:           owner,
 		Title:           req.Title,
+		Language:        newsletterLanguage,
 		Template:        templateName,
 		HeaderID:        strings.TrimSpace(req.HeaderID),
 		IntroMarkdown:   req.IntroMarkdown,
@@ -1087,6 +1091,7 @@ func (h *Handler) ListNewsletters(w http.ResponseWriter, r *http.Request) {
 		findOptions.SetProjection(bson.M{
 			"owner":          1,
 			"title":          1,
+			"language":       1,
 			"template":       1,
 			"headerId":       1,
 			"introMarkdown":  1,
@@ -1110,6 +1115,7 @@ func (h *Handler) ListNewsletters(w http.ResponseWriter, r *http.Request) {
 			ID             string                 `bson:"_id"`
 			Owner          string                 `bson:"owner,omitempty"`
 			Title          string                 `bson:"title"`
+			Language       model.LanguageCode     `bson:"language,omitempty"`
 			Template       string                 `bson:"template,omitempty"`
 			HeaderID       string                 `bson:"headerId,omitempty"`
 			IntroMarkdown  string                 `bson:"introMarkdown"`
@@ -1133,6 +1139,7 @@ func (h *Handler) ListNewsletters(w http.ResponseWriter, r *http.Request) {
 			ID            string                 `json:"id"`
 			Owner         string                 `json:"owner,omitempty"`
 			Title         string                 `json:"title"`
+			Language      model.LanguageCode     `json:"language,omitempty"`
 			Template      string                 `json:"template,omitempty"`
 			HeaderID      string                 `json:"headerId,omitempty"`
 			IncludeIndex  bool                   `json:"includeIndex"`
@@ -1168,6 +1175,7 @@ func (h *Handler) ListNewsletters(w http.ResponseWriter, r *http.Request) {
 				ID:            raw.ID,
 				Owner:         raw.Owner,
 				Title:         raw.Title,
+				Language:      raw.Language,
 				Template:      normalizeNewsletterTemplateName(raw.Template),
 				HeaderID:      raw.HeaderID,
 				IncludeIndex:  raw.IncludeIndex,
@@ -1328,6 +1336,16 @@ func (h *Handler) UpdateNewsletter(w http.ResponseWriter, r *http.Request, id st
 		return
 	}
 
+	var existing model.Newsletter
+	if err := h.newsletters.FindOne(r.Context(), bson.M{"_id": id}).Decode(&existing); err != nil {
+		if err == mongo.ErrNoDocuments {
+			h.writeError(w, http.StatusNotFound, "newsletter not found")
+			return
+		}
+		h.writeError(w, http.StatusInternalServerError, "failed to load newsletter")
+		return
+	}
+
 	if strings.TrimSpace(req.Title) == "" {
 		h.writeError(w, http.StatusBadRequest, "title is required")
 		return
@@ -1343,10 +1361,12 @@ func (h *Handler) UpdateNewsletter(w http.ResponseWriter, r *http.Request, id st
 		h.writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
+	newsletterLanguage := normalizeArticleLanguage(req.Language, normalizeArticleLanguage(string(existing.Language), model.LanguageFrench))
 
 	update := bson.M{
 		"$set": bson.M{
 			"title":           strings.TrimSpace(req.Title),
+			"language":        newsletterLanguage,
 			"template":        templateName,
 			"headerId":        strings.TrimSpace(req.HeaderID),
 			"introMarkdown":   req.IntroMarkdown,
@@ -1726,7 +1746,8 @@ func (h *Handler) loadNewsletterWithArticles(ctx context.Context, id string) (*m
 			ordered = append(ordered, article)
 		}
 	}
-	if err := h.applyArticleTranslations(ctx, ordered, "", false); err != nil {
+	preferredArticleLanguage := normalizeArticleLanguage(string(newsletter.Language), model.LanguageFrench)
+	if err := h.applyArticleTranslations(ctx, ordered, preferredArticleLanguage, false, model.LanguageEnglish); err != nil {
 		return nil, nil, err
 	}
 

@@ -724,6 +724,7 @@ export default function ArticlesPage() {
 
       await updateNewsletter(favoriteNewsletterId, {
         title: newsletter.title,
+        language: newsletter.language,
         headerId: newsletter.headerId ?? "",
         introMarkdown: newsletter.introMarkdown,
         includeIndex: newsletter.includeIndex,

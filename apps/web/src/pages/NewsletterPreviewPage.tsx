@@ -43,6 +43,7 @@ export default function NewsletterPreviewPage() {
         try {
           await updateNewsletter(id, {
             title: newsletter.title,
+            language: newsletter.language,
             headerId: newsletter.headerId ?? "",
             introMarkdown: newsletter.introMarkdown,
             includeIndex: newsletter.includeIndex,

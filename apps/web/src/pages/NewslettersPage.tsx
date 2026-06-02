@@ -49,7 +49,7 @@ import {
   renderMarkdown,
   TokenExpiredError
 } from "../lib/api";
-import type { ArticleSummary, Contact, Header, Newsletter, NewsletterSummary } from "../types/domain";
+import type { ArticleLanguageCode, ArticleSummary, Contact, Header, Newsletter, NewsletterSummary } from "../types/domain";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../lib/auth";
 import { DateTimePicker } from "@mantine/dates";
@@ -62,6 +62,16 @@ const PENDING_SEND_NEWSLETTER_ID_KEY = "newsletter.pending_send.id";
 const MAX_RECIPIENTS = 3;
 const ARTICLE_REUSE_WARNING_TEXT = "already used in another newsletter";
 const DEFAULT_NEWSLETTER_TEMPLATE = "default";
+const DEFAULT_NEWSLETTER_LANGUAGE: ArticleLanguageCode = "fr";
+const NEWSLETTER_LANGUAGE_OPTIONS: Array<{ value: ArticleLanguageCode; label: string }> = [
+  { value: "en", label: "English" },
+  { value: "fr", label: "French" },
+  { value: "de", label: "German" },
+  { value: "es", label: "Spanish" },
+  { value: "it", label: "Italian" },
+  { value: "ja", label: "Japanese" },
+  { value: "zh", label: "Chinese" }
+];
 
 type NewslettersDataCache = {
   articles: ArticleSummary[];
@@ -173,6 +183,7 @@ function toNewsletterSummary(newsletter: Newsletter): NewsletterSummary {
     id: newsletter.id,
     owner: newsletter.owner,
     title: newsletter.title,
+    language: newsletter.language,
     template: newsletter.template,
     headerId: newsletter.headerId,
     includeIndex: newsletter.includeIndex,
@@ -229,6 +240,7 @@ export default function NewslettersPage() {
     () => restoredNewsletterIdRef.current
   );
   const [title, setTitle] = useState("");
+  const [newsletterLanguage, setNewsletterLanguage] = useState<ArticleLanguageCode>(DEFAULT_NEWSLETTER_LANGUAGE);
   const [headerId, setHeaderId] = useState<string | null>(null);
   const [newsletterTemplate, setNewsletterTemplate] = useState(DEFAULT_NEWSLETTER_TEMPLATE);
   const [, setIntroMarkdown] = useState("");
@@ -463,6 +475,7 @@ export default function NewslettersPage() {
   const resetForm = () => {
     setSelectedNewsletterID(null);
     setTitle("");
+    setNewsletterLanguage(DEFAULT_NEWSLETTER_LANGUAGE);
     setNewsletterTemplate(DEFAULT_NEWSLETTER_TEMPLATE);
     setHeaderId(null);
     setIntroContentHTML("");
@@ -496,6 +509,7 @@ export default function NewslettersPage() {
       if (pendingEditRef.current !== newsletter.id) return;
       setSelectedNewsletterID(fullNewsletter.id);
       setTitle(fullNewsletter.title);
+      setNewsletterLanguage(fullNewsletter.language ?? DEFAULT_NEWSLETTER_LANGUAGE);
       setNewsletterTemplate((fullNewsletter.template ?? DEFAULT_NEWSLETTER_TEMPLATE).trim() || DEFAULT_NEWSLETTER_TEMPLATE);
       setHeaderId(fullNewsletter.headerId ?? null);
       setIntroMarkdown(fullNewsletter.introMarkdown);
@@ -543,6 +557,7 @@ export default function NewslettersPage() {
       }
       lastSavedDraftRef.current = JSON.stringify({
         title: fullNewsletter.title.trim(),
+        language: fullNewsletter.language ?? DEFAULT_NEWSLETTER_LANGUAGE,
         template: (fullNewsletter.template ?? DEFAULT_NEWSLETTER_TEMPLATE).trim() || DEFAULT_NEWSLETTER_TEMPLATE,
         headerId: fullNewsletter.headerId ?? "",
         introMarkdown: "",
@@ -680,6 +695,7 @@ export default function NewslettersPage() {
 
   const buildNewsletterDraftPayload = () => ({
     title: title.trim(),
+    language: newsletterLanguage,
     template: newsletterTemplate,
     headerId: headerId ?? "",
     introMarkdown: "",
@@ -711,6 +727,7 @@ export default function NewslettersPage() {
       const created = await createNewsletter({
         creatorId: oidcEnabled ? undefined : FALLBACK_CREATOR_ID,
         title: getDefaultNewsletterTitle(),
+        language: DEFAULT_NEWSLETTER_LANGUAGE,
         template: DEFAULT_NEWSLETTER_TEMPLATE,
         introMarkdown: "",
         includeIndex: false,
@@ -821,7 +838,7 @@ export default function NewslettersPage() {
         window.clearTimeout(autosaveTimerRef.current);
       }
     };
-  }, [selectedNewsletterId, title, newsletterTemplate, headerId, introContentHTML, footerContentHTML, includeIndex, contentWidth, archived, articleIds, recipientRaw, recipientMode, contactTags, contactTagsMode, hasTooManyRecipients, isSubmitting]);
+  }, [selectedNewsletterId, title, newsletterLanguage, newsletterTemplate, headerId, introContentHTML, footerContentHTML, includeIndex, contentWidth, archived, articleIds, recipientRaw, recipientMode, contactTags, contactTagsMode, hasTooManyRecipients, isSubmitting]);
 
   useEffect(() => () => {
     if (autosaveTimerRef.current !== null) {
@@ -947,6 +964,7 @@ export default function NewslettersPage() {
       const created = await createNewsletter({
         creatorId: oidcEnabled ? undefined : FALLBACK_CREATOR_ID,
         title: `${source.title} (copy)`,
+        language: source.language ?? DEFAULT_NEWSLETTER_LANGUAGE,
         template: source.template ?? DEFAULT_NEWSLETTER_TEMPLATE,
         headerId: source.headerId ?? "",
         introMarkdown: source.introMarkdown ?? "",
@@ -1290,6 +1308,15 @@ export default function NewslettersPage() {
             placeholder="April Product Digest"
             value={title}
             onChange={(event) => setTitle(event.currentTarget.value)}
+          />
+
+          <Select
+            label="Language"
+            description="Preferred language for article content when rendering this newsletter."
+            data={NEWSLETTER_LANGUAGE_OPTIONS}
+            value={newsletterLanguage}
+            onChange={(value) => setNewsletterLanguage((value as ArticleLanguageCode) ?? DEFAULT_NEWSLETTER_LANGUAGE)}
+            allowDeselect={false}
           />
 
           {newsletterTemplateOptions.length > 1 ? (

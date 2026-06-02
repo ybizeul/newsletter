@@ -81,7 +81,7 @@ func (h *Handler) loadArticleTranslations(ctx context.Context, articleIDs []stri
 	return result, nil
 }
 
-func pickArticleTranslation(byLang map[model.LanguageCode]model.ArticleTranslation, preferred model.LanguageCode, strictPreferred bool) (model.ArticleTranslation, bool) {
+func pickArticleTranslation(byLang map[model.LanguageCode]model.ArticleTranslation, preferred model.LanguageCode, strictPreferred bool, secondaryFallback model.LanguageCode) (model.ArticleTranslation, bool) {
 	if len(byLang) == 0 {
 		return model.ArticleTranslation{}, false
 	}
@@ -94,8 +94,10 @@ func pickArticleTranslation(byLang map[model.LanguageCode]model.ArticleTranslati
 			return model.ArticleTranslation{}, false
 		}
 	}
-	if translation, ok := byLang[model.LanguageFrench]; ok {
-		return translation, true
+	if secondaryFallback != "" {
+		if translation, ok := byLang[secondaryFallback]; ok {
+			return translation, true
+		}
 	}
 	for _, supported := range model.SupportedArticleLanguages {
 		if translation, ok := byLang[supported]; ok {
@@ -109,7 +111,7 @@ func pickArticleTranslation(byLang map[model.LanguageCode]model.ArticleTranslati
 	return model.ArticleTranslation{}, false
 }
 
-func (h *Handler) applyArticleTranslations(ctx context.Context, articles []model.Article, preferred model.LanguageCode, strictPreferred bool) error {
+func (h *Handler) applyArticleTranslations(ctx context.Context, articles []model.Article, preferred model.LanguageCode, strictPreferred bool, secondaryFallback model.LanguageCode) error {
 	if len(articles) == 0 {
 		return nil
 	}
@@ -134,7 +136,7 @@ func (h *Handler) applyArticleTranslations(ctx context.Context, articles []model
 		}
 		articles[i].AvailableLangs = available
 
-		translation, ok := pickArticleTranslation(byLang, preferred, strictPreferred)
+		translation, ok := pickArticleTranslation(byLang, preferred, strictPreferred, secondaryFallback)
 		if ok {
 			articles[i].Title = translation.Title
 			articles[i].Markdown = translation.Markdown
