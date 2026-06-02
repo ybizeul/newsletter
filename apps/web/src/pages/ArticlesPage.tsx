@@ -103,10 +103,15 @@ function browserArticleListLanguage(): ArticleLanguageCode {
 }
 
 function isEmptyArticleBodyContent(contentHTML: string): boolean {
-  const textOnly = contentHTML
-    .replace(/<[^>]*>/g, " ")
-    .replace(/&nbsp;/gi, " ")
-    .trim();
+  const raw = contentHTML?.trim() ?? "";
+  if (!raw) return true;
+  if (typeof window === "undefined" || typeof window.DOMParser === "undefined") {
+    const textOnly = raw.replace(/<[^>]*>/g, " ").replace(/&nbsp;/gi, " ").trim();
+    return textOnly.length === 0;
+  }
+  const parser = new window.DOMParser();
+  const doc = parser.parseFromString(raw, "text/html");
+  const textOnly = (doc.body.textContent ?? "").replace(/\u00a0/g, " ").trim();
   return textOnly.length === 0;
 }
 
