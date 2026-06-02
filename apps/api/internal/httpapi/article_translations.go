@@ -54,6 +54,22 @@ func (h *Handler) upsertArticleTranslation(ctx context.Context, articleID string
 	return err
 }
 
+func (h *Handler) deleteArticleTranslation(ctx context.Context, articleID string, language model.LanguageCode) error {
+	lang := defaultArticleLanguage(language)
+	_, err := h.articleTranslations.DeleteOne(ctx, bson.M{"articleId": articleID, "language": lang})
+	return err
+}
+
+func isBlankArticleTranslationInput(title, markdown, contentHTML string) bool {
+	if strings.TrimSpace(title) != "" {
+		return false
+	}
+	if strings.TrimSpace(markdown) != "" {
+		return false
+	}
+	return stripHTMLTags(contentHTML) == ""
+}
+
 func (h *Handler) loadArticleTranslations(ctx context.Context, articleIDs []string) (map[string]map[model.LanguageCode]model.ArticleTranslation, error) {
 	result := make(map[string]map[model.LanguageCode]model.ArticleTranslation)
 	if len(articleIDs) == 0 {

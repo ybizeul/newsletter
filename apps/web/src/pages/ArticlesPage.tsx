@@ -102,6 +102,19 @@ function browserArticleListLanguage(): ArticleLanguageCode {
   return DEFAULT_ARTICLE_LANGUAGE;
 }
 
+function isEmptyArticleBodyContent(contentHTML: string): boolean {
+  const raw = contentHTML?.trim() ?? "";
+  if (!raw) return true;
+  if (typeof window === "undefined" || typeof window.DOMParser === "undefined") {
+    const textOnly = raw.replace(/<[^>]*>/g, " ").replace(/&nbsp;/gi, " ").trim();
+    return textOnly.length === 0;
+  }
+  const parser = new window.DOMParser();
+  const doc = parser.parseFromString(raw, "text/html");
+  const textOnly = (doc.body.textContent ?? "").replace(/\u00a0/g, " ").trim();
+  return textOnly.length === 0;
+}
+
 let cachedArticleSummaries: ArticleSummary[] | null = null;
 
 type ArticleSmartFilter = "all" | "mine" | "recent" | "private" | "public";
@@ -782,15 +795,14 @@ export default function ArticlesPage() {
     const available = (article.availableLanguages ?? []).filter((language) =>
       ARTICLE_LANGUAGES.some((supported) => supported.code === language)
     );
-    const preferred = selectedLanguage;
     if (available.length === 0) {
-      return preferred || articleListLanguage;
-    }
-    if (available.includes(selectedLanguage)) {
-      return selectedLanguage;
+      return articleListLanguage;
     }
     if (available.includes(articleListLanguage)) {
       return articleListLanguage;
+    }
+    if (available.includes("en")) {
+      return "en";
     }
     return available[0];
   };
@@ -1204,7 +1216,8 @@ export default function ArticlesPage() {
   });
 
   const onSubmit = async () => {
-    if (!title.trim()) {
+    const emptyBody = isEmptyArticleBodyContent(articleContentHTML);
+    if (!title.trim() && !emptyBody) {
       setError("Title is required");
       return;
     }
@@ -1266,7 +1279,8 @@ export default function ArticlesPage() {
       return;
     }
 
-    if (!payload.title) {
+    const emptyBody = isEmptyArticleBodyContent(payload.contentHTML);
+    if (!payload.title && !emptyBody) {
       return;
     }
 
