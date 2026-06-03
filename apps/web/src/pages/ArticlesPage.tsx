@@ -1915,15 +1915,6 @@ export default function ArticlesPage() {
                   >
                     Tag
                   </Menu.CheckboxItem>
-                  {allNewsletterSummaries.length > 0 ? (
-                    <Menu.CheckboxItem
-                      closeMenuOnClick={false}
-                      checked={showOnlyUnused}
-                      onChange={() => setShowOnlyUnused((value) => !value)}
-                    >
-                      Unused
-                    </Menu.CheckboxItem>
-                  ) : null}
 
                   <Menu.Divider />
                   <Menu.Sub>
@@ -1991,6 +1982,27 @@ export default function ArticlesPage() {
             value={articleSearchQuery}
             onChange={(event) => setArticleSearchQuery(event.currentTarget.value)}
           />
+          <ActionIcon
+            variant={showOnlyUnused ? "light" : "subtle"}
+            color={showOnlyUnused ? "blue" : "gray"}
+            size="lg"
+            radius="xl"
+            aria-label="Toggle unused articles"
+            title={allNewsletterSummaries.length > 0 ? "Show only unused articles" : "Unused filter is unavailable until a newsletter exists"}
+            disabled={allNewsletterSummaries.length === 0}
+            onClick={() => setShowOnlyUnused((value) => !value)}
+          >
+            <div
+              style={{
+                width: 8,
+                height: 8,
+                borderRadius: "50%",
+                backgroundColor: showOnlyUnused ? "var(--mantine-primary-color-filled)" : "var(--mantine-color-gray-4)",
+                border: showOnlyUnused ? "none" : "1px solid var(--mantine-color-gray-5)",
+                flexShrink: 0
+              }}
+            />
+          </ActionIcon>
         </div>
 
         <ScrollArea h="calc(100% - 110px)" offsetScrollbars viewportRef={articleListViewportRef}>
