@@ -44,6 +44,7 @@ const DEFAULT_TOPIC_ICON_STROKE = "#ffffff";
 const ARTICLES_PANE_WIDTH_STORAGE_KEY = "newsletter.articles.pane.width";
 const FAVORITE_NEWSLETTER_ID_STORAGE_KEY = "newsletter.favorite.id";
 const SAVED_ICONS_STORAGE_KEY = "newsletter.articles.savedIcons";
+const ARTICLES_SEARCH_MENU_STORAGE_KEY = "newsletter.articles.searchMenu";
 const MAX_SAVED_ICONS = 24;
 const ICON_PNG_RASTER_SIZE = 90;
 const RECENT_ARTICLES_WINDOW_MS = 30 * 24 * 60 * 60 * 1000;
@@ -187,6 +188,64 @@ function getStoredFavoriteNewsletterId(): string | null {
   }
   const trimmed = raw.trim();
   return trimmed.length > 0 ? trimmed : null;
+}
+
+type ArticleSearchMenuPrefs = {
+  showOnlyUnused: boolean;
+  languageFilter: ArticleLanguageCode[];
+  searchCriteria: {
+    title: boolean;
+    content: boolean;
+    tag: boolean;
+  };
+  sortMode: "recent" | "last-used" | "most-sent";
+};
+
+function getStoredArticleSearchMenuPrefs(): ArticleSearchMenuPrefs {
+  const allLanguages = ARTICLE_LANGUAGES.map((language) => language.code);
+  const defaults: ArticleSearchMenuPrefs = {
+    showOnlyUnused: false,
+    languageFilter: allLanguages,
+    searchCriteria: {
+      title: true,
+      content: true,
+      tag: false
+    },
+    sortMode: "recent"
+  };
+
+  try {
+    const raw = window.localStorage.getItem(ARTICLES_SEARCH_MENU_STORAGE_KEY);
+    if (!raw) {
+      return defaults;
+    }
+
+    const parsed = JSON.parse(raw) as Partial<ArticleSearchMenuPrefs>;
+    const parsedLanguages = Array.isArray(parsed.languageFilter)
+      ? parsed.languageFilter.filter((language): language is ArticleLanguageCode =>
+        allLanguages.includes(language as ArticleLanguageCode)
+      )
+      : [];
+
+    const searchCriteria = {
+      title: parsed.searchCriteria?.title ?? defaults.searchCriteria.title,
+      content: parsed.searchCriteria?.content ?? defaults.searchCriteria.content,
+      tag: parsed.searchCriteria?.tag ?? defaults.searchCriteria.tag
+    };
+
+    const searchCriteriaSelectedCount = [searchCriteria.title, searchCriteria.content, searchCriteria.tag].filter(Boolean).length;
+
+    return {
+      showOnlyUnused: parsed.showOnlyUnused ?? defaults.showOnlyUnused,
+      languageFilter: parsedLanguages.length > 0 ? parsedLanguages : defaults.languageFilter,
+      searchCriteria: searchCriteriaSelectedCount > 0 ? searchCriteria : defaults.searchCriteria,
+      sortMode: parsed.sortMode === "last-used" || parsed.sortMode === "most-sent" || parsed.sortMode === "recent"
+        ? parsed.sortMode
+        : defaults.sortMode
+    };
+  } catch {
+    return defaults;
+  }
 }
 
 function extractTopicIconBackgroundColor(illustration?: string): string {
@@ -587,14 +646,14 @@ export default function ArticlesPage() {
   const savedIconActiveRef = useRef(false);
   const [tablerIconMap, setTablerIconMap] = useState<TablerIconMap | null>(null);
   const [isIconLibraryLoading, setIsIconLibraryLoading] = useState(false);
+  const [articleSearchMenuPrefs] = useState<ArticleSearchMenuPrefs>(getStoredArticleSearchMenuPrefs);
   const [articleSearchQuery, setArticleSearchQuery] = useState("");
-  const [showOnlyUnused, setShowOnlyUnused] = useState(false);
-  const [articleSearchCriteria, setArticleSearchCriteria] = useState({
-    title: true,
-    content: true,
-    tag: false
-  });
-  const [articleSortMode, setArticleSortMode] = useState<"recent" | "last-used" | "most-sent">("recent");
+  const [showOnlyUnused, setShowOnlyUnused] = useState(articleSearchMenuPrefs.showOnlyUnused);
+  const [articleLanguageFilter, setArticleLanguageFilter] = useState<ArticleLanguageCode[]>(
+    articleSearchMenuPrefs.languageFilter
+  );
+  const [articleSearchCriteria, setArticleSearchCriteria] = useState(articleSearchMenuPrefs.searchCriteria);
+  const [articleSortMode, setArticleSortMode] = useState<"recent" | "last-used" | "most-sent">(articleSearchMenuPrefs.sortMode);
   const [iconSearch, setIconSearch] = useState("");
   const [tagSearch, setTagSearch] = useState("");
   const [editingId, setEditingID] = useState<string | null>(null);
@@ -681,6 +740,21 @@ export default function ArticlesPage() {
     }
     cachedArticleSummaries = articles;
   }, [articles, hasLoadedArticles]);
+
+  useEffect(() => {
+    const payload: ArticleSearchMenuPrefs = {
+      showOnlyUnused,
+      languageFilter: articleLanguageFilter,
+      searchCriteria: articleSearchCriteria,
+      sortMode: articleSortMode
+    };
+
+    try {
+      window.localStorage.setItem(ARTICLES_SEARCH_MENU_STORAGE_KEY, JSON.stringify(payload));
+    } catch {
+      // Ignore storage quota issues and keep in-memory settings.
+    }
+  }, [showOnlyUnused, articleLanguageFilter, articleSearchCriteria, articleSortMode]);
 
   useEffect(() => {
     void loadArticles();
@@ -1595,6 +1669,13 @@ export default function ArticlesPage() {
       }
     }
 
+    if (articleLanguageFilter.length > 0 && articleLanguageFilter.length < ARTICLE_LANGUAGES.length) {
+      scopedArticles = scopedArticles.filter((article) => {
+        const available = article.availableLanguages ?? [];
+        return available.some((language) => articleLanguageFilter.includes(language));
+      });
+    }
+
     const query = articleSearchQuery.trim().toLowerCase();
     if (!query) {
       return scopedArticles;
@@ -1622,7 +1703,7 @@ export default function ArticlesPage() {
       const haystack = haystackParts.join(" ").toLowerCase();
       return words.every((word) => haystack.includes(word));
     });
-  }, [articleSearchQuery, articleSearchCriteria, articles, articleSmartFilter, currentUserEmail]);
+  }, [articleSearchQuery, articleSearchCriteria, articleLanguageFilter, articles, articleSmartFilter, currentUserEmail]);
 
   const filteredArticles = useMemo(() => {
     if (!showOnlyUnused || allNewsletterSummaries.length === 0) {
@@ -1715,6 +1796,18 @@ export default function ArticlesPage() {
     });
   };
 
+  const toggleLanguageFilter = (languageCode: ArticleLanguageCode) => {
+    setArticleLanguageFilter((current) => {
+      if (current.includes(languageCode)) {
+        if (current.length <= 1) {
+          return current;
+        }
+        return current.filter((code) => code !== languageCode);
+      }
+      return [...current, languageCode];
+    });
+  };
+
   const startPaneResize = (event: ReactMouseEvent<HTMLDivElement>) => {
     event.preventDefault();
     const containerRect = containerRef.current?.getBoundingClientRect();
@@ -1785,17 +1878,22 @@ export default function ArticlesPage() {
           <TextInput
             radius="xl"
             style={{ flex: 1 }}
-            leftSection={<IconSearch size={14} />}
-            rightSectionWidth={44}
-            rightSection={
-              <Menu position="bottom-end" withArrow>
+            leftSectionPointerEvents="all"
+            leftSectionWidth={52}
+            rightSectionPointerEvents="all"
+            rightSectionWidth={articleSearchQuery ? 34 : 0}
+            leftSection={
+              <Menu position="bottom-start" withArrow>
                 <Menu.Target>
-                  <ActionIcon variant="subtle" size="sm" aria-label="Filter and sort articles" mr={8}>
-                    <IconChevronDown size={14} />
+                  <ActionIcon variant="transparent" size="md" aria-label="Search options" style={{ marginLeft: 4 }}>
+                    <Group gap={2} wrap="nowrap" style={{ pointerEvents: "none" }}>
+                      <IconSearch size={14} />
+                      <IconChevronDown size={11} />
+                    </Group>
                   </ActionIcon>
                 </Menu.Target>
                 <Menu.Dropdown>
-                  <Menu.Label>Filter</Menu.Label>
+                  <Menu.Label>Search</Menu.Label>
                   <Menu.CheckboxItem
                     closeMenuOnClick={false}
                     checked={articleSearchCriteria.title}
@@ -1817,48 +1915,82 @@ export default function ArticlesPage() {
                   >
                     Tag
                   </Menu.CheckboxItem>
+                  {allNewsletterSummaries.length > 0 ? (
+                    <Menu.CheckboxItem
+                      closeMenuOnClick={false}
+                      checked={showOnlyUnused}
+                      onChange={() => setShowOnlyUnused((value) => !value)}
+                    >
+                      Unused
+                    </Menu.CheckboxItem>
+                  ) : null}
+
+                  <Menu.Divider />
+                  <Menu.Sub>
+                    <Menu.Sub.Target>
+                      <Menu.Sub.Item>
+                        Language
+                      </Menu.Sub.Item>
+                    </Menu.Sub.Target>
+                    <Menu.Sub.Dropdown>
+                      {ARTICLE_LANGUAGES.map((language) => (
+                        <Menu.CheckboxItem
+                          key={language.code}
+                          closeMenuOnClick={false}
+                          checked={articleLanguageFilter.includes(language.code)}
+                          onChange={() => toggleLanguageFilter(language.code)}
+                        >
+                          {language.label}
+                        </Menu.CheckboxItem>
+                      ))}
+                    </Menu.Sub.Dropdown>
+                  </Menu.Sub>
 
                   <Menu.Divider />
                   <Menu.Label>Sort</Menu.Label>
-                  <Menu.CheckboxItem
-                    checked={articleSortMode === "recent"}
-                    onChange={() => setArticleSortMode("recent")}
+                  <Menu.Item
+                    onClick={() => setArticleSortMode("recent")}
+                    leftSection={articleSortMode === "recent" ? <IconPointFilled size={9} /> : <span style={{ width: 9 }} />}
                   >
-                    Most recent
-                  </Menu.CheckboxItem>
-                  <Menu.CheckboxItem
-                    checked={articleSortMode === "last-used"}
-                    onChange={() => setArticleSortMode("last-used")}
+                    Date
+                  </Menu.Item>
+                  <Menu.Item
+                    onClick={() => setArticleSortMode("last-used")}
+                    leftSection={articleSortMode === "last-used" ? <IconPointFilled size={9} /> : <span style={{ width: 9 }} />}
                   >
-                    Last used
-                  </Menu.CheckboxItem>
-                  <Menu.CheckboxItem
-                    checked={articleSortMode === "most-sent"}
-                    onChange={() => setArticleSortMode("most-sent")}
+                    Last Used
+                  </Menu.Item>
+                  <Menu.Item
+                    onClick={() => setArticleSortMode("most-sent")}
+                    leftSection={articleSortMode === "most-sent" ? <IconPointFilled size={9} /> : <span style={{ width: 9 }} />}
                   >
-                    Most sent
-                  </Menu.CheckboxItem>
+                    Most Used
+                  </Menu.Item>
                 </Menu.Dropdown>
               </Menu>
             }
+            rightSection={articleSearchQuery ? (
+              <ActionIcon
+                variant="filled"
+                color="gray"
+                size="sm"
+                radius="xl"
+                aria-label="Clear search"
+                onClick={() => setArticleSearchQuery("")}
+                styles={{
+                  root: {
+                    backgroundColor: "var(--mantine-color-gray-4)",
+                    color: "var(--mantine-color-gray-7)"
+                  }
+                }}
+              >
+                <IconX size={11} stroke={2.4} />
+              </ActionIcon>
+            ) : null}
             placeholder="Search"
             value={articleSearchQuery}
             onChange={(event) => setArticleSearchQuery(event.currentTarget.value)}
           />
-          {allNewsletterSummaries.length > 0 && (
-            <Tooltip label={showOnlyUnused ? "Show all articles" : "Show unused only"} position="bottom" withArrow>
-              <ActionIcon
-                variant={showOnlyUnused ? "filled" : "subtle"}
-                color={showOnlyUnused ? "blue" : "gray"}
-                size="sm"
-                aria-label="Toggle unused articles filter"
-                onClick={() => setShowOnlyUnused((v) => !v)}
-                style={{ flexShrink: 0 }}
-              >
-                <IconPointFilled size={12} />
-              </ActionIcon>
-            </Tooltip>
-          )}
         </div>
 
         <ScrollArea h="calc(100% - 110px)" offsetScrollbars viewportRef={articleListViewportRef}>
