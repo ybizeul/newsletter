@@ -8,6 +8,7 @@ import {
   Group,
   Input,
   Loader,
+  Menu,
   Modal,
   ScrollArea,
   SegmentedControl,
@@ -65,6 +66,7 @@ const MAX_RECIPIENTS = 3;
 const ARTICLE_REUSE_WARNING_TEXT = "already used in another newsletter";
 const DEFAULT_NEWSLETTER_TEMPLATE = "default";
 const DEFAULT_NEWSLETTER_LANGUAGE: ArticleLanguageCode = "fr";
+const NO_HEADER_OPTION_VALUE = "__none__";
 const NEWSLETTER_LANGUAGE_OPTIONS: Array<{ value: ArticleLanguageCode; label: string }> = [
   { value: "en", label: "English" },
   { value: "fr", label: "French" },
@@ -327,6 +329,11 @@ export default function NewslettersPage() {
     () => newsletterTemplates.map((templateName) => ({ value: templateName, label: templateName })),
     [newsletterTemplates]
   );
+  const selectedLanguageLabel =
+    NEWSLETTER_LANGUAGE_OPTIONS.find((option) => option.value === newsletterLanguage)?.label ?? newsletterLanguage;
+  const selectedTemplateLabel =
+    newsletterTemplateOptions.find((option) => option.value === newsletterTemplate)?.label ?? newsletterTemplate;
+  const selectedHeaderLabel = headerOptions.find((option) => option.value === headerId)?.label ?? "No header";
 
   const selectedArticleRows = useMemo(
     () =>
@@ -1355,38 +1362,87 @@ export default function NewslettersPage() {
             onChange={(event) => setTitle(event.currentTarget.value)}
           />
 
-          <Select
+          <Input.Wrapper
             label="Language"
             description="Preferred language for article content when rendering this newsletter."
-            data={NEWSLETTER_LANGUAGE_OPTIONS}
-            value={newsletterLanguage}
-            onChange={(value) => setNewsletterLanguage((value as ArticleLanguageCode) ?? DEFAULT_NEWSLETTER_LANGUAGE)}
-            allowDeselect={false}
-          />
+          >
+            <Menu withArrow width="target">
+              <Menu.Target>
+                <Button variant="default" justify="space-between" fullWidth rightSection={<IconChevronDown size={16} />}>
+                  {selectedLanguageLabel}
+                </Button>
+              </Menu.Target>
+              <Menu.Dropdown>
+                <Menu.RadioGroup
+                  value={newsletterLanguage}
+                  onChange={(value) => setNewsletterLanguage(value as ArticleLanguageCode)}
+                >
+                  {NEWSLETTER_LANGUAGE_OPTIONS.map((option) => (
+                    <Menu.RadioItem key={option.value} value={option.value}>
+                      {option.label}
+                    </Menu.RadioItem>
+                  ))}
+                </Menu.RadioGroup>
+              </Menu.Dropdown>
+            </Menu>
+          </Input.Wrapper>
 
           {newsletterTemplateOptions.length > 1 ? (
-            <Select
+            <Input.Wrapper
               label="Template"
               description="Choose the newsletter layout template."
-              placeholder="Select a template"
-              data={newsletterTemplateOptions}
-              value={newsletterTemplate}
-              onChange={(value) => setNewsletterTemplate((value ?? DEFAULT_NEWSLETTER_TEMPLATE).trim() || DEFAULT_NEWSLETTER_TEMPLATE)}
-              allowDeselect={false}
-            />
+            >
+              <Menu withArrow width="target">
+                <Menu.Target>
+                  <Button variant="default" justify="space-between" fullWidth rightSection={<IconChevronDown size={16} />}>
+                    {selectedTemplateLabel}
+                  </Button>
+                </Menu.Target>
+                <Menu.Dropdown>
+                  <Menu.RadioGroup
+                    value={newsletterTemplate}
+                    onChange={setNewsletterTemplate}
+                  >
+                    {newsletterTemplateOptions.map((option) => (
+                      <Menu.RadioItem key={option.value} value={option.value}>
+                        {option.label}
+                      </Menu.RadioItem>
+                    ))}
+                  </Menu.RadioGroup>
+                </Menu.Dropdown>
+              </Menu>
+            </Input.Wrapper>
           ) : null}
 
-          <Select
+          <Input.Wrapper
             label="Header"
             description="Pick a reusable header inserted before the introduction in generated HTML."
-            placeholder="No header"
-            data={headerOptions}
-            value={headerId}
-            onChange={setHeaderId}
-            clearable
-            searchable
-            nothingFoundMessage="No headers found"
-          />
+          >
+            <Menu withArrow width="target">
+              <Menu.Target>
+                <Button variant="default" justify="space-between" fullWidth rightSection={<IconChevronDown size={16} />}>
+                  {selectedHeaderLabel}
+                </Button>
+              </Menu.Target>
+              <Menu.Dropdown>
+                <Menu.RadioGroup
+                  value={headerId ?? NO_HEADER_OPTION_VALUE}
+                  onChange={(value) => setHeaderId(value === NO_HEADER_OPTION_VALUE ? null : value)}
+                >
+                  <Menu.RadioItem value={NO_HEADER_OPTION_VALUE}>No header</Menu.RadioItem>
+                  {headerOptions.length > 0 ? (
+                    headerOptions.map((option) => (
+                      <Menu.RadioItem key={option.value} value={option.value}>
+                        {option.label}
+                      </Menu.RadioItem>
+                    ))
+                  ) : (
+                    <Menu.Item disabled>No headers found</Menu.Item>
+                  )}
+                </Menu.RadioGroup>
+              </Menu.Dropdown>
+            </Menu>
+          </Input.Wrapper>
 
           <Input.Wrapper
             label="Introduction"
