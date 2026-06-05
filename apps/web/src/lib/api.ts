@@ -49,6 +49,8 @@ type UpdateNewsletterPayload = {
   headerId?: string;
   introMarkdown: string;
   introHTML?: string;
+  footerMarkdown?: string;
+  footerHTML?: string;
   includeIndex: boolean;
   contentWidth: number;
   archived: boolean;

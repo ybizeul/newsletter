@@ -44,13 +44,19 @@ export default function NewsletterPreviewPage() {
           await updateNewsletter(id, {
             title: newsletter.title,
             language: newsletter.language,
+            template: newsletter.template,
             headerId: newsletter.headerId ?? "",
             introMarkdown: newsletter.introMarkdown,
+            introHTML: newsletter.introHTML,
+            footerMarkdown: newsletter.footerMarkdown,
+            footerHTML: newsletter.footerHTML,
             includeIndex: newsletter.includeIndex,
             contentWidth: value,
             archived: newsletter.archived,
             articleIds: newsletter.articleIds,
-            recipientIds: newsletter.recipientIds
+            recipientIds: newsletter.recipientIds,
+            contactTags: newsletter.contactTags,
+            contactTagsMode: newsletter.contactTagsMode
           });
           await refreshPreview(id);
         } catch {
