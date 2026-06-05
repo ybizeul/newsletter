@@ -2293,7 +2293,19 @@ func (h *Handler) newsletterPublicViewURL(newsletter model.Newsletter) string {
 	path := "/view/" + slug
 	base := strings.TrimSpace(h.cfg.PublicBaseURL)
 	if base == "" {
-		return path
+		port := strings.TrimSpace(h.cfg.Port)
+		switch port {
+		case "", "80":
+			return "http://localhost" + path
+		case "443":
+			return "https://localhost" + path
+		default:
+			return "http://localhost:" + port + path
+		}
+	}
+	lowerBase := strings.ToLower(base)
+	if !strings.HasPrefix(lowerBase, "http://") && !strings.HasPrefix(lowerBase, "https://") {
+		base = "https://" + base
 	}
 	return strings.TrimRight(base, "/") + path
 }
