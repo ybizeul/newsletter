@@ -19,6 +19,8 @@ type Newsletter struct {
 	Title           string           `bson:"title" json:"title"`
 	Language        LanguageCode     `bson:"language,omitempty" json:"language,omitempty"`
 	Template        string           `bson:"template,omitempty" json:"template,omitempty"`
+	PublicLink      bool             `bson:"publicLink,omitempty" json:"publicLink"`
+	PublicSlug      string           `bson:"publicSlug,omitempty" json:"publicSlug,omitempty"`
 	HeaderID        string           `bson:"headerId,omitempty" json:"headerId,omitempty"`
 	IntroMarkdown   string           `bson:"introMarkdown" json:"introMarkdown"`
 	IntroHTML       string           `bson:"introHTML,omitempty" json:"introHTML,omitempty"`

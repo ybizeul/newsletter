@@ -72,6 +72,9 @@ func main() {
 
 	// OIDC callback at top level (registered with identity provider as /callback)
 	r.Get("/callback", auth.HandleCallback)
+	r.Get("/view/{slug}", func(w http.ResponseWriter, r *http.Request) {
+		h.GetPublicNewsletterBySlug(w, r, chi.URLParam(r, "slug"))
+	})
 
 	r.Route("/api", func(api chi.Router) {
 		// OIDC auth routes (outside auth middleware)

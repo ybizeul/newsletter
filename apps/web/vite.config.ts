@@ -56,6 +56,10 @@ export default defineConfig({
       "/api": {
         target: "http://localhost:8080",
         headers: { "X-Forwarded-Proto": "https" }
+      },
+      "/view": {
+        target: "http://localhost:8080",
+        headers: { "X-Forwarded-Proto": "https" }
       }
     }
   }

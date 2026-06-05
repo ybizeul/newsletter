@@ -19,6 +19,7 @@ type Config struct {
 	SMTPPass         string
 	SMTPXoauth2      bool
 	UseGraphAPI      bool
+	PublicBaseURL    string
 	DefaultTZ        string
 	ScheduleTick     time.Duration
 	ContactsDisabled bool
@@ -46,6 +47,7 @@ func Load() Config {
 		SMTPPass:         getEnv("SMTP_PASS", ""),
 		SMTPXoauth2:      getEnvBool("SMTP_XOAUTH2", false),
 		UseGraphAPI:      getEnvBool("USE_GRAPH_API", false),
+		PublicBaseURL:    getEnv("PUBLIC_BASE_URL", ""),
 		DefaultTZ:        getEnv("DEFAULT_TZ", "UTC"),
 		ScheduleTick:     20 * time.Second,
 		ContactsDisabled: getEnvBool("DISABLE_CONTACTS", false),

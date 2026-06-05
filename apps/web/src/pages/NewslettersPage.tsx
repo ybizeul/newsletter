@@ -9,6 +9,7 @@ import {
   Input,
   Loader,
   Modal,
+  Anchor,
   ScrollArea,
   SegmentedControl,
   Select,
@@ -196,6 +197,8 @@ function toNewsletterSummary(newsletter: Newsletter): NewsletterSummary {
     title: newsletter.title,
     language: newsletter.language,
     template: newsletter.template,
+    publicLink: Boolean(newsletter.publicLink),
+    publicSlug: newsletter.publicSlug,
     headerId: newsletter.headerId,
     includeIndex: newsletter.includeIndex,
     articleIds: newsletter.articleIds,
@@ -254,6 +257,8 @@ export default function NewslettersPage() {
   const [newsletterLanguage, setNewsletterLanguage] = useState<ArticleLanguageCode>(DEFAULT_NEWSLETTER_LANGUAGE);
   const [headerId, setHeaderId] = useState<string | null>(null);
   const [newsletterTemplate, setNewsletterTemplate] = useState(DEFAULT_NEWSLETTER_TEMPLATE);
+  const [publicLink, setPublicLink] = useState(false);
+  const [publicSlug, setPublicSlug] = useState("");
   const [, setIntroMarkdown] = useState("");
   const [introContentHTML, setIntroContentHTML] = useState("");
   const [introEditorKey, setIntroEditorKey] = useState("");
@@ -527,6 +532,8 @@ export default function NewslettersPage() {
     setTitle("");
     setNewsletterLanguage(DEFAULT_NEWSLETTER_LANGUAGE);
     setNewsletterTemplate(DEFAULT_NEWSLETTER_TEMPLATE);
+    setPublicLink(false);
+    setPublicSlug("");
     setHeaderId(null);
     setIntroContentHTML("");
     setIntroEditorKey("");
@@ -561,6 +568,8 @@ export default function NewslettersPage() {
       setTitle(fullNewsletter.title);
       setNewsletterLanguage(fullNewsletter.language ?? DEFAULT_NEWSLETTER_LANGUAGE);
       setNewsletterTemplate((fullNewsletter.template ?? DEFAULT_NEWSLETTER_TEMPLATE).trim() || DEFAULT_NEWSLETTER_TEMPLATE);
+      setPublicLink(Boolean(fullNewsletter.publicLink));
+      setPublicSlug((fullNewsletter.publicSlug ?? "").trim());
       setHeaderId(fullNewsletter.headerId ?? null);
       setIntroMarkdown(fullNewsletter.introMarkdown);
       let introHTML: string;
@@ -609,6 +618,7 @@ export default function NewslettersPage() {
         title: fullNewsletter.title.trim(),
         language: fullNewsletter.language ?? DEFAULT_NEWSLETTER_LANGUAGE,
         template: (fullNewsletter.template ?? DEFAULT_NEWSLETTER_TEMPLATE).trim() || DEFAULT_NEWSLETTER_TEMPLATE,
+        publicLink: Boolean(fullNewsletter.publicLink),
         headerId: fullNewsletter.headerId ?? "",
         introMarkdown: "",
         introHTML: introHTML,
@@ -747,6 +757,7 @@ export default function NewslettersPage() {
     title: title.trim(),
     language: newsletterLanguage,
     template: newsletterTemplate,
+    publicLink,
     headerId: headerId ?? "",
     introMarkdown: "",
     introHTML: introContentHTML,
@@ -779,6 +790,7 @@ export default function NewslettersPage() {
         title: getDefaultNewsletterTitle(),
         language: DEFAULT_NEWSLETTER_LANGUAGE,
         template: DEFAULT_NEWSLETTER_TEMPLATE,
+        publicLink: false,
         introMarkdown: "",
         includeIndex: false,
         articleIds: [],
@@ -812,6 +824,7 @@ export default function NewslettersPage() {
 
       if (selectedNewsletterId) {
         const updated = await updateNewsletter(selectedNewsletterId, payload);
+        setPublicSlug((updated.publicSlug ?? "").trim());
         setNewsletters((current) =>
           current.map((newsletter) => (newsletter.id === selectedNewsletterId ? withFavoriteFlag(toNewsletterSummary(updated)) : newsletter))
         );
@@ -823,6 +836,7 @@ export default function NewslettersPage() {
           creatorId: oidcEnabled ? undefined : FALLBACK_CREATOR_ID,
           ...payload
         });
+        setPublicSlug((created.publicSlug ?? "").trim());
         setNewsletters((current) => [withFavoriteFlag(toNewsletterSummary(created)), ...current]);
         setSelectedNewsletterID(created.id);
         setIsManualNewNewsletterMode(false);
@@ -867,6 +881,7 @@ export default function NewslettersPage() {
       setAutosaveStatus("saving");
       try {
         const updated = await updateNewsletter(selectedNewsletterId, payload);
+        setPublicSlug((updated.publicSlug ?? "").trim());
         setNewsletters((current) =>
           current.map((newsletter) => (newsletter.id === selectedNewsletterId ? withFavoriteFlag(toNewsletterSummary(updated)) : newsletter))
         );
@@ -888,7 +903,7 @@ export default function NewslettersPage() {
         window.clearTimeout(autosaveTimerRef.current);
       }
     };
-  }, [selectedNewsletterId, title, newsletterLanguage, newsletterTemplate, headerId, introContentHTML, footerContentHTML, includeIndex, contentWidth, archived, articleIds, recipientRaw, recipientMode, contactTags, contactTagsMode, hasTooManyRecipients, isSubmitting]);
+  }, [selectedNewsletterId, title, newsletterLanguage, newsletterTemplate, publicLink, headerId, introContentHTML, footerContentHTML, includeIndex, contentWidth, archived, articleIds, recipientRaw, recipientMode, contactTags, contactTagsMode, hasTooManyRecipients, isSubmitting]);
 
   useEffect(() => () => {
     if (autosaveTimerRef.current !== null) {
@@ -1016,6 +1031,7 @@ export default function NewslettersPage() {
         title: `${source.title} (copy)`,
         language: source.language ?? DEFAULT_NEWSLETTER_LANGUAGE,
         template: source.template ?? DEFAULT_NEWSLETTER_TEMPLATE,
+        publicLink: Boolean(source.publicLink),
         headerId: source.headerId ?? "",
         introMarkdown: source.introMarkdown ?? "",
         introHTML: source.introHTML ?? "",
@@ -1368,6 +1384,18 @@ export default function NewslettersPage() {
             checked={archived}
             onChange={(event) => setArchived(event.currentTarget.checked)}
           />
+
+          <Checkbox
+            label="Public link"
+            description="Expose this newsletter at a public URL without authentication."
+            checked={publicLink}
+            onChange={(event) => setPublicLink(event.currentTarget.checked)}
+          />
+          {publicLink && publicSlug ? (
+            <Text size="sm" c="dimmed">
+              Public URL: <Anchor href={`/view/${publicSlug}`} target="_blank" rel="noreferrer">/view/{publicSlug}</Anchor>
+            </Text>
+          ) : null}
 
           <Group grow align="flex-start" wrap="nowrap">
             <Select

@@ -56,6 +56,8 @@ const maxNewsletterRecipients = 3
 
 const defaultNewsletterTemplateName = "default"
 
+var newsletterSlugSanitizeRe = regexp.MustCompile(`[^a-z0-9]+`)
+
 func NewHandler(db *mongo.Database, cfg config.Config, appVersion string) *Handler {
 	return &Handler{
 		articles:            db.Collection("articles"),
@@ -996,6 +998,7 @@ type createNewsletterRequest struct {
 	Title           string   `json:"title"`
 	Language        string   `json:"language"`
 	Template        string   `json:"template"`
+	PublicLink      bool     `json:"publicLink"`
 	HeaderID        string   `json:"headerId"`
 	IntroMarkdown   string   `json:"introMarkdown"`
 	IntroHTML       string   `json:"introHTML"`
@@ -1012,6 +1015,7 @@ type updateNewsletterRequest struct {
 	Title           string   `json:"title"`
 	Language        string   `json:"language"`
 	Template        string   `json:"template"`
+	PublicLink      bool     `json:"publicLink"`
 	HeaderID        string   `json:"headerId"`
 	IntroMarkdown   string   `json:"introMarkdown"`
 	IntroHTML       string   `json:"introHTML"`
@@ -1055,6 +1059,15 @@ func (h *Handler) CreateNewsletter(w http.ResponseWriter, r *http.Request) {
 	}
 
 	now := time.Now().UTC()
+	publicSlug := ""
+	if req.PublicLink {
+		publicSlug, err = h.generateUniqueNewsletterSlug(r.Context(), req.Title, "")
+		if err != nil {
+			h.writeError(w, http.StatusInternalServerError, "failed to allocate public slug")
+			return
+		}
+	}
+
 	newsletter := model.Newsletter{
 		ID:              bson.NewObjectID().Hex(),
 		CreatorID:       req.CreatorID,
@@ -1062,6 +1075,8 @@ func (h *Handler) CreateNewsletter(w http.ResponseWriter, r *http.Request) {
 		Title:           req.Title,
 		Language:        newsletterLanguage,
 		Template:        templateName,
+		PublicLink:      req.PublicLink,
+		PublicSlug:      publicSlug,
 		HeaderID:        strings.TrimSpace(req.HeaderID),
 		IntroMarkdown:   req.IntroMarkdown,
 		IntroHTML:       req.IntroHTML,
@@ -1101,6 +1116,8 @@ func (h *Handler) ListNewsletters(w http.ResponseWriter, r *http.Request) {
 			"title":          1,
 			"language":       1,
 			"template":       1,
+			"publicLink":     1,
+			"publicSlug":     1,
 			"headerId":       1,
 			"introMarkdown":  1,
 			"introHTML":      1,
@@ -1125,6 +1142,8 @@ func (h *Handler) ListNewsletters(w http.ResponseWriter, r *http.Request) {
 			Title          string                 `bson:"title"`
 			Language       model.LanguageCode     `bson:"language,omitempty"`
 			Template       string                 `bson:"template,omitempty"`
+			PublicLink     bool                   `bson:"publicLink,omitempty"`
+			PublicSlug     string                 `bson:"publicSlug,omitempty"`
 			HeaderID       string                 `bson:"headerId,omitempty"`
 			IntroMarkdown  string                 `bson:"introMarkdown"`
 			IntroHTML      string                 `bson:"introHTML,omitempty"`
@@ -1149,6 +1168,8 @@ func (h *Handler) ListNewsletters(w http.ResponseWriter, r *http.Request) {
 			Title         string                 `json:"title"`
 			Language      model.LanguageCode     `json:"language,omitempty"`
 			Template      string                 `json:"template,omitempty"`
+			PublicLink    bool                   `json:"publicLink"`
+			PublicSlug    string                 `json:"publicSlug,omitempty"`
 			HeaderID      string                 `json:"headerId,omitempty"`
 			IncludeIndex  bool                   `json:"includeIndex"`
 			ArticleIDs    []string               `json:"articleIds"`
@@ -1185,6 +1206,8 @@ func (h *Handler) ListNewsletters(w http.ResponseWriter, r *http.Request) {
 				Title:         raw.Title,
 				Language:      raw.Language,
 				Template:      normalizeNewsletterTemplateName(raw.Template),
+				PublicLink:    raw.PublicLink,
+				PublicSlug:    strings.TrimSpace(raw.PublicSlug),
 				HeaderID:      raw.HeaderID,
 				IncludeIndex:  raw.IncludeIndex,
 				ArticleIDs:    raw.ArticleIDs,
@@ -1376,6 +1399,7 @@ func (h *Handler) UpdateNewsletter(w http.ResponseWriter, r *http.Request, id st
 			"title":           strings.TrimSpace(req.Title),
 			"language":        newsletterLanguage,
 			"template":        templateName,
+			"publicLink":      req.PublicLink,
 			"headerId":        strings.TrimSpace(req.HeaderID),
 			"introMarkdown":   req.IntroMarkdown,
 			"introHTML":       req.IntroHTML,
@@ -1390,6 +1414,16 @@ func (h *Handler) UpdateNewsletter(w http.ResponseWriter, r *http.Request, id st
 			"contactTagsMode": normalizeContactTagsMode(req.ContactTagsMode),
 			"updatedAt":       time.Now().UTC(),
 		},
+	}
+	if req.PublicLink {
+		publicSlug, slugErr := h.generateUniqueNewsletterSlug(r.Context(), req.Title, id)
+		if slugErr != nil {
+			h.writeError(w, http.StatusInternalServerError, "failed to allocate public slug")
+			return
+		}
+		update["$set"].(bson.M)["publicSlug"] = publicSlug
+	} else {
+		update["$unset"] = bson.M{"publicSlug": ""}
 	}
 
 	result, err := h.newsletters.UpdateByID(r.Context(), id, update)
@@ -1434,6 +1468,40 @@ func (h *Handler) GetNewsletterPreview(w http.ResponseWriter, r *http.Request, i
 		"html":       htmlBody,
 		"text":       textBody,
 	})
+}
+
+func (h *Handler) GetPublicNewsletterBySlug(w http.ResponseWriter, r *http.Request, slug string) {
+	slug = strings.TrimSpace(strings.ToLower(slug))
+	if slug == "" {
+		http.NotFound(w, r)
+		return
+	}
+
+	var newsletter model.Newsletter
+	if err := h.newsletters.FindOne(r.Context(), bson.M{"publicLink": true, "publicSlug": slug}).Decode(&newsletter); err != nil {
+		if err == mongo.ErrNoDocuments {
+			http.NotFound(w, r)
+			return
+		}
+		http.Error(w, "failed to load newsletter", http.StatusInternalServerError)
+		return
+	}
+
+	loaded, articles, err := h.loadNewsletterWithArticles(r.Context(), newsletter.ID)
+	if err != nil {
+		http.Error(w, "failed to load newsletter", http.StatusInternalServerError)
+		return
+	}
+
+	htmlBody, _, err := h.renderNewsletter(r.Context(), *loaded, articles)
+	if err != nil {
+		http.Error(w, "failed to render newsletter", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write([]byte(htmlBody))
 }
 
 type renderMarkdownRequest struct {
@@ -1916,7 +1984,7 @@ var newsletterTemplateFuncMap = htmltemplate.FuncMap{
 			return htmltemplate.URL("")
 		}
 		lower := strings.ToLower(trimmed)
-		if strings.HasPrefix(lower, "http://") || strings.HasPrefix(lower, "https://") || strings.HasPrefix(lower, "cid:") || strings.HasPrefix(lower, "data:image/") {
+		if strings.HasPrefix(trimmed, "/") || strings.HasPrefix(lower, "http://") || strings.HasPrefix(lower, "https://") || strings.HasPrefix(lower, "cid:") || strings.HasPrefix(lower, "data:image/") {
 			return htmltemplate.URL(trimmed)
 		}
 		return htmltemplate.URL("")
@@ -2075,6 +2143,16 @@ func (h *Handler) renderNewsletter(ctx context.Context, newsletter model.Newslet
 	footerHTML = enforceImageFullWidth(footerHTML)
 	footerHTML = enforceContentTableStyles(footerHTML)
 
+	publicViewURL := ""
+	if newsletter.PublicLink && strings.TrimSpace(newsletter.PublicSlug) != "" {
+		publicViewURL = h.newsletterPublicViewURL(newsletter)
+	}
+	if publicViewURL != "" {
+		hintedURL := html.EscapeString(publicViewURL)
+		hintedFooter := `<p style="margin-top:16px;font-size:13px;color:#666;text-align: center;">If the content of this email is not displayed properly, click <a href="` + hintedURL + `">here</a></p>`
+		footerHTML += hintedFooter
+	}
+
 	articlesForTemplate := make([]newsletterTemplateArticle, 0, len(articles))
 	var text strings.Builder
 	if headerText != "" {
@@ -2143,6 +2221,9 @@ func (h *Handler) renderNewsletter(ctx context.Context, newsletter model.Newslet
 		} else {
 			text.WriteString(newsletter.FooterMarkdown + "\n\n")
 		}
+		if publicViewURL != "" {
+			text.WriteString("If the content of this email is not displayed properly, click here: " + publicViewURL + "\n\n")
+		}
 	}
 
 	templateName, ok := resolveNewsletterTemplateName(newsletter.Template)
@@ -2164,6 +2245,57 @@ func (h *Handler) renderNewsletter(ctx context.Context, newsletter model.Newslet
 	}
 	htmlBody = convertSVGDataURLsInHTMLToPNG(htmlBody)
 	return htmlBody, strings.TrimSpace(text.String()), nil
+}
+
+func slugifyNewsletterTitle(title string) string {
+	slug := strings.ToLower(strings.TrimSpace(title))
+	slug = newsletterSlugSanitizeRe.ReplaceAllString(slug, "-")
+	slug = strings.Trim(slug, "-")
+	if slug == "" {
+		return "newsletter"
+	}
+	if len(slug) > 96 {
+		slug = strings.Trim(slug[:96], "-")
+	}
+	if slug == "" {
+		return "newsletter"
+	}
+	return slug
+}
+
+func (h *Handler) generateUniqueNewsletterSlug(ctx context.Context, title string, excludeID string) (string, error) {
+	base := slugifyNewsletterTitle(title)
+	for i := 1; i <= 1000; i++ {
+		candidate := base
+		if i > 1 {
+			candidate = fmt.Sprintf("%s-%d", base, i)
+		}
+		query := bson.M{"publicSlug": candidate}
+		if strings.TrimSpace(excludeID) != "" {
+			query["_id"] = bson.M{"$ne": strings.TrimSpace(excludeID)}
+		}
+		count, err := h.newsletters.CountDocuments(ctx, query)
+		if err != nil {
+			return "", err
+		}
+		if count == 0 {
+			return candidate, nil
+		}
+	}
+	return "", fmt.Errorf("failed to allocate unique slug")
+}
+
+func (h *Handler) newsletterPublicViewURL(newsletter model.Newsletter) string {
+	slug := strings.TrimSpace(newsletter.PublicSlug)
+	if slug == "" {
+		return ""
+	}
+	path := "/view/" + slug
+	base := strings.TrimSpace(h.cfg.PublicBaseURL)
+	if base == "" {
+		return path
+	}
+	return strings.TrimRight(base, "/") + path
 }
 
 func convertSVGDataURLsInHTMLToPNG(input string) string {
@@ -2892,7 +3024,7 @@ func sanitizeHTML(htmlInput string) string {
 	policy.RequireParseableURLs(false)
 	policy.AllowDataURIImages()
 	policy.AllowURLSchemes("http", "https", "data")
-	policy.AllowAttrs("src").Matching(regexp.MustCompile(`^(?i)(https?://|data:image/)`)).OnElements("img")
+	policy.AllowAttrs("src").Matching(regexp.MustCompile(`^(?i)(/|https?://|data:image/)`)).OnElements("img")
 	policy.AllowAttrs("alt", "title").OnElements("img")
 	policy.AllowAttrs("href").OnElements("a")
 	policy.AllowAttrs("style").OnElements(
@@ -2940,7 +3072,7 @@ func renderMarkdownToSafeHTML(markdown string) (string, error) {
 	policy.RequireParseableURLs(false)
 	policy.AllowDataURIImages()
 	policy.AllowURLSchemes("http", "https", "data")
-	policy.AllowAttrs("src").Matching(regexp.MustCompile(`^(?i)(https?://|data:image/)`)).OnElements("img")
+	policy.AllowAttrs("src").Matching(regexp.MustCompile(`^(?i)(/|https?://|data:image/)`)).OnElements("img")
 	policy.AllowAttrs("alt", "title").OnElements("img")
 	policy.AllowAttrs("style").OnElements(
 		"p", "span", "div",

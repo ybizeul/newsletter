@@ -55,6 +55,8 @@ export interface Newsletter {
   title: string;
   language?: ArticleLanguageCode;
   template?: string;
+  publicLink: boolean;
+  publicSlug?: string;
   headerId?: string;
   introMarkdown: string;
   introHTML?: string;
@@ -82,6 +84,8 @@ export interface NewsletterSummary {
   title: string;
   language?: ArticleLanguageCode;
   template?: string;
+  publicLink: boolean;
+  publicSlug?: string;
   headerId?: string;
   includeIndex: boolean;
   articleIds: string[];

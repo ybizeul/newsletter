@@ -30,6 +30,7 @@ type CreateNewsletterPayload = {
   title: string;
   language?: ArticleLanguageCode;
   template?: string;
+  publicLink?: boolean;
   headerId?: string;
   introMarkdown: string;
   introHTML?: string;
@@ -46,6 +47,7 @@ type UpdateNewsletterPayload = {
   title: string;
   language?: ArticleLanguageCode;
   template?: string;
+  publicLink?: boolean;
   headerId?: string;
   introMarkdown: string;
   introHTML?: string;
