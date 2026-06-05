@@ -1137,8 +1137,9 @@ export default function ArticlesPage() {
         iconStrokeColor: loadedIconStrokeColor,
         iconFillColor: loadedIconFillColor
       };
-      // Keep newly seeded translations dirty so autosave creates the language variant.
-      lastSavedDraftRef.current = useSeedDraft ? "" : JSON.stringify(loadedDraft);
+      // Treat seeded language drafts as clean until the user changes something explicitly.
+      // This prevents creating a translation variant just by switching languages.
+      lastSavedDraftRef.current = JSON.stringify(loadedDraft);
       setAutosaveStatus("idle");
       if (isMobile) {
         setIsMobileEditorOpen(true);
