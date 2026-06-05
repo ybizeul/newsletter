@@ -2,6 +2,21 @@
 
 All notable changes are documented from git tags and commit messages.
 
+## v1.3 - 2026-06-05
+
+Changes since v1.2:
+- Added shareable public newsletter links with stable slugs and routing, making it easier to open published content directly.
+- Improved public-link behavior in local development so preview and shared URLs resolve more reliably.
+- Improved newsletter readability and visual consistency with better line-height, preserved text-transform styles, and more consistent typography.
+- Improved newsletter editing reliability by ensuring footer markdown/HTML changes are correctly included in preview updates.
+- Added a toggle to show unused articles with a clear visual indicator, helping editors spot reusable content faster.
+
+## v1.2 - 2026-06-03
+
+Changes since v1.1:
+- Streamlined newsletter option pickers for language, header, and template selection with a clearer, more consistent chooser experience.
+- Added persistent article search menu preferences so your browsing setup is remembered between sessions.
+
 ## v1.1 - 2026-06-03
 
 Changes since v1.0.1:
