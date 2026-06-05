@@ -24,6 +24,17 @@ func TestRenderMarkdownToSafeHTML_PreservesTypographyStyles(t *testing.T) {
 	}
 }
 
+func TestSanitizeHTML_PreservesTextTransformStyle(t *testing.T) {
+	input := `<div style="text-transform:capitalize;">title</div>`
+
+	output := sanitizeHTML(input)
+	lower := strings.ToLower(output)
+
+	if !strings.Contains(lower, "text-transform") || !strings.Contains(lower, "capitalize") {
+		t.Fatalf("expected text-transform style to be preserved, got: %s", output)
+	}
+}
+
 func TestEnforceTableCellAlignment_InferRightAlignFromImageMargin(t *testing.T) {
 	input := `<table><tr><th colspan="1" rowspan="1" style="vertical-align:middle;" valign="middle"><img src="data:image/png;base64,abc" style="width: auto; max-width: none; height: auto; display: block; margin: 8px 0px 8px auto;max-width:100%;width:auto;height:auto;display:block;float:none;"></th></tr></table>`
 

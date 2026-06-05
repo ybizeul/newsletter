@@ -2906,7 +2906,7 @@ func sanitizeHTML(htmlInput string) string {
 	styleValuePattern := regexp.MustCompile(`(?i)^[a-z0-9\s#(),.%'"\-+/]+$`)
 	policy.AllowStyles(
 		"text-align", "font-size", "font-family", "font-weight", "font-style",
-		"text-decoration", "line-height", "color", "background-color",
+		"text-decoration", "text-transform", "line-height", "color", "background-color",
 		"vertical-align", "width", "max-width", "height",
 		"display", "margin", "margin-left", "margin-right", "margin-top", "margin-bottom",
 		"border", "border-left", "border-collapse", "table-layout",
@@ -2958,6 +2958,7 @@ func renderMarkdownToSafeHTML(markdown string) (string, error) {
 		"font-weight",
 		"font-style",
 		"text-decoration",
+		"text-transform",
 		"line-height",
 		"color",
 		"background-color",
