@@ -334,7 +334,16 @@ export default function NewslettersPage() {
 
   const newsletterTemplateOptions = useMemo(
     () =>
-      newsletterTemplates.map((templateName) => ({
+      [...newsletterTemplates]
+        .sort((a, b) => {
+          const aIsDefault = a.trim().toLowerCase() === DEFAULT_NEWSLETTER_TEMPLATE;
+          const bIsDefault = b.trim().toLowerCase() === DEFAULT_NEWSLETTER_TEMPLATE;
+          if (aIsDefault === bIsDefault) {
+            return 0;
+          }
+          return aIsDefault ? -1 : 1;
+        })
+        .map((templateName) => ({
         value: templateName,
         label: formatTemplateLabel(templateName)
       })),
