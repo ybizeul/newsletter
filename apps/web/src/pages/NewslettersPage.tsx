@@ -1412,7 +1412,7 @@ export default function NewslettersPage() {
       />
       ) : null}
 
-      <div style={{ padding: "12px clamp(8px, 2.5vw, 12px)", overflow: "auto", display: isMobile && !isMobileEditorOpen ? "none" : undefined }}>
+      <div style={{ overflow: "hidden", minHeight: 0, display: isMobile && !isMobileEditorOpen ? "none" : undefined }}>
         {!hasLoadedNewslettersData || (!selectedNewsletterId && !isManualNewNewsletterMode && newsletters.length > 0) ? (
           <Center h="100%">
             <Stack align="center" gap="xs">
@@ -1421,7 +1421,15 @@ export default function NewslettersPage() {
             </Stack>
           </Center>
         ) : (
-        <Stack>
+        <Stack gap={0} style={{ height: "100%", minHeight: 0 }}>
+          <Box
+            style={{
+              background: "var(--mantine-color-gray-1)",
+              borderBottom: "1px solid var(--mantine-color-default-border)",
+              borderRadius: 0,
+              padding: "8px 10px"
+            }}
+          >
           <Group justify="space-between" wrap="nowrap" ref={headerRowRef} style={{ overflow: "hidden", minWidth: 0 }}>
             <Group gap="xs" wrap="nowrap" ref={headerLeftRef}>
               {isMobile ? (
@@ -1442,6 +1450,22 @@ export default function NewslettersPage() {
                 </ActionIcon>
               ) : null}
               <Text fw={700} style={{ whiteSpace: "nowrap", flexShrink: 0 }}>{selectedNewsletterId ? "Edit Newsletter" : "New Newsletter"}</Text>
+              {selectedNewsletterId ? (
+                <ActionIcon
+                  variant="subtle"
+                  color={selectedNewsletter?.isFavorite ? "yellow" : "gray"}
+                  size="md"
+                  aria-label={selectedNewsletter?.isFavorite ? "Unset favorite" : "Set favorite"}
+                  title={selectedNewsletter?.isFavorite ? "Unset favorite" : "Set favorite"}
+                  onClick={() => void onToggleFavorite()}
+                >
+                  <IconStar
+                    size={16}
+                    fill={selectedNewsletter?.isFavorite ? "var(--mantine-color-yellow-4)" : "var(--mantine-color-body)"}
+                    color={selectedNewsletter?.isFavorite ? "var(--mantine-color-yellow-6)" : "var(--mantine-color-gray-5)"}
+                  />
+                </ActionIcon>
+              ) : null}
               {selectedNewsletterId && autosaveStatus === "error" ? (
                 <Text size="xs" c={autosaveStatus === "error" ? "red" : "dimmed"}>
                   Autosave failed
@@ -1467,20 +1491,6 @@ export default function NewslettersPage() {
                     </Box>
                   </Tooltip>
                 ) : null}
-                <ActionIcon
-                  variant={selectedNewsletter?.isFavorite ? "light" : "default"}
-                  color={selectedNewsletter?.isFavorite ? "yellow" : "gray"}
-                  size="md"
-                  aria-label={selectedNewsletter?.isFavorite ? "Unset favorite" : "Set favorite"}
-                  title={selectedNewsletter?.isFavorite ? "Unset favorite" : "Set favorite"}
-                  onClick={() => void onToggleFavorite()}
-                >
-                  <IconStar
-                    size={16}
-                    fill={selectedNewsletter?.isFavorite ? "var(--mantine-color-yellow-4)" : "var(--mantine-color-body)"}
-                    color={selectedNewsletter?.isFavorite ? "var(--mantine-color-yellow-6)" : "var(--mantine-color-gray-5)"}
-                  />
-                </ActionIcon>
                 {isCompactActions || isMobile ? (
                   <ActionIcon variant="light" color="blue" size="md" aria-label="Preview" title="Preview" onClick={() => navigate(`/newsletters/${selectedNewsletterId}/preview`, { state: { selectedNewsletterId } })}>
                     <IconEye size={16} />
@@ -1496,7 +1506,7 @@ export default function NewslettersPage() {
                   </Button>
                 )}
                 {isCompactActions || isMobile ? (
-                  <ActionIcon variant="default" size="md" aria-label="Duplicate" title="Duplicate" onClick={() => void onDuplicateNewsletter()} loading={isDuplicatingNewsletter}>
+                  <ActionIcon variant="default" size="md" aria-label="Copy" title="Copy" onClick={() => void onDuplicateNewsletter()} loading={isDuplicatingNewsletter}>
                     <IconFiles size={16} />
                   </ActionIcon>
                 ) : (
@@ -1506,7 +1516,7 @@ export default function NewslettersPage() {
                     onClick={() => void onDuplicateNewsletter()}
                     loading={isDuplicatingNewsletter}
                   >
-                    Duplicate
+                    Copy
                   </Button>
                 )}
                 {oidcEnabled && !selectedNewsletter?.owner ? (
@@ -1538,6 +1548,10 @@ export default function NewslettersPage() {
               </Group>
             ) : null}
           </Group>
+          </Box>
+
+          <div style={{ overflow: "auto", minHeight: 0, padding: "12px clamp(8px, 2.5vw, 12px)" }}>
+          <Stack gap="md">
 
           <Group align="center" gap="xs">
             <Checkbox
@@ -1583,13 +1597,12 @@ export default function NewslettersPage() {
             ) : null}
           </Group>
 
-          <Group justify="space-between" align="center" wrap="nowrap">
+          <Group>
             <Checkbox
-              label="Public link"
-              description="Expose this newsletter at a public URL without authentication."
+              label="Publish"
+              description="Expose this newsletter at a public URL."
               checked={publicLink}
               onChange={(event) => setPublicLink(event.currentTarget.checked)}
-              style={{ flex: 1 }}
             />
             {publicLink && publicSlug ? (
               <ActionIcon
@@ -1943,6 +1956,8 @@ export default function NewslettersPage() {
           ) : null}
 
           {error ? <Text c="red">{error}</Text> : null}
+          </Stack>
+          </div>
         </Stack>
         )}
       </div>

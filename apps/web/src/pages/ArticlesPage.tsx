@@ -15,7 +15,9 @@ import {
   Paper,
   Pill,
   PillsInput,
+  Popover,
   ScrollArea,
+  SegmentedControl,
   Slider,
   SimpleGrid,
   Stack,
@@ -51,6 +53,7 @@ const RECENT_ARTICLES_WINDOW_MS = 30 * 24 * 60 * 60 * 1000;
 const DEFAULT_NEWSLETTER_CONTENT_WIDTH = 680;
 const TAG_COLORS = ["blue", "teal", "cyan", "grape", "indigo", "violet", "lime", "orange", "pink"] as const;
 const DEFAULT_ARTICLE_LANGUAGE: ArticleLanguageCode = "fr";
+const ADD_LANGUAGE_SEGMENT_VALUE = "__add_language__";
 const ARTICLE_LANGUAGES: Array<{ code: ArticleLanguageCode; label: string }> = [
   { code: "en", label: "English" },
   { code: "fr", label: "French" },
@@ -672,6 +675,7 @@ export default function ArticlesPage() {
   const [isAddingToFavorite, setIsAddingToFavorite] = useState(false);
   const [isFavoriteMembershipLoading, setIsFavoriteMembershipLoading] = useState(false);
   const [isEditingArticleInFavorite, setIsEditingArticleInFavorite] = useState(false);
+  const [isAddLanguagePopoverOpen, setIsAddLanguagePopoverOpen] = useState(false);
   const [isCompactActions, setIsCompactActions] = useState(false);
   const [isManualNewArticleMode, setIsManualNewArticleMode] = useState(false);
   const [allNewsletterSummaries, setAllNewsletterSummaries] = useState<NewsletterSummary[]>([]);
@@ -684,6 +688,24 @@ export default function ArticlesPage() {
   const usedArticleIds = useMemo(
     () => new Set(allNewsletterSummaries.flatMap((n) => n.articleIds)),
     [allNewsletterSummaries]
+  );
+
+  const editorLanguageCodes = useMemo(() => {
+    const available = (selectedArticleSummary?.availableLanguages ?? []).filter((language): language is ArticleLanguageCode =>
+      ARTICLE_LANGUAGES.some((supported) => supported.code === language)
+    );
+    if (!available.includes(selectedLanguage)) {
+      available.push(selectedLanguage);
+    }
+
+    return ARTICLE_LANGUAGES
+      .map((language) => language.code)
+      .filter((languageCode) => available.includes(languageCode));
+  }, [selectedArticleSummary?.availableLanguages, selectedLanguage]);
+
+  const addableEditorLanguages = useMemo(
+    () => ARTICLE_LANGUAGES.filter((language) => !editorLanguageCodes.includes(language.code)),
+    [editorLanguageCodes]
   );
 
   const newsletterCountByArticleId = useMemo(() => {
@@ -910,6 +932,13 @@ export default function ArticlesPage() {
     return available[0];
   };
 
+  const shouldSwitchToAvailableTranslation = (article: ArticleSummary): boolean => {
+    const available = (article.availableLanguages ?? []).filter((language): language is ArticleLanguageCode =>
+      ARTICLE_LANGUAGES.some((supported) => supported.code === language)
+    );
+    return available.length > 0 && !available.includes(selectedLanguage);
+  };
+
   const resolveListSummaryWithTitleFallback = async (
     summary: ArticleSummary
   ): Promise<ArticleSummary> => {
@@ -986,29 +1015,35 @@ export default function ArticlesPage() {
     contentHTML: string;
   };
 
-  const buildDraftPayloadSnapshot = () => ({
-    language: selectedLanguage,
-    title: title.trim(),
-    markdown: "",
-    contentHTML: articleContentHTML,
-    public: isPublic,
-    tags,
-    topicIcon: topicIcon.trim(),
-    illustration: topicIconIllustration,
-    iconSource: customIconImageDataUrl.trim()
-      ? customIconImageDataUrl.trim()
-      : buildTopicIconIllustration(
-          tablerIconMap,
-          resolveTablerIconName(tablerIconMap, topicIcon),
-          topicIconBgColor,
-          topicIconStrokeColor,
-          topicIconFillColor
-        ),
-    iconZoom: customIconImageDataUrl.trim() ? customIconImageSizeDelta : 0,
-    iconBgColor: topicIconBgColor,
-    iconStrokeColor: topicIconStrokeColor,
-    iconFillColor: topicIconFillColor
-  });
+  type EditorLanguageSwitchOptions = {
+    autosaveSeedDraft?: boolean;
+  };
+
+  const buildDraftPayloadSnapshot = () => {
+    return {
+      language: selectedLanguage,
+      title: title.trim(),
+      markdown: "",
+      contentHTML: articleContentHTML,
+      public: isPublic,
+      tags,
+      topicIcon: topicIcon.trim(),
+      illustration: topicIconIllustration,
+      iconSource: customIconImageDataUrl.trim()
+        ? customIconImageDataUrl.trim()
+        : buildTopicIconIllustration(
+            tablerIconMap,
+            resolveTablerIconName(tablerIconMap, topicIcon),
+            topicIconBgColor,
+            topicIconStrokeColor,
+            topicIconFillColor
+          ),
+      iconZoom: customIconImageDataUrl.trim() ? customIconImageSizeDelta : 0,
+      iconBgColor: topicIconBgColor,
+      iconStrokeColor: topicIconStrokeColor,
+      iconFillColor: topicIconFillColor
+    };
+  };
 
   const flushPendingDraftBeforeSwitch = async (nextArticleId: string) => {
     if (!editingId || editingId === nextArticleId || !isEditingOwnedByCurrentUser) {
@@ -1047,7 +1082,8 @@ export default function ArticlesPage() {
   const onEdit = async (
     article: ArticleSummary,
     languageOverride?: ArticleLanguageCode,
-    seedDraft?: LanguageSeedDraft
+    seedDraft?: LanguageSeedDraft,
+    options?: EditorLanguageSwitchOptions
   ) => {
     await flushPendingDraftBeforeSwitch(article.id);
     const editRequestSeq = editRequestSeqRef.current + 1;
@@ -1137,9 +1173,14 @@ export default function ArticlesPage() {
         iconStrokeColor: loadedIconStrokeColor,
         iconFillColor: loadedIconFillColor
       };
-      // Treat seeded language drafts as clean until the user changes something explicitly.
-      // This prevents creating a translation variant just by switching languages.
-      lastSavedDraftRef.current = JSON.stringify(loadedDraft);
+      if (useSeedDraft && options?.autosaveSeedDraft) {
+        // Force one autosave cycle when language is explicitly added from the + menu.
+        lastSavedDraftRef.current = "";
+      } else {
+        // Treat seeded language drafts as clean until the user changes something explicitly.
+        // This prevents creating a translation variant just by switching languages.
+        lastSavedDraftRef.current = JSON.stringify(loadedDraft);
+      }
       setAutosaveStatus("idle");
       if (isMobile) {
         setIsMobileEditorOpen(true);
@@ -1152,7 +1193,7 @@ export default function ArticlesPage() {
     }
   };
 
-  const onSelectEditorLanguage = (language: ArticleLanguageCode) => {
+  const onSelectEditorLanguage = (language: ArticleLanguageCode, options?: EditorLanguageSwitchOptions) => {
     if (language === selectedLanguage) {
       return;
     }
@@ -1161,10 +1202,19 @@ export default function ArticlesPage() {
         language: selectedLanguage,
         title,
         contentHTML: articleContentHTML
-      });
+      }, options);
       return;
     }
     setSelectedLanguage(language);
+  };
+
+  const onSelectEditorLanguageSegment = (value: string) => {
+    if (value === ADD_LANGUAGE_SEGMENT_VALUE) {
+      setIsAddLanguagePopoverOpen(true);
+      return;
+    }
+    onSelectEditorLanguage(value as ArticleLanguageCode);
+    setIsAddLanguagePopoverOpen(false);
   };
 
   useEffect(() => {
@@ -1422,7 +1472,7 @@ export default function ArticlesPage() {
 
   const onSubmit = async () => {
     const emptyBody = isEmptyArticleBodyContent(articleContentHTML);
-    if (!title.trim() && !emptyBody) {
+    if (!editingId && !title.trim() && !emptyBody) {
       setError("Title is required");
       return;
     }
@@ -1448,6 +1498,9 @@ export default function ArticlesPage() {
         setSelectedArticleID(updated.id);
         lastSavedDraftRef.current = JSON.stringify(payload);
         setAutosaveStatus("saved");
+        if (shouldSwitchToAvailableTranslation(updatedSummary)) {
+          void onEdit(updatedSummary);
+        }
       } else {
         const created = await createArticle({
           authorId: oidcEnabled ? undefined : FALLBACK_AUTHOR_ID,
@@ -1504,6 +1557,9 @@ export default function ArticlesPage() {
           current.map((article) => (article.id === editingId ? updatedSummary : article))
         );
         lastSavedDraftRef.current = serializedPayload;
+        if (shouldSwitchToAvailableTranslation(updatedSummary)) {
+          void onEdit(updatedSummary);
+        }
         if (autosaveClearSavedRef.current !== null) {
           window.clearTimeout(autosaveClearSavedRef.current);
         }
@@ -2163,7 +2219,7 @@ export default function ArticlesPage() {
       />
       ) : null}
 
-      <div ref={editorPaneRef} style={{ padding: "12px clamp(8px, 2.5vw, 12px)", overflow: "auto", display: isMobile && !isMobileEditorOpen ? "none" : undefined }}>
+      <div style={{ overflow: "hidden", minHeight: 0, display: isMobile && !isMobileEditorOpen ? "none" : undefined }}>
         {!hasLoadedArticles || (!editingId && !isManualNewArticleMode && articles.length > 0) ? (
           <Center h="100%">
             <Stack align="center" gap="xs">
@@ -2172,7 +2228,20 @@ export default function ArticlesPage() {
             </Stack>
           </Center>
         ) : (
-        <Stack style={isReadOnlyArticleView ? { width: "100%", maxWidth: favoriteNewsletterContentWidth, margin: "0 auto" } : undefined}>
+        <Stack
+          gap={0}
+          style={isReadOnlyArticleView
+            ? { width: "100%", maxWidth: favoriteNewsletterContentWidth, margin: "0 auto", height: "100%", minHeight: 0 }
+            : { height: "100%", minHeight: 0 }}
+        >
+          <Box
+            style={{
+              background: "var(--mantine-color-gray-1)",
+              borderBottom: "1px solid var(--mantine-color-default-border)",
+              borderRadius: 0,
+              padding: "8px 10px"
+            }}
+          >
           <Group justify="space-between" wrap="nowrap" ref={headerRowRef} style={{ overflow: "hidden", minWidth: 0 }}>
             <Group gap="xs" wrap="nowrap" ref={headerLeftRef}>
               {isMobile ? (
@@ -2211,31 +2280,67 @@ export default function ArticlesPage() {
                   Autosave failed
                 </Text>
               ) : null}
-              <Menu position="bottom-start" withArrow>
-                <Menu.Target>
-                  <ActionIcon
-                    variant="default"
-                    size="md"
-                    aria-label={`Language: ${languageLabel(selectedLanguage)}`}
-                    title={`Language: ${languageLabel(selectedLanguage)}`}
-                  >
-                    <Text component="span" size="sm">
-                      {languageFlag(selectedLanguage)}
-                    </Text>
-                  </ActionIcon>
-                </Menu.Target>
-                <Menu.Dropdown>
-                  {ARTICLE_LANGUAGES.map((language) => (
-                    <Menu.CheckboxItem
-                      key={`article-language-${language.code}`}
-                      checked={selectedLanguage === language.code}
-                      onChange={() => onSelectEditorLanguage(language.code)}
-                    >
-                      {language.label}
-                    </Menu.CheckboxItem>
-                  ))}
-                </Menu.Dropdown>
-              </Menu>
+              <Popover
+                opened={isAddLanguagePopoverOpen}
+                onChange={setIsAddLanguagePopoverOpen}
+                position="bottom-start"
+                withArrow
+              >
+                <Popover.Target>
+                  <Box>
+                    <SegmentedControl
+                      size="xs"
+                      value={selectedLanguage}
+                      onChange={onSelectEditorLanguageSegment}
+                      aria-label={`Language: ${languageLabel(selectedLanguage)}`}
+                      data={[
+                        ...editorLanguageCodes.map((languageCode) => ({
+                          value: languageCode,
+                          label: languageFlag(languageCode)
+                        })),
+                        {
+                          value: ADD_LANGUAGE_SEGMENT_VALUE,
+                          label: "+"
+                        }
+                      ]}
+                    />
+                  </Box>
+                </Popover.Target>
+                <Popover.Dropdown p={6}>
+                  <Stack gap={2}>
+                    {addableEditorLanguages.length === 0 ? (
+                      <Text size="sm" c="dimmed" px={6} py={4}>
+                        All languages already added
+                      </Text>
+                    ) : (
+                      addableEditorLanguages.map((language) => (
+                        <UnstyledButton
+                          key={`article-add-language-${language.code}`}
+                          onClick={() => {
+                            onSelectEditorLanguage(language.code, { autosaveSeedDraft: true });
+                            setIsAddLanguagePopoverOpen(false);
+                          }}
+                          style={{
+                            width: "100%",
+                            display: "flex",
+                            alignItems: "center",
+                            gap: 8,
+                            borderRadius: 6,
+                            padding: "6px 8px"
+                          }}
+                        >
+                          <Text component="span" size="sm">
+                            {languageFlag(language.code)}
+                          </Text>
+                          <Text component="span" size="sm">
+                            {language.label}
+                          </Text>
+                        </UnstyledButton>
+                      ))
+                    )}
+                  </Stack>
+                </Popover.Dropdown>
+              </Popover>
             </Group>
             {editingId ? (
               <Group gap="xs" wrap="nowrap" ref={headerActionsRef}>
@@ -2297,7 +2402,7 @@ export default function ArticlesPage() {
                   )
                 ) : null}
                 {isCompactActions || isMobile ? (
-                  <ActionIcon variant="default" size="md" aria-label="Duplicate" title="Duplicate" onClick={() => void onDuplicateArticle()} loading={isDuplicatingArticle}>
+                  <ActionIcon variant="default" size="md" aria-label="Copy" title="Copy" onClick={() => void onDuplicateArticle()} loading={isDuplicatingArticle}>
                     <IconFiles size={16} />
                   </ActionIcon>
                 ) : (
@@ -2307,7 +2412,7 @@ export default function ArticlesPage() {
                     onClick={() => void onDuplicateArticle()}
                     loading={isDuplicatingArticle}
                   >
-                    Duplicate
+                    Copy
                   </Button>
                 )}
                 {oidcEnabled && !articles.find((article) => article.id === editingId)?.owner ? (
@@ -2339,6 +2444,10 @@ export default function ArticlesPage() {
               </Group>
             ) : null}
           </Group>
+          </Box>
+
+          <div ref={editorPaneRef} style={{ overflow: "auto", minHeight: 0, padding: "12px clamp(8px, 2.5vw, 12px)" }}>
+          <Stack gap="md">
 
           {isReadOnlyArticleView ? (
             <Stack gap="xs">
@@ -2569,6 +2678,8 @@ export default function ArticlesPage() {
           </Group>
 
           {error ? <Text c="red">{error}</Text> : null}
+          </Stack>
+          </div>
         </Stack>
         )}
       </div>

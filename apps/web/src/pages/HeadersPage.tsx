@@ -1,6 +1,7 @@
 import { type MouseEvent as ReactMouseEvent, useEffect, useRef, useState } from "react";
 import {
   ActionIcon,
+  Box,
   Button,
   Group,
   Loader,
@@ -488,9 +489,17 @@ export default function HeadersPage() {
       />
       ) : null}
 
-      <div style={{ padding: "12px clamp(8px, 2.5vw, 12px)", overflow: "auto", display: isMobile && !isMobileEditorOpen ? "none" : undefined }}>
-        <Stack>
-          <Group justify="space-between">
+      <div style={{ overflow: "hidden", minHeight: 0, display: isMobile && !isMobileEditorOpen ? "none" : undefined }}>
+        <Stack gap={0} style={{ height: "100%", minHeight: 0 }}>
+          <Box
+            style={{
+              background: "var(--mantine-color-gray-1)",
+              borderBottom: "1px solid var(--mantine-color-default-border)",
+              borderRadius: 0,
+              padding: "8px 10px"
+            }}
+          >
+          <Group justify="space-between" wrap="nowrap" style={{ minWidth: 0 }}>
             <Group gap="xs" wrap="nowrap">
               {isMobile ? (
                 <Button variant="subtle" size="xs" onClick={() => setIsMobileEditorOpen(false)}>
@@ -534,6 +543,10 @@ export default function HeadersPage() {
               </Group>
             ) : null}
           </Group>
+          </Box>
+
+          <div style={{ overflow: "auto", minHeight: 0, padding: "12px clamp(8px, 2.5vw, 12px)" }}>
+          <Stack gap="md">
 
           <TextInput
             label="Title"
@@ -566,6 +579,8 @@ export default function HeadersPage() {
           </Group>
 
           {error ? <Text c="red">{error}</Text> : null}
+          </Stack>
+          </div>
         </Stack>
       </div>
 
