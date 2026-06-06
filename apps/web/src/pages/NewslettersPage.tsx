@@ -718,6 +718,14 @@ export default function NewslettersPage() {
   }, [isMobile]);
 
   useEffect(() => {
+    const mobileListRequestAt = (location.state as { mobileListRequestAt?: number } | null)?.mobileListRequestAt;
+    if (!isMobile || typeof mobileListRequestAt !== "number") {
+      return;
+    }
+    setIsMobileEditorOpen(false);
+  }, [isMobile, location.key, location.state]);
+
+  useEffect(() => {
     const row = headerRowRef.current;
     const left = headerLeftRef.current;
     const actions = headerActionsRef.current;

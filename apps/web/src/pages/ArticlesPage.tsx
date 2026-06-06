@@ -32,7 +32,7 @@ import { useMediaQuery } from "@mantine/hooks";
 import { IconChevronDown, IconFiles, IconMail, IconPencil, IconPointFilled, IconRefresh, IconSearch, IconTrash, IconUpload, IconUserCheck, IconUserFilled, IconX } from "@tabler/icons-react";
 import { SimpleEditor } from "@/components/tiptap-templates/simple/simple-editor";
 import { renderToStaticMarkup } from "react-dom/server";
-import { useParams } from "react-router-dom";
+import { useLocation, useParams } from "react-router-dom";
 import { createArticle, deleteArticle, getArticle, getNewsletter, getSavedIcons, listArticleSummaries, listNewsletterSummaries, putSavedIcons, renderMarkdown, updateArticle, updateNewsletter } from "../lib/api";
 import { claimArticle } from "../lib/api";
 import { useAuth } from "../lib/auth";
@@ -608,6 +608,7 @@ function toArticleSummary(article: Article): ArticleSummary {
 
 export default function ArticlesPage() {
   const { smartFilter } = useParams<{ smartFilter?: string }>();
+  const location = useLocation();
   const articleSmartFilter = normalizeArticleSmartFilter(smartFilter);
   const { oidcEnabled, user } = useAuth();
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -1422,6 +1423,14 @@ export default function ArticlesPage() {
       setIsMobileEditorOpen(false);
     }
   }, [isMobile]);
+
+  useEffect(() => {
+    const mobileListRequestAt = (location.state as { mobileListRequestAt?: number } | null)?.mobileListRequestAt;
+    if (!isMobile || typeof mobileListRequestAt !== "number") {
+      return;
+    }
+    setIsMobileEditorOpen(false);
+  }, [isMobile, location.key, location.state]);
 
   useEffect(() => {
     const row = headerRowRef.current;

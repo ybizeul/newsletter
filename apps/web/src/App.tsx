@@ -222,7 +222,7 @@ function App() {
                   style={{ backgroundColor: "transparent" }}
                   leftSection={<IconList size={14} />}
                   onClick={() => {
-                    navigate("/articles/all");
+                    navigate("/articles/all", { state: { mobileListRequestAt: Date.now() } });
                     close();
                   }}
                 />
@@ -235,7 +235,7 @@ function App() {
                   style={{ backgroundColor: "transparent" }}
                   leftSection={<IconUser size={14} />}
                   onClick={() => {
-                    navigate("/articles/mine");
+                    navigate("/articles/mine", { state: { mobileListRequestAt: Date.now() } });
                     close();
                   }}
                 />
@@ -248,7 +248,7 @@ function App() {
                   style={{ backgroundColor: "transparent" }}
                   leftSection={<IconLock size={14} />}
                   onClick={() => {
-                    navigate("/articles/private");
+                    navigate("/articles/private", { state: { mobileListRequestAt: Date.now() } });
                     close();
                   }}
                 />
@@ -262,7 +262,7 @@ function App() {
                     style={{ backgroundColor: "transparent" }}
                     leftSection={<IconWorld size={14} />}
                     onClick={() => {
-                      navigate("/articles/public");
+                      navigate("/articles/public", { state: { mobileListRequestAt: Date.now() } });
                       close();
                     }}
                   />
@@ -276,7 +276,7 @@ function App() {
                   style={{ backgroundColor: "transparent" }}
                   leftSection={<IconClock size={14} />}
                   onClick={() => {
-                    navigate("/articles/recent");
+                    navigate("/articles/recent", { state: { mobileListRequestAt: Date.now() } });
                     close();
                   }}
                 />
@@ -288,7 +288,7 @@ function App() {
               active={location.pathname.startsWith("/newsletters")}
               leftSection={<IconMail size={16} />}
               onClick={() => {
-                navigate("/newsletters");
+                navigate("/newsletters", { state: { mobileListRequestAt: Date.now() } });
                 close();
               }}
             />
@@ -298,7 +298,7 @@ function App() {
               active={location.pathname.startsWith("/headers")}
               leftSection={<IconAlignBoxCenterTop size={16} />}
               onClick={() => {
-                navigate("/headers");
+                navigate("/headers", { state: { mobileListRequestAt: Date.now() } });
                 close();
               }}
             />
