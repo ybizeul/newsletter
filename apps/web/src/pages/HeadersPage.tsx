@@ -13,6 +13,7 @@ import {
 } from "@mantine/core";
 import { useMediaQuery } from "@mantine/hooks";
 import { IconPlus } from "@tabler/icons-react";
+import { useLocation } from "react-router-dom";
 import { createHeader, deleteHeader, listHeaders, renderMarkdown, updateHeader } from "../lib/api";
 import { useAuth } from "../lib/auth";
 import type { Header } from "../types/domain";
@@ -91,6 +92,7 @@ function looksLikeHTML(input: string): boolean {
 
 
 export default function HeadersPage() {
+  const location = useLocation();
   const { oidcEnabled } = useAuth();
   const containerRef = useRef<HTMLDivElement | null>(null);
   const autosaveTimerRef = useRef<number | null>(null);
@@ -203,6 +205,14 @@ export default function HeadersPage() {
       setIsMobileEditorOpen(false);
     }
   }, [isMobile]);
+
+  useEffect(() => {
+    const mobileListRequestAt = (location.state as { mobileListRequestAt?: number } | null)?.mobileListRequestAt;
+    if (!isMobile || typeof mobileListRequestAt !== "number") {
+      return;
+    }
+    setIsMobileEditorOpen(false);
+  }, [isMobile, location.key, location.state]);
 
   const onSave = async () => {
     if (!title.trim()) {
