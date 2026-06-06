@@ -34,6 +34,7 @@ type Newsletter struct {
 	ContentWidth    int              `bson:"contentWidth,omitempty" json:"contentWidth"`
 	IsFavorite      bool             `bson:"isFavorite" json:"isFavorite"`
 	Archived        bool             `bson:"archived" json:"archived"`
+	ArchivedAt      *time.Time       `bson:"archivedAt,omitempty" json:"archivedAt,omitempty"`
 	Status          NewsletterStatus `bson:"status" json:"status"`
 	DeliveryError   string           `bson:"deliveryError,omitempty" json:"deliveryError,omitempty"`
 	ScheduledAt     *time.Time       `bson:"scheduledAt,omitempty" json:"scheduledAt,omitempty"`
