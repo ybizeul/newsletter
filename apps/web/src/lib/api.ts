@@ -56,6 +56,7 @@ type UpdateNewsletterPayload = {
   includeIndex: boolean;
   contentWidth: number;
   archived: boolean;
+  archivedAt?: string;
   articleIds: string[];
   recipientIds: string[];
   contactTags?: string[];

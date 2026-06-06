@@ -1024,6 +1024,7 @@ type updateNewsletterRequest struct {
 	IncludeIndex    bool     `json:"includeIndex"`
 	ContentWidth    int      `json:"contentWidth"`
 	Archived        bool     `json:"archived"`
+	ArchivedAt      string   `json:"archivedAt"`
 	ArticleIDs      []string `json:"articleIds"`
 	RecipientIDs    []string `json:"recipientIds"`
 	ContactTags     []string `json:"contactTags"`
@@ -1420,7 +1421,14 @@ func (h *Handler) UpdateNewsletter(w http.ResponseWriter, r *http.Request, id st
 	}
 	unsetFields := bson.M{}
 	if req.Archived {
-		if existing.ArchivedAt == nil {
+		if strings.TrimSpace(req.ArchivedAt) != "" {
+			parsedArchivedAt, parseErr := time.Parse(time.RFC3339, req.ArchivedAt)
+			if parseErr != nil {
+				h.writeError(w, http.StatusBadRequest, "archivedAt must be an RFC3339 datetime")
+				return
+			}
+			setFields["archivedAt"] = parsedArchivedAt.UTC()
+		} else if existing.ArchivedAt == nil {
 			setFields["archivedAt"] = now
 		}
 	} else {

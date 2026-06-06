@@ -9,6 +9,7 @@ import {
   Input,
   Loader,
   Modal,
+  Popover,
   Anchor,
   ScrollArea,
   SegmentedControl,
@@ -55,7 +56,7 @@ import {
 import type { ArticleLanguageCode, ArticleSummary, Contact, Header, Newsletter, NewsletterSummary } from "../types/domain";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../lib/auth";
-import { DateTimePicker } from "@mantine/dates";
+import { DatePicker, DateTimePicker } from "@mantine/dates";
 import { SimpleEditor } from "@/components/tiptap-templates/simple/simple-editor";
 
 const FALLBACK_CREATOR_ID = "demo-user";
@@ -290,6 +291,8 @@ export default function NewslettersPage() {
   const [smtpConfigured, setSmtpConfigured] = useState(() => cachedNewslettersData?.smtpConfigured ?? true);
   const [isLoading, setIsLoading] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isArchiving, setIsArchiving] = useState(false);
+  const [isArchivedAtPickerOpen, setIsArchivedAtPickerOpen] = useState(false);
   const [isSendingNow, setIsSendingNow] = useState(false);
   const [isDuplicatingNewsletter, setIsDuplicatingNewsletter] = useState(false);
   const [isClaimingNewsletter, setIsClaimingNewsletter] = useState(false);
@@ -565,6 +568,7 @@ export default function NewslettersPage() {
     setScheduledAtInput(null);
     lastSavedDraftRef.current = "";
     setAutosaveStatus("idle");
+    setIsArchivedAtPickerOpen(false);
   };
 
   const onSelectNewsletter = async (newsletter: NewsletterSummary) => {
@@ -608,6 +612,7 @@ export default function NewslettersPage() {
       setIncludeIndex(Boolean(fullNewsletter.includeIndex));
       setArchived(Boolean(fullNewsletter.archived));
       setArchivedAt(fullNewsletter.archivedAt ?? null);
+      setIsArchivedAtPickerOpen(false);
       setContentWidth(fullNewsletter.contentWidth || 680);
       setArticleIDs(fullNewsletter.articleIds);
       setRecipientRaw(fullNewsletter.recipientIds.join(","));
@@ -866,6 +871,107 @@ export default function NewslettersPage() {
     }
   };
 
+  const onArchivedChange = async (nextArchived: boolean) => {
+    setArchived(nextArchived);
+    setIsArchivedAtPickerOpen(false);
+
+    if (!selectedNewsletterId) {
+      return;
+    }
+
+    if (!title.trim()) {
+      setError("Title is required");
+      setArchived(!nextArchived);
+      return;
+    }
+
+    if (hasTooManyRecipients && recipientMode === "emails") {
+      setError(`A maximum of ${MAX_RECIPIENTS} recipients is allowed`);
+      setArchived(!nextArchived);
+      return;
+    }
+
+    if (autosaveTimerRef.current !== null) {
+      window.clearTimeout(autosaveTimerRef.current);
+      autosaveTimerRef.current = null;
+    }
+
+    setError(null);
+    setIsArchiving(true);
+    setAutosaveStatus("saving");
+
+    const payload = {
+      ...buildNewsletterDraftPayload(),
+      archived: nextArchived
+    };
+
+    try {
+      const updated = await updateNewsletter(selectedNewsletterId, payload);
+      setArchived(Boolean(updated.archived));
+      setArchivedAt(updated.archivedAt ?? null);
+      setPublicSlug((updated.publicSlug ?? "").trim());
+      setNewsletters((current) =>
+        current.map((newsletter) => (newsletter.id === selectedNewsletterId ? withFavoriteFlag(toNewsletterSummary(updated)) : newsletter))
+      );
+      lastSavedDraftRef.current = JSON.stringify(payload);
+      setAutosaveStatus("saved");
+      scheduleAutosaveSavedReset();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to save newsletter");
+      setArchived((current) => !current);
+      setAutosaveStatus("error");
+    } finally {
+      setIsArchiving(false);
+    }
+  };
+
+  const onArchivedDateChange = async (nextArchivedDate: Date | string | null) => {
+    if (!selectedNewsletterId || !archived || !nextArchivedDate) {
+      return;
+    }
+
+    const normalizedArchivedDate =
+      nextArchivedDate instanceof Date ? nextArchivedDate : new Date(nextArchivedDate);
+    if (Number.isNaN(normalizedArchivedDate.getTime())) {
+      setError("Invalid archival date");
+      return;
+    }
+
+    if (autosaveTimerRef.current !== null) {
+      window.clearTimeout(autosaveTimerRef.current);
+      autosaveTimerRef.current = null;
+    }
+
+    setError(null);
+    setIsArchiving(true);
+    setAutosaveStatus("saving");
+
+    const payload = {
+      ...buildNewsletterDraftPayload(),
+      archived: true,
+      archivedAt: normalizedArchivedDate.toISOString()
+    };
+
+    try {
+      const updated = await updateNewsletter(selectedNewsletterId, payload);
+      setArchived(Boolean(updated.archived));
+      setArchivedAt(updated.archivedAt ?? payload.archivedAt);
+      setPublicSlug((updated.publicSlug ?? "").trim());
+      setNewsletters((current) =>
+        current.map((newsletter) => (newsletter.id === selectedNewsletterId ? withFavoriteFlag(toNewsletterSummary(updated)) : newsletter))
+      );
+      lastSavedDraftRef.current = JSON.stringify(buildNewsletterDraftPayload());
+      setAutosaveStatus("saved");
+      scheduleAutosaveSavedReset();
+      setIsArchivedAtPickerOpen(false);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to save newsletter");
+      setAutosaveStatus("error");
+    } finally {
+      setIsArchiving(false);
+    }
+  };
+
   useEffect(() => {
     if (!selectedNewsletterId || isSubmitting || isLoadingNewsletterRef.current) {
       return;
@@ -896,6 +1002,8 @@ export default function NewslettersPage() {
       try {
         const updated = await updateNewsletter(selectedNewsletterId, payload);
         setPublicSlug((updated.publicSlug ?? "").trim());
+        setArchived(Boolean(updated.archived));
+        setArchivedAt(updated.archivedAt ?? null);
         setNewsletters((current) =>
           current.map((newsletter) => (newsletter.id === selectedNewsletterId ? withFavoriteFlag(toNewsletterSummary(updated)) : newsletter))
         );
@@ -1404,12 +1512,43 @@ export default function NewslettersPage() {
             <Checkbox
               label="Archived"
               checked={archived}
-              onChange={(event) => setArchived(event.currentTarget.checked)}
+              disabled={isArchiving}
+              onChange={(event) => {
+                void onArchivedChange(event.currentTarget.checked);
+              }}
             />
             {archived ? (
-              <Text size="xs" c="dimmed">
-                {archivedAt ? `Archived on ${formatNewsletterListDate(archivedAt)}` : "Archival date will be set when saved"}
-              </Text>
+              <Popover
+                opened={isArchivedAtPickerOpen}
+                onChange={setIsArchivedAtPickerOpen}
+                position="bottom-start"
+                withArrow
+              >
+                <Popover.Target>
+                  <Text
+                    size="xs"
+                    c="dimmed"
+                    style={{ cursor: archivedAt ? "pointer" : "default", userSelect: "none" }}
+                    title={archivedAt ? "Double-click to adjust archival date" : undefined}
+                    onDoubleClick={() => {
+                      if (archivedAt && !isArchiving) {
+                        setIsArchivedAtPickerOpen(true);
+                      }
+                    }}
+                  >
+                    {archivedAt ? `on ${formatNewsletterListDate(archivedAt)}` : isArchiving ? "Saving archival status..." : "Archival date will be set when saved"}
+                  </Text>
+                </Popover.Target>
+                <Popover.Dropdown>
+                  <DatePicker
+                    value={archivedAt ? new Date(archivedAt) : null}
+                    onChange={(value) => {
+                      void onArchivedDateChange(value);
+                    }}
+                    maxDate={new Date()}
+                  />
+                </Popover.Dropdown>
+              </Popover>
             ) : null}
           </Group>
 
