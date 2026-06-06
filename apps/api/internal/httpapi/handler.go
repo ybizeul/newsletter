@@ -39,14 +39,15 @@ import (
 )
 
 type Handler struct {
-	articles            *mongo.Collection
-	articleTranslations *mongo.Collection
-	headers             *mongo.Collection
-	newsletters         *mongo.Collection
-	contacts            *mongo.Collection
-	userPrefs           *mongo.Collection
-	cfg                 config.Config
-	appVersion          string
+	articles             *mongo.Collection
+	articleTranslations  *mongo.Collection
+	headers              *mongo.Collection
+	newsletters          *mongo.Collection
+	newsletterOpenTokens *mongo.Collection
+	contacts             *mongo.Collection
+	userPrefs            *mongo.Collection
+	cfg                  config.Config
+	appVersion           string
 }
 
 var errNewsletterAlreadySending = errors.New("newsletter is already sending")
@@ -60,14 +61,15 @@ var newsletterSlugSanitizeRe = regexp.MustCompile(`[^a-z0-9]+`)
 
 func NewHandler(db *mongo.Database, cfg config.Config, appVersion string) *Handler {
 	return &Handler{
-		articles:            db.Collection("articles"),
-		articleTranslations: db.Collection("article_translations"),
-		headers:             db.Collection("headers"),
-		newsletters:         db.Collection("newsletters"),
-		contacts:            db.Collection("contacts"),
-		userPrefs:           db.Collection("user_preferences"),
-		cfg:                 cfg,
-		appVersion:          strings.TrimSpace(appVersion),
+		articles:             db.Collection("articles"),
+		articleTranslations:  db.Collection("article_translations"),
+		headers:              db.Collection("headers"),
+		newsletters:          db.Collection("newsletters"),
+		newsletterOpenTokens: db.Collection("newsletter_open_tokens"),
+		contacts:             db.Collection("contacts"),
+		userPrefs:            db.Collection("user_preferences"),
+		cfg:                  cfg,
+		appVersion:           strings.TrimSpace(appVersion),
 	}
 }
 
@@ -1070,28 +1072,30 @@ func (h *Handler) CreateNewsletter(w http.ResponseWriter, r *http.Request) {
 	}
 
 	newsletter := model.Newsletter{
-		ID:              bson.NewObjectID().Hex(),
-		CreatorID:       req.CreatorID,
-		Owner:           owner,
-		Title:           req.Title,
-		Language:        newsletterLanguage,
-		Template:        templateName,
-		PublicLink:      req.PublicLink,
-		PublicSlug:      publicSlug,
-		HeaderID:        strings.TrimSpace(req.HeaderID),
-		IntroMarkdown:   req.IntroMarkdown,
-		IntroHTML:       req.IntroHTML,
-		FooterMarkdown:  req.FooterMarkdown,
-		FooterHTML:      req.FooterHTML,
-		IncludeIndex:    req.IncludeIndex,
-		ArticleIDs:      req.ArticleIDs,
-		RecipientIDs:    recipientIDs,
-		ContactTags:     normalizeContactTags(req.ContactTags),
-		ContactTagsMode: normalizeContactTagsMode(req.ContactTagsMode),
-		IsFavorite:      false,
-		Status:          model.NewsletterStatusDraft,
-		CreatedAt:       now,
-		UpdatedAt:       now,
+		ID:                bson.NewObjectID().Hex(),
+		CreatorID:         req.CreatorID,
+		Owner:             owner,
+		Title:             req.Title,
+		Language:          newsletterLanguage,
+		Template:          templateName,
+		PublicLink:        req.PublicLink,
+		PublicSlug:        publicSlug,
+		HeaderID:          strings.TrimSpace(req.HeaderID),
+		IntroMarkdown:     req.IntroMarkdown,
+		IntroHTML:         req.IntroHTML,
+		FooterMarkdown:    req.FooterMarkdown,
+		FooterHTML:        req.FooterHTML,
+		IncludeIndex:      req.IncludeIndex,
+		ArticleIDs:        req.ArticleIDs,
+		RecipientIDs:      recipientIDs,
+		ContactTags:       normalizeContactTags(req.ContactTags),
+		ContactTagsMode:   normalizeContactTagsMode(req.ContactTagsMode),
+		IsFavorite:        false,
+		SentCount:         0,
+		OpenedUniqueCount: 0,
+		Status:            model.NewsletterStatusDraft,
+		CreatedAt:         now,
+		UpdatedAt:         now,
 	}
 
 	if _, err := h.newsletters.InsertOne(r.Context(), newsletter); err != nil {
@@ -1113,80 +1117,86 @@ func (h *Handler) ListNewsletters(w http.ResponseWriter, r *http.Request) {
 
 	if strings.EqualFold(strings.TrimSpace(r.URL.Query().Get("view")), "summary") {
 		findOptions.SetProjection(bson.M{
-			"owner":          1,
-			"title":          1,
-			"language":       1,
-			"template":       1,
-			"publicLink":     1,
-			"publicSlug":     1,
-			"headerId":       1,
-			"introMarkdown":  1,
-			"introHTML":      1,
-			"footerMarkdown": 1,
-			"footerHTML":     1,
-			"includeIndex":   1,
-			"articleIds":     1,
-			"recipientIds":   1,
-			"isFavorite":     1,
-			"archived":       1,
-			"archivedAt":     1,
-			"status":         1,
-			"deliveryError":  1,
-			"scheduledAt":    1,
-			"sentAt":         1,
-			"createdAt":      1,
-			"updatedAt":      1,
+			"owner":             1,
+			"title":             1,
+			"language":          1,
+			"template":          1,
+			"publicLink":        1,
+			"publicSlug":        1,
+			"headerId":          1,
+			"introMarkdown":     1,
+			"introHTML":         1,
+			"footerMarkdown":    1,
+			"footerHTML":        1,
+			"includeIndex":      1,
+			"articleIds":        1,
+			"recipientIds":      1,
+			"isFavorite":        1,
+			"archived":          1,
+			"archivedAt":        1,
+			"status":            1,
+			"deliveryError":     1,
+			"sentCount":         1,
+			"openedUniqueCount": 1,
+			"scheduledAt":       1,
+			"sentAt":            1,
+			"createdAt":         1,
+			"updatedAt":         1,
 		})
 
 		type newsletterSummarySource struct {
-			ID             string                 `bson:"_id"`
-			Owner          string                 `bson:"owner,omitempty"`
-			Title          string                 `bson:"title"`
-			Language       model.LanguageCode     `bson:"language,omitempty"`
-			Template       string                 `bson:"template,omitempty"`
-			PublicLink     bool                   `bson:"publicLink,omitempty"`
-			PublicSlug     string                 `bson:"publicSlug,omitempty"`
-			HeaderID       string                 `bson:"headerId,omitempty"`
-			IntroMarkdown  string                 `bson:"introMarkdown"`
-			IntroHTML      string                 `bson:"introHTML,omitempty"`
-			FooterMarkdown string                 `bson:"footerMarkdown"`
-			FooterHTML     string                 `bson:"footerHTML,omitempty"`
-			IncludeIndex   bool                   `bson:"includeIndex"`
-			ArticleIDs     []string               `bson:"articleIds"`
-			RecipientIDs   []string               `bson:"recipientIds"`
-			IsFavorite     bool                   `bson:"isFavorite"`
-			Archived       bool                   `bson:"archived"`
-			ArchivedAt     *time.Time             `bson:"archivedAt,omitempty"`
-			Status         model.NewsletterStatus `bson:"status"`
-			DeliveryError  string                 `bson:"deliveryError,omitempty"`
-			ScheduledAt    *time.Time             `bson:"scheduledAt,omitempty"`
-			SentAt         *time.Time             `bson:"sentAt,omitempty"`
-			CreatedAt      time.Time              `bson:"createdAt"`
-			UpdatedAt      time.Time              `bson:"updatedAt"`
+			ID                string                 `bson:"_id"`
+			Owner             string                 `bson:"owner,omitempty"`
+			Title             string                 `bson:"title"`
+			Language          model.LanguageCode     `bson:"language,omitempty"`
+			Template          string                 `bson:"template,omitempty"`
+			PublicLink        bool                   `bson:"publicLink,omitempty"`
+			PublicSlug        string                 `bson:"publicSlug,omitempty"`
+			HeaderID          string                 `bson:"headerId,omitempty"`
+			IntroMarkdown     string                 `bson:"introMarkdown"`
+			IntroHTML         string                 `bson:"introHTML,omitempty"`
+			FooterMarkdown    string                 `bson:"footerMarkdown"`
+			FooterHTML        string                 `bson:"footerHTML,omitempty"`
+			IncludeIndex      bool                   `bson:"includeIndex"`
+			ArticleIDs        []string               `bson:"articleIds"`
+			RecipientIDs      []string               `bson:"recipientIds"`
+			IsFavorite        bool                   `bson:"isFavorite"`
+			Archived          bool                   `bson:"archived"`
+			ArchivedAt        *time.Time             `bson:"archivedAt,omitempty"`
+			Status            model.NewsletterStatus `bson:"status"`
+			DeliveryError     string                 `bson:"deliveryError,omitempty"`
+			SentCount         int64                  `bson:"sentCount"`
+			OpenedUniqueCount int64                  `bson:"openedUniqueCount"`
+			ScheduledAt       *time.Time             `bson:"scheduledAt,omitempty"`
+			SentAt            *time.Time             `bson:"sentAt,omitempty"`
+			CreatedAt         time.Time              `bson:"createdAt"`
+			UpdatedAt         time.Time              `bson:"updatedAt"`
 		}
 
 		type newsletterSummary struct {
-			ID            string                 `json:"id"`
-			Owner         string                 `json:"owner,omitempty"`
-			Title         string                 `json:"title"`
-			Language      model.LanguageCode     `json:"language,omitempty"`
-			Template      string                 `json:"template,omitempty"`
-			PublicLink    bool                   `json:"publicLink"`
-			PublicSlug    string                 `json:"publicSlug,omitempty"`
-			HeaderID      string                 `json:"headerId,omitempty"`
-			IncludeIndex  bool                   `json:"includeIndex"`
-			ArticleIDs    []string               `json:"articleIds"`
-			RecipientIDs  []string               `json:"recipientIds"`
-			IsFavorite    bool                   `json:"isFavorite"`
-			Archived      bool                   `json:"archived"`
-			ArchivedAt    *time.Time             `json:"archivedAt,omitempty"`
-			Status        model.NewsletterStatus `json:"status"`
-			DeliveryError string                 `json:"deliveryError,omitempty"`
-			ScheduledAt   *time.Time             `json:"scheduledAt,omitempty"`
-			SentAt        *time.Time             `json:"sentAt,omitempty"`
-			CreatedAt     time.Time              `json:"createdAt"`
-			UpdatedAt     time.Time              `json:"updatedAt"`
-			Preview       string                 `json:"preview"`
+			ID                string                 `json:"id"`
+			Owner             string                 `json:"owner,omitempty"`
+			Title             string                 `json:"title"`
+			Language          model.LanguageCode     `json:"language,omitempty"`
+			Template          string                 `json:"template,omitempty"`
+			PublicLink        bool                   `json:"publicLink"`
+			PublicSlug        string                 `json:"publicSlug,omitempty"`
+			HeaderID          string                 `json:"headerId,omitempty"`
+			IncludeIndex      bool                   `json:"includeIndex"`
+			ArticleIDs        []string               `json:"articleIds"`
+			RecipientIDs      []string               `json:"recipientIds"`
+			IsFavorite        bool                   `json:"isFavorite"`
+			Archived          bool                   `json:"archived"`
+			ArchivedAt        *time.Time             `json:"archivedAt,omitempty"`
+			Status            model.NewsletterStatus `json:"status"`
+			DeliveryError     string                 `json:"deliveryError,omitempty"`
+			SentCount         int64                  `json:"sentCount"`
+			OpenedUniqueCount int64                  `json:"openedUniqueCount"`
+			ScheduledAt       *time.Time             `json:"scheduledAt,omitempty"`
+			SentAt            *time.Time             `json:"sentAt,omitempty"`
+			CreatedAt         time.Time              `json:"createdAt"`
+			UpdatedAt         time.Time              `json:"updatedAt"`
+			Preview           string                 `json:"preview"`
 		}
 
 		cursor, err := h.newsletters.Find(r.Context(), visibilityFilter, findOptions)
@@ -1205,27 +1215,29 @@ func (h *Handler) ListNewsletters(w http.ResponseWriter, r *http.Request) {
 		items := make([]newsletterSummary, 0, len(rawItems))
 		for _, raw := range rawItems {
 			items = append(items, newsletterSummary{
-				ID:            raw.ID,
-				Owner:         raw.Owner,
-				Title:         raw.Title,
-				Language:      raw.Language,
-				Template:      normalizeNewsletterTemplateName(raw.Template),
-				PublicLink:    raw.PublicLink,
-				PublicSlug:    strings.TrimSpace(raw.PublicSlug),
-				HeaderID:      raw.HeaderID,
-				IncludeIndex:  raw.IncludeIndex,
-				ArticleIDs:    raw.ArticleIDs,
-				RecipientIDs:  raw.RecipientIDs,
-				IsFavorite:    raw.IsFavorite,
-				Archived:      raw.Archived,
-				ArchivedAt:    raw.ArchivedAt,
-				Status:        raw.Status,
-				DeliveryError: raw.DeliveryError,
-				ScheduledAt:   raw.ScheduledAt,
-				SentAt:        raw.SentAt,
-				CreatedAt:     raw.CreatedAt,
-				UpdatedAt:     raw.UpdatedAt,
-				Preview:       contentPreview(raw.IntroMarkdown, raw.IntroHTML, 3, 180),
+				ID:                raw.ID,
+				Owner:             raw.Owner,
+				Title:             raw.Title,
+				Language:          raw.Language,
+				Template:          normalizeNewsletterTemplateName(raw.Template),
+				PublicLink:        raw.PublicLink,
+				PublicSlug:        strings.TrimSpace(raw.PublicSlug),
+				HeaderID:          raw.HeaderID,
+				IncludeIndex:      raw.IncludeIndex,
+				ArticleIDs:        raw.ArticleIDs,
+				RecipientIDs:      raw.RecipientIDs,
+				IsFavorite:        raw.IsFavorite,
+				Archived:          raw.Archived,
+				ArchivedAt:        raw.ArchivedAt,
+				Status:            raw.Status,
+				DeliveryError:     raw.DeliveryError,
+				SentCount:         raw.SentCount,
+				OpenedUniqueCount: raw.OpenedUniqueCount,
+				ScheduledAt:       raw.ScheduledAt,
+				SentAt:            raw.SentAt,
+				CreatedAt:         raw.CreatedAt,
+				UpdatedAt:         raw.UpdatedAt,
+				Preview:           contentPreview(raw.IntroMarkdown, raw.IntroHTML, 3, 180),
 			})
 		}
 
@@ -1756,7 +1768,7 @@ func (h *Handler) processScheduledNewsletter(ctx context.Context, newsletter mod
 		senderEmail = u.Email
 	}
 
-	// Collect all recipients for BCC delivery.
+	// Collect all recipients, deduplicated for per-recipient delivery.
 	var recipients []string
 
 	if len(loadedNewsletter.ContactTags) > 0 {
@@ -1787,14 +1799,35 @@ func (h *Handler) processScheduledNewsletter(ctx context.Context, newsletter mod
 		}
 	}
 
+	recipients = deduplicateRecipientEmails(recipients)
+
 	if len(recipients) == 0 {
 		return fmt.Errorf("no recipients for newsletter %s", loadedNewsletter.ID)
 	}
 
+	trackingEnabled := h.isOpenTrackingEnabled()
+	tokensByRecipient := make([]string, 0)
+	if trackingEnabled {
+		tokens, tokenErr := h.createOpenTokensForRecipients(ctx, loadedNewsletter.ID, len(recipients), time.Now().UTC())
+		if tokenErr != nil {
+			log.Printf("open tracking token creation failed newsletter_id=%s error=%v", loadedNewsletter.ID, tokenErr)
+			trackingEnabled = false
+		} else {
+			tokensByRecipient = tokens
+		}
+	}
+
 	log.Printf("smtp send start newsletter_id=%s recipients=%d smtp_host=%s smtp_port=%s", loadedNewsletter.ID, len(recipients), h.cfg.SMTPHost, h.cfg.SMTPPort)
-	if err := h.sendEmailBcc(recipients, loadedNewsletter.Title, htmlBody, textBody, accessToken, senderEmail); err != nil {
-		log.Printf("smtp send failed newsletter_id=%s error=%v", loadedNewsletter.ID, err)
-		return err
+	for i, recipient := range recipients {
+		recipientHTML := htmlBody
+		if trackingEnabled && i < len(tokensByRecipient) {
+			trackingURL := h.buildNewsletterOpenPixelURL(tokensByRecipient[i])
+			recipientHTML = appendTrackingPixel(recipientHTML, trackingURL)
+		}
+		if err := h.sendEmail(recipient, loadedNewsletter.Title, recipientHTML, textBody, accessToken, senderEmail); err != nil {
+			log.Printf("smtp send failed newsletter_id=%s recipient=%s error=%v", loadedNewsletter.ID, recipient, err)
+			return err
+		}
 	}
 	log.Printf("smtp send success newsletter_id=%s recipients=%d", loadedNewsletter.ID, len(recipients))
 
@@ -1808,6 +1841,7 @@ func (h *Handler) processScheduledNewsletter(ctx context.Context, newsletter mod
 			"sentAt":    now,
 			"updatedAt": now,
 		},
+		"$inc":   bson.M{"sentCount": int64(len(recipients))},
 		"$unset": bson.M{"deliveryError": ""},
 	})
 	return err

@@ -218,6 +218,8 @@ function toNewsletterSummary(newsletter: Newsletter): NewsletterSummary {
     archivedAt: newsletter.archivedAt,
     status: newsletter.status,
     deliveryError: newsletter.deliveryError,
+    sentCount: newsletter.sentCount ?? 0,
+    openedUniqueCount: newsletter.openedUniqueCount ?? 0,
     scheduledAt: newsletter.scheduledAt,
     sentAt: newsletter.sentAt,
     createdAt: newsletter.createdAt,
@@ -1271,6 +1273,14 @@ export default function NewslettersPage() {
   };
 
   const selectedNewsletter = newsletters.find((newsletter) => newsletter.id === selectedNewsletterId) ?? null;
+  const selectedNewsletterOpenRate = useMemo(() => {
+    const sentCount = selectedNewsletter?.sentCount ?? 0;
+    const openedUniqueCount = selectedNewsletter?.openedUniqueCount ?? 0;
+    if (!selectedNewsletter || sentCount <= 0) {
+      return null;
+    }
+    return Math.round((openedUniqueCount / sentCount) * 1000) / 10;
+  }, [selectedNewsletter]);
 
   const startPaneResize = (event: ReactMouseEvent<HTMLDivElement>) => {
     event.preventDefault();
@@ -1470,6 +1480,13 @@ export default function NewslettersPage() {
                 <Text size="xs" c={autosaveStatus === "error" ? "red" : "dimmed"}>
                   Autosave failed
                 </Text>
+              ) : null}
+              {selectedNewsletterId && selectedNewsletter ? (
+                <Group gap={10} wrap="nowrap">
+                  <Text size="xs" c="dimmed">Sent: {selectedNewsletter.sentCount ?? 0}</Text>
+                  <Text size="xs" c="dimmed">Opened: {selectedNewsletter.openedUniqueCount ?? 0}</Text>
+                  <Text size="xs" c="dimmed">Open rate: {selectedNewsletterOpenRate !== null ? `${selectedNewsletterOpenRate}%` : "-"}</Text>
+                </Group>
               ) : null}
             </Group>
             {selectedNewsletterId ? (

@@ -73,6 +73,8 @@ export interface Newsletter {
   archivedAt?: string;
   status: NewsletterStatus;
   deliveryError?: string;
+  sentCount: number;
+  openedUniqueCount: number;
   scheduledAt?: string;
   sentAt?: string;
   createdAt: string;
@@ -98,6 +100,8 @@ export interface NewsletterSummary {
   archivedAt?: string;
   status: NewsletterStatus;
   deliveryError?: string;
+  sentCount: number;
+  openedUniqueCount: number;
   scheduledAt?: string;
   sentAt?: string;
   createdAt: string;

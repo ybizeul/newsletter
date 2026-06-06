@@ -60,6 +60,10 @@ export default defineConfig({
       "/view": {
         target: "http://localhost:8080",
         headers: { "X-Forwarded-Proto": "https" }
+      },
+      "/t": {
+        target: "http://localhost:8080",
+        headers: { "X-Forwarded-Proto": "https" }
       }
     }
   }

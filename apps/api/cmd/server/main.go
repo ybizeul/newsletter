@@ -47,6 +47,9 @@ func main() {
 	if err := h.EnsureArticleTranslations(ctx); err != nil {
 		log.Fatalf("failed to ensure article translations: %v", err)
 	}
+	if err := h.EnsureNewsletterOpenTracking(ctx); err != nil {
+		log.Fatalf("failed to ensure newsletter open tracking: %v", err)
+	}
 	webHandler := webui.Handler()
 	go startScheduler(h, cfg.ScheduleTick)
 
@@ -74,6 +77,9 @@ func main() {
 	r.Get("/callback", auth.HandleCallback)
 	r.Get("/view/{slug}", func(w http.ResponseWriter, r *http.Request) {
 		h.GetPublicNewsletterBySlug(w, r, chi.URLParam(r, "slug"))
+	})
+	r.Get("/t/{token}.gif", func(w http.ResponseWriter, r *http.Request) {
+		h.TrackNewsletterOpen(w, r, chi.URLParam(r, "token"))
 	})
 
 	r.Route("/api", func(api chi.Router) {
