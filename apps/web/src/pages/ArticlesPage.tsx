@@ -2270,6 +2270,8 @@ export default function ArticlesPage() {
                   <Box>
                     <SegmentedControl
                       size="xs"
+                      withItemsBorders={false}
+                      radius="xl"
                       value={selectedLanguage}
                       onChange={onSelectEditorLanguageSegment}
                       aria-label={`Language: ${languageLabel(selectedLanguage)}`}
