@@ -42,7 +42,6 @@ If key inputs are missing, ask for them before writing.
    - Mention scope when relevant (mobile, admin-only, multilingual flow).
 6. Add release entry with this shape:
    - `## vX.Y.Z - YYYY-MM-DD`
-   - `Changes since vA.B.C:`
    - 3-10 concise bullets ordered by user value.
 7. Quality-check before saving:
    - Every bullet answers "What changed for the user?"

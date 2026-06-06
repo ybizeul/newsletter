@@ -2,9 +2,16 @@
 
 All notable changes are documented from git tags and commit messages.
 
+## v1.3.1 - 2026-06-06
+
+- Improved editor page layouts for articles, headers, and newsletters, with clearer structure and easier scanning while editing.
+- Improved language selection flows in the editor so switching and adding translations is more direct.
+- Added one-click public newsletter link copy, making it faster to share published editions.
+- Added newsletter archival date controls with an integrated date picker, so archived editions can reflect the correct archival date.
+- Fixed seeded translation draft behavior to reduce accidental creation of unnecessary translation variants.
+
 ## v1.3 - 2026-06-05
 
-Changes since v1.2:
 - Added shareable public newsletter links with stable slugs and routing, making it easier to open published content directly.
 - Improved public-link behavior in local development so preview and shared URLs resolve more reliably.
 - Improved newsletter readability and visual consistency with better line-height, preserved text-transform styles, and more consistent typography.
@@ -13,13 +20,11 @@ Changes since v1.2:
 
 ## v1.2 - 2026-06-03
 
-Changes since v1.1:
 - Streamlined newsletter option pickers for language, header, and template selection with a clearer, more consistent chooser experience.
 - Added persistent article search menu preferences so your browsing setup is remembered between sessions.
 
 ## v1.1 - 2026-06-03
 
-Changes since v1.0.1:
 - Added full multi-language workflow for articles and newsletters, including translation management and better fallback behavior.
 - Introduced newsletter templates and improved option pickers for language, header, and template selection.
 - Improved autosave reliability and stale-edit protection to reduce the risk of losing in-progress edits.
@@ -29,13 +34,11 @@ Changes since v1.0.1:
 
 ## v1.0.1 - 2026-06-02
 
-Changes since v1.0.0:
 - Fixed table width inconsistencies between the editor and newsletter preview.
 - Simplified newsletter creation flow by removing an extra modal step and related validation friction.
 
 ## v1.0.0 - 2026-05-19
 
-Changes since v0.9.0:
 - Launched the first stable platform release with complete workflows for articles, headers, contacts, and newsletters.
 - Added rich newsletter composition features: intro/footer editing, header support, optional index generation, content width controls, preview improvements, and better email HTML compatibility.
 - Introduced autosave for articles and newsletters with stronger pending-edit handling to reduce data loss and race-condition issues.
