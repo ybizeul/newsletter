@@ -10,7 +10,6 @@ import {
   Loader,
   Modal,
   Popover,
-  Anchor,
   ScrollArea,
   SegmentedControl,
   Select,
@@ -28,6 +27,7 @@ import {
   IconEye,
   IconFiles,
   IconGripVertical,
+  IconLink,
   IconPlus,
   IconRefresh,
   IconSend,
@@ -972,6 +972,37 @@ export default function NewslettersPage() {
     }
   };
 
+  const onCopyPublicLink = async () => {
+    if (!publicSlug) {
+      return;
+    }
+
+    const publicUrl = `${window.location.origin}/view/${publicSlug}`;
+
+    try {
+      if (navigator.clipboard && typeof navigator.clipboard.writeText === "function") {
+        await navigator.clipboard.writeText(publicUrl);
+        return;
+      }
+
+      const textArea = document.createElement("textarea");
+      textArea.value = publicUrl;
+      textArea.setAttribute("readonly", "");
+      textArea.style.position = "fixed";
+      textArea.style.opacity = "0";
+      document.body.appendChild(textArea);
+      textArea.focus();
+      textArea.select();
+      const copied = document.execCommand("copy");
+      document.body.removeChild(textArea);
+      if (!copied) {
+        throw new Error("Copy failed");
+      }
+    } catch {
+      setError("Failed to copy public URL");
+    }
+  };
+
   useEffect(() => {
     if (!selectedNewsletterId || isSubmitting || isLoadingNewsletterRef.current) {
       return;
@@ -1552,17 +1583,28 @@ export default function NewslettersPage() {
             ) : null}
           </Group>
 
-          <Checkbox
-            label="Public link"
-            description="Expose this newsletter at a public URL without authentication."
-            checked={publicLink}
-            onChange={(event) => setPublicLink(event.currentTarget.checked)}
-          />
-          {publicLink && publicSlug ? (
-            <Text size="sm" c="dimmed">
-              Public URL: <Anchor href={`/view/${publicSlug}`} target="_blank" rel="noreferrer">/view/{publicSlug}</Anchor>
-            </Text>
-          ) : null}
+          <Group justify="space-between" align="center" wrap="nowrap">
+            <Checkbox
+              label="Public link"
+              description="Expose this newsletter at a public URL without authentication."
+              checked={publicLink}
+              onChange={(event) => setPublicLink(event.currentTarget.checked)}
+              style={{ flex: 1 }}
+            />
+            {publicLink && publicSlug ? (
+              <ActionIcon
+                variant="subtle"
+                size="md"
+                aria-label="Copy public link"
+                title="Copy public link"
+                onClick={() => {
+                  void onCopyPublicLink();
+                }}
+              >
+                <IconLink size={16} />
+              </ActionIcon>
+            ) : null}
+          </Group>
 
           <Group grow align="flex-start" wrap="nowrap">
             <Select
