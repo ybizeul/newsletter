@@ -1420,9 +1420,7 @@ func (h *Handler) UpdateNewsletter(w http.ResponseWriter, r *http.Request, id st
 	}
 	unsetFields := bson.M{}
 	if req.Archived {
-		if existing.ArchivedAt != nil {
-			setFields["archivedAt"] = existing.ArchivedAt
-		} else {
+		if existing.ArchivedAt == nil {
 			setFields["archivedAt"] = now
 		}
 	} else {

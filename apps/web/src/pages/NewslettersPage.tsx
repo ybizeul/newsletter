@@ -131,7 +131,8 @@ function getNewsletterListDateValue(newsletter: NewsletterSummary): string {
 }
 
 function getNewsletterListSortTime(newsletter: NewsletterSummary): number {
-  return new Date(getNewsletterListDateValue(newsletter)).getTime() || 0;
+  const time = new Date(getNewsletterListDateValue(newsletter)).getTime();
+  return Number.isNaN(time) ? Number.NEGATIVE_INFINITY : time;
 }
 
 function getDefaultNewsletterTitle(date = new Date()): string {
