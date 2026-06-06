@@ -114,7 +114,7 @@ function getStoredFavoriteNewsletterId(): string | null {
   return trimmed.length > 0 ? trimmed : null;
 }
 
-function formatNewsletterCreatedAt(value: string): string {
+function formatNewsletterListDate(value: string): string {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) {
     return "Unknown date";
@@ -124,6 +124,14 @@ function formatNewsletterCreatedAt(value: string): string {
     month: "short",
     day: "numeric"
   });
+}
+
+function getNewsletterListDateValue(newsletter: NewsletterSummary): string {
+  return newsletter.archivedAt ?? newsletter.createdAt;
+}
+
+function getNewsletterListSortTime(newsletter: NewsletterSummary): number {
+  return new Date(getNewsletterListDateValue(newsletter)).getTime() || 0;
 }
 
 function getDefaultNewsletterTitle(date = new Date()): string {
@@ -205,6 +213,7 @@ function toNewsletterSummary(newsletter: Newsletter): NewsletterSummary {
     recipientIds: newsletter.recipientIds,
     isFavorite: newsletter.isFavorite,
     archived: newsletter.archived,
+    archivedAt: newsletter.archivedAt,
     status: newsletter.status,
     deliveryError: newsletter.deliveryError,
     scheduledAt: newsletter.scheduledAt,
@@ -267,6 +276,7 @@ export default function NewslettersPage() {
   const [footerEditorKey, setFooterEditorKey] = useState("");
   const [includeIndex, setIncludeIndex] = useState(false);
   const [archived, setArchived] = useState(false);
+  const [archivedAt, setArchivedAt] = useState<string | null>(null);
   const [contentWidth, setContentWidth] = useState(680);
   const [articleIds, setArticleIDs] = useState<string[]>([]);
   const [draggedArticleId, setDraggedArticleId] = useState<string | null>(null);
@@ -543,6 +553,7 @@ export default function NewslettersPage() {
     setFooterMarkdown("");
     setIncludeIndex(false);
     setArchived(false);
+    setArchivedAt(null);
     setContentWidth(680);
     setArticleIDs([]);
     setDraggedArticleId(null);
@@ -595,6 +606,7 @@ export default function NewslettersPage() {
       setFooterEditorKey(fullNewsletter.id + "-footer");
       setIncludeIndex(Boolean(fullNewsletter.includeIndex));
       setArchived(Boolean(fullNewsletter.archived));
+      setArchivedAt(fullNewsletter.archivedAt ?? null);
       setContentWidth(fullNewsletter.contentWidth || 680);
       setArticleIDs(fullNewsletter.articleIds);
       setRecipientRaw(fullNewsletter.recipientIds.join(","));
@@ -825,6 +837,7 @@ export default function NewslettersPage() {
       if (selectedNewsletterId) {
         const updated = await updateNewsletter(selectedNewsletterId, payload);
         setPublicSlug((updated.publicSlug ?? "").trim());
+        setArchivedAt(updated.archivedAt ?? null);
         setNewsletters((current) =>
           current.map((newsletter) => (newsletter.id === selectedNewsletterId ? withFavoriteFlag(toNewsletterSummary(updated)) : newsletter))
         );
@@ -1172,7 +1185,14 @@ export default function NewslettersPage() {
 
         <ScrollArea h="calc(100% - 52px)" offsetScrollbars>
           <Stack gap={0}>
-            {[...newsletters].sort((a, b) => (a.archived === b.archived ? 0 : a.archived ? 1 : -1)).map((newsletter) => (
+            {[...newsletters]
+              .sort((a, b) => {
+                if (a.archived !== b.archived) {
+                  return a.archived ? 1 : -1;
+                }
+                return getNewsletterListSortTime(b) - getNewsletterListSortTime(a);
+              })
+              .map((newsletter) => (
               (() => {
                 const titleText = cutByChars(newsletter.title, 72);
                 const previewText = newsletter.preview;
@@ -1209,7 +1229,7 @@ export default function NewslettersPage() {
                       ) : null}
                     </Group>
                     <Text size="xs" c="dimmed" style={{ flexShrink: 0 }}>
-                      {formatNewsletterCreatedAt(newsletter.createdAt)}
+                      {formatNewsletterListDate(getNewsletterListDateValue(newsletter))}
                     </Text>
                   </Group>
                   {previewText ? (
@@ -1379,11 +1399,18 @@ export default function NewslettersPage() {
             ) : null}
           </Group>
 
-          <Checkbox
-            label="Archived"
-            checked={archived}
-            onChange={(event) => setArchived(event.currentTarget.checked)}
-          />
+          <Group align="center" gap="xs">
+            <Checkbox
+              label="Archived"
+              checked={archived}
+              onChange={(event) => setArchived(event.currentTarget.checked)}
+            />
+            {archived ? (
+              <Text size="xs" c="dimmed">
+                {archivedAt ? `Archived on ${formatNewsletterListDate(archivedAt)}` : "Archival date will be set when saved"}
+              </Text>
+            ) : null}
+          </Group>
 
           <Checkbox
             label="Public link"

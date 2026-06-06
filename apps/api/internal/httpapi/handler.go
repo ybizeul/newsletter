@@ -1128,6 +1128,7 @@ func (h *Handler) ListNewsletters(w http.ResponseWriter, r *http.Request) {
 			"recipientIds":   1,
 			"isFavorite":     1,
 			"archived":       1,
+			"archivedAt":     1,
 			"status":         1,
 			"deliveryError":  1,
 			"scheduledAt":    1,
@@ -1154,6 +1155,7 @@ func (h *Handler) ListNewsletters(w http.ResponseWriter, r *http.Request) {
 			RecipientIDs   []string               `bson:"recipientIds"`
 			IsFavorite     bool                   `bson:"isFavorite"`
 			Archived       bool                   `bson:"archived"`
+			ArchivedAt     *time.Time             `bson:"archivedAt,omitempty"`
 			Status         model.NewsletterStatus `bson:"status"`
 			DeliveryError  string                 `bson:"deliveryError,omitempty"`
 			ScheduledAt    *time.Time             `bson:"scheduledAt,omitempty"`
@@ -1176,6 +1178,7 @@ func (h *Handler) ListNewsletters(w http.ResponseWriter, r *http.Request) {
 			RecipientIDs  []string               `json:"recipientIds"`
 			IsFavorite    bool                   `json:"isFavorite"`
 			Archived      bool                   `json:"archived"`
+			ArchivedAt    *time.Time             `json:"archivedAt,omitempty"`
 			Status        model.NewsletterStatus `json:"status"`
 			DeliveryError string                 `json:"deliveryError,omitempty"`
 			ScheduledAt   *time.Time             `json:"scheduledAt,omitempty"`
@@ -1214,6 +1217,7 @@ func (h *Handler) ListNewsletters(w http.ResponseWriter, r *http.Request) {
 				RecipientIDs:  raw.RecipientIDs,
 				IsFavorite:    raw.IsFavorite,
 				Archived:      raw.Archived,
+				ArchivedAt:    raw.ArchivedAt,
 				Status:        raw.Status,
 				DeliveryError: raw.DeliveryError,
 				ScheduledAt:   raw.ScheduledAt,
@@ -1394,8 +1398,8 @@ func (h *Handler) UpdateNewsletter(w http.ResponseWriter, r *http.Request, id st
 	}
 	newsletterLanguage := normalizeArticleLanguage(req.Language, normalizeArticleLanguage(string(existing.Language), model.LanguageFrench))
 
-	update := bson.M{
-		"$set": bson.M{
+	now := time.Now().UTC()
+	setFields := bson.M{
 			"title":           strings.TrimSpace(req.Title),
 			"language":        newsletterLanguage,
 			"template":        templateName,
@@ -1412,18 +1416,31 @@ func (h *Handler) UpdateNewsletter(w http.ResponseWriter, r *http.Request, id st
 			"recipientIds":    recipientIDs,
 			"contactTags":     normalizeContactTags(req.ContactTags),
 			"contactTagsMode": normalizeContactTagsMode(req.ContactTagsMode),
-			"updatedAt":       time.Now().UTC(),
-		},
+			"updatedAt":       now,
 	}
+	unsetFields := bson.M{}
+	if req.Archived {
+		if existing.ArchivedAt != nil {
+			setFields["archivedAt"] = existing.ArchivedAt
+		} else {
+			setFields["archivedAt"] = now
+		}
+	} else {
+		unsetFields["archivedAt"] = ""
+	}
+	update := bson.M{"$set": setFields}
 	if req.PublicLink {
 		publicSlug, slugErr := h.generateUniqueNewsletterSlug(r.Context(), req.Title, id)
 		if slugErr != nil {
 			h.writeError(w, http.StatusInternalServerError, "failed to allocate public slug")
 			return
 		}
-		update["$set"].(bson.M)["publicSlug"] = publicSlug
+		setFields["publicSlug"] = publicSlug
 	} else {
-		update["$unset"] = bson.M{"publicSlug": ""}
+		unsetFields["publicSlug"] = ""
+	}
+	if len(unsetFields) > 0 {
+		update["$unset"] = unsetFields
 	}
 
 	result, err := h.newsletters.UpdateByID(r.Context(), id, update)
