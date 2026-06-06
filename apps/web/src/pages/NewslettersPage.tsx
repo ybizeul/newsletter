@@ -22,13 +22,11 @@ import {
 import { useMediaQuery } from "@mantine/hooks";
 import {
   IconChevronDown,
-  IconChevronLeft,
   IconChevronUp,
   IconEye,
   IconFiles,
   IconGripVertical,
   IconLink,
-  IconPlus,
   IconRefresh,
   IconSend,
   IconStar,
@@ -1434,7 +1432,7 @@ export default function NewslettersPage() {
         <Stack gap={0} style={{ height: "100%", minHeight: 0 }}>
           <Box
             style={{
-              background: "var(--mantine-color-gray-1)",
+              background: "var(--mantine-color-default)",
               borderBottom: "1px solid var(--mantine-color-default-border)",
               borderRadius: 0,
               padding: "8px 10px"
@@ -1442,23 +1440,6 @@ export default function NewslettersPage() {
           >
           <Group justify="space-between" wrap="nowrap" ref={headerRowRef} style={{ overflow: "hidden", minWidth: 0 }}>
             <Group gap="xs" wrap="nowrap" ref={headerLeftRef}>
-              {isMobile ? (
-                <ActionIcon variant="light" size="md" aria-label="Back" onClick={() => setIsMobileEditorOpen(false)}>
-                  <IconChevronLeft size={18} />
-                </ActionIcon>
-              ) : null}
-              {isMobile && selectedNewsletterId ? (
-                <ActionIcon
-                  variant="light"
-                  size="md"
-                  aria-label="New Newsletter"
-                  title="New Newsletter"
-                  onClick={() => void onCreateNewsletter()}
-                  loading={isCreatingNewsletter}
-                >
-                  <IconPlus size={16} />
-                </ActionIcon>
-              ) : null}
               <Text fw={700} style={{ whiteSpace: "nowrap", flexShrink: 0 }}>{selectedNewsletterId ? "Edit Newsletter" : "New Newsletter"}</Text>
               {selectedNewsletterId ? (
                 <ActionIcon
@@ -1483,9 +1464,11 @@ export default function NewslettersPage() {
               ) : null}
               {selectedNewsletterId && selectedNewsletter ? (
                 <Group gap={10} wrap="nowrap">
-                  <Text size="xs" c="dimmed">Sent: {selectedNewsletter.sentCount ?? 0}</Text>
-                  <Text size="xs" c="dimmed">Opened: {selectedNewsletter.openedUniqueCount ?? 0}</Text>
-                  <Text size="xs" c="dimmed">Open rate: {selectedNewsletterOpenRate !== null ? `${selectedNewsletterOpenRate}%` : "-"}</Text>
+                  <Tooltip label="Sent / Opened / Open rate" position="bottom" withArrow>
+                    <Text size="xs" c="dimmed">
+                      {selectedNewsletter.sentCount ?? 0} / {selectedNewsletter.openedUniqueCount ?? 0} / {selectedNewsletterOpenRate !== null ? `${selectedNewsletterOpenRate}%` : "-"}
+                    </Text>
+                  </Tooltip>
                 </Group>
               ) : null}
             </Group>

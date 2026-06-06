@@ -29,7 +29,7 @@ import {
   useCombobox
 } from "@mantine/core";
 import { useMediaQuery } from "@mantine/hooks";
-import { IconChevronDown, IconChevronLeft, IconFiles, IconMail, IconPencil, IconPlus, IconPointFilled, IconRefresh, IconSearch, IconTrash, IconUpload, IconUserCheck, IconUserFilled, IconX } from "@tabler/icons-react";
+import { IconChevronDown, IconFiles, IconMail, IconPencil, IconPointFilled, IconRefresh, IconSearch, IconTrash, IconUpload, IconUserCheck, IconUserFilled, IconX } from "@tabler/icons-react";
 import { SimpleEditor } from "@/components/tiptap-templates/simple/simple-editor";
 import { renderToStaticMarkup } from "react-dom/server";
 import { useParams } from "react-router-dom";
@@ -2236,7 +2236,7 @@ export default function ArticlesPage() {
         >
           <Box
             style={{
-              background: "var(--mantine-color-gray-1)",
+              background: "var(--mantine-color-default)",
               borderBottom: "1px solid var(--mantine-color-default-border)",
               borderRadius: 0,
               padding: "8px 10px"
@@ -2244,26 +2244,6 @@ export default function ArticlesPage() {
           >
           <Group justify="space-between" wrap="nowrap" ref={headerRowRef} style={{ overflow: "hidden", minWidth: 0 }}>
             <Group gap="xs" wrap="nowrap" ref={headerLeftRef}>
-              {isMobile ? (
-                <ActionIcon variant="light" size="md" aria-label="Back" onClick={() => setIsMobileEditorOpen(false)}>
-                  <IconChevronLeft size={18} />
-                </ActionIcon>
-              ) : null}
-              {isMobile && editingId ? (
-                <ActionIcon
-                  variant="light"
-                  size="md"
-                  aria-label="New Article"
-                  title="New Article"
-                  onClick={() => {
-                    pendingEditRef.current = null;
-                    setIsManualNewArticleMode(true);
-                    resetForm();
-                  }}
-                >
-                  <IconPlus size={16} />
-                </ActionIcon>
-              ) : null}
               {editingId && !isEditingOwnedByCurrentUser ? (
                 <Tooltip label="Read only (not owner)" position="bottom" withArrow>
                   <Text fw={700} style={{ whiteSpace: "nowrap", flexShrink: 0, cursor: "help" }}>

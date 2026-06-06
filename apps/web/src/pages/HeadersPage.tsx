@@ -493,7 +493,7 @@ export default function HeadersPage() {
         <Stack gap={0} style={{ height: "100%", minHeight: 0 }}>
           <Box
             style={{
-              background: "var(--mantine-color-gray-1)",
+              background: "var(--mantine-color-default)",
               borderBottom: "1px solid var(--mantine-color-default-border)",
               borderRadius: 0,
               padding: "8px 10px"
