@@ -2,6 +2,14 @@
 
 All notable changes are documented from git tags and commit messages.
 
+## v1.4 - 2026-06-07
+
+- Added newsletter open tracking and open-rate reporting so editors can see how many recipients opened a sent edition.
+- Improved language selection UI with cleaner, easier-to-scan options.
+- Refined page visuals across articles, headers, and newsletters with a more consistent default background treatment.
+- Improved "bare" theme newsletter template readability with spacing and layout polish for clearer rendering.
+- Removed the preview-page copy-to-clipboard action to simplify the preview overlay.
+
 ## v1.3.1 - 2026-06-06
 
 - Improved editor page layouts for articles, headers, and newsletters, with clearer structure and easier scanning while editing.
