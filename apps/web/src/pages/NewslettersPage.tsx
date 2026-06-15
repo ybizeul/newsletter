@@ -241,6 +241,7 @@ export default function NewslettersPage() {
   const wasNewslettersRouteActiveRef = useRef(false);
   const [leftPaneWidth, setLeftPaneWidth] = useState(getStoredNewslettersPaneWidth);
   const isMobile = useMediaQuery("(max-width: 48em)");
+  const isTouchDevice = useMediaQuery("(pointer: coarse)");
   const [isMobileEditorOpen, setIsMobileEditorOpen] = useState(false);
   const [isCompactActions, setIsCompactActions] = useState(false);
   const navigate = useNavigate();
@@ -1723,24 +1724,24 @@ export default function NewslettersPage() {
               {selectedArticleRows.map((article, index) => (
                 <div
                   key={article.id}
-                  draggable={!isMobile}
+                  draggable={!isTouchDevice}
                   onDragStart={() => {
-                    if (!isMobile) {
+                    if (!isTouchDevice) {
                       setDraggedArticleId(article.id);
                     }
                   }}
                   onDragEnd={() => {
-                    if (!isMobile) {
+                    if (!isTouchDevice) {
                       setDraggedArticleId(null);
                     }
                   }}
                   onDragOver={(event) => {
-                    if (!isMobile) {
+                    if (!isTouchDevice) {
                       event.preventDefault();
                     }
                   }}
                   onDragEnter={() => {
-                    if (!isMobile && draggedArticleId) {
+                    if (!isTouchDevice && draggedArticleId) {
                       moveArticle(draggedArticleId, article.id);
                     }
                   }}
@@ -1750,12 +1751,12 @@ export default function NewslettersPage() {
                     borderRadius: 8,
                     padding: "8px 10px",
                     background: "var(--mantine-color-body)",
-                    cursor: isMobile ? "default" : "grab"
+                    cursor: isTouchDevice ? "default" : "grab"
                   }}
                 >
                   <Group justify="space-between" wrap="nowrap" style={{ width: "100%" }}>
                     <Group gap="xs" wrap="nowrap" style={{ flex: 1, minWidth: 0 }}>
-                      {!isMobile ? (
+                      {!isTouchDevice ? (
                         <div
                           style={{
                             display: "inline-flex",
@@ -1808,7 +1809,7 @@ export default function NewslettersPage() {
                       </Text>
                     </Group>
                     <Group gap={4} wrap="nowrap">
-                      {isMobile ? (
+                      {isTouchDevice ? (
                         <>
                           <ActionIcon
                             variant="subtle"
