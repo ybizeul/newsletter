@@ -3,6 +3,7 @@ package httpapi
 import (
 	"context"
 	"fmt"
+	"html"
 	"strings"
 	"time"
 
@@ -67,7 +68,9 @@ func isBlankArticleTranslationInput(title, markdown, contentHTML string) bool {
 	if strings.TrimSpace(markdown) != "" {
 		return false
 	}
-	return stripHTMLTags(contentHTML) == ""
+	text := html.UnescapeString(stripHTMLTags(contentHTML))
+	text = strings.ReplaceAll(text, "\u00a0", " ")
+	return strings.TrimSpace(text) == ""
 }
 
 func (h *Handler) loadArticleTranslations(ctx context.Context, articleIDs []string) (map[string]map[model.LanguageCode]model.ArticleTranslation, error) {
