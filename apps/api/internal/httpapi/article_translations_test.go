@@ -41,7 +41,6 @@ func TestIsBlankArticleTranslationInput(t *testing.T) {
 	}
 
 	for _, tc := range tests {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 			got := isBlankArticleTranslationInput(tc.title, tc.markdown, tc.contentHTML)

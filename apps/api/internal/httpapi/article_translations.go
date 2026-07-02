@@ -2,8 +2,8 @@ package httpapi
 
 import (
 	"context"
-	"html"
 	"fmt"
+	"html"
 	"strings"
 	"time"
 
