@@ -129,6 +129,30 @@ func TestEnforceContentTableStyles_SetsTableFullWidth(t *testing.T) {
 	}
 }
 
+func TestSanitizeHTML_PreservesOrderedListStartAttribute(t *testing.T) {
+	input := `<ol start="3"><li>Third item</li><li>Fourth item</li></ol>`
+
+	output := sanitizeHTML(input)
+
+	if !strings.Contains(output, `start="3"`) {
+		t.Fatalf("expected start attribute to be preserved on ol, got: %s", output)
+	}
+}
+
+func TestRenderMarkdownToSafeHTML_PreservesOrderedListStartAttribute(t *testing.T) {
+	// Pass raw HTML through renderMarkdownToSafeHTML (goldmark passes it through as-is with WithUnsafe)
+	input := `<ol start="5"><li>Fifth item</li></ol>`
+
+	html, err := renderMarkdownToSafeHTML(input)
+	if err != nil {
+		t.Fatalf("renderMarkdownToSafeHTML returned error: %v", err)
+	}
+
+	if !strings.Contains(html, `start="5"`) {
+		t.Fatalf("expected start attribute to be preserved on ol, got: %s", html)
+	}
+}
+
 func TestEnforceContentTableStyles_PreservesExistingTableWidth(t *testing.T) {
 	input := `<table style="width:50%;border-collapse:collapse;"><tr><td>cell</td></tr></table>`
 
