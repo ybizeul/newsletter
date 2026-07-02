@@ -3122,6 +3122,7 @@ func sanitizeHTML(htmlInput string) string {
 	)
 	policy.AllowElements("table", "thead", "tbody", "tfoot", "tr", "th", "td", "blockquote")
 	policy.AllowAttrs("align", "valign", "colspan", "rowspan").OnElements("th", "td")
+	policy.AllowAttrs("start").Matching(regexp.MustCompile(`^\d+$`)).OnElements("ol")
 	sanitized := policy.Sanitize(htmlInput)
 	sanitized = strings.ReplaceAll(sanitized, "<blockquote>", `<blockquote style="border-left:4px solid #ccc;background-color:#f5f5f5;margin:1em 0;padding:0.75em 1em">`)
 	return sanitized
@@ -3192,6 +3193,7 @@ func renderMarkdownToSafeHTML(markdown string) (string, error) {
 	)
 	policy.AllowElements("table", "thead", "tbody", "tfoot", "tr", "th", "td", "blockquote")
 	policy.AllowAttrs("align", "valign", "colspan", "rowspan").OnElements("th", "td")
+	policy.AllowAttrs("start").Matching(regexp.MustCompile(`^\d+$`)).OnElements("ol")
 
 	sanitized := policy.Sanitize(raw.String())
 	sanitized = strings.ReplaceAll(sanitized, "<blockquote>", `<blockquote style="border-left:4px solid #ccc;background-color:#f5f5f5;margin:1em 0;padding:0.75em 1em">`)
