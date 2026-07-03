@@ -62,6 +62,7 @@ import {
   LinkButton,
 } from "@/components/tiptap-ui/link-popover"
 import { MarkButton } from "@/components/tiptap-ui/mark-button"
+import { ClearFormattingButton } from "@/components/tiptap-ui/clear-formatting-button"
 import { TextAlignButton } from "@/components/tiptap-ui/text-align-button"
 import { UndoRedoButton } from "@/components/tiptap-ui/undo-redo-button"
 import { TableDropdownMenu } from "@/components/tiptap-ui/table-dropdown-menu/table-dropdown-menu"
@@ -146,6 +147,7 @@ const MainToolbarContent = ({
           <ColorHighlightPopoverButton onClick={onHighlighterClick} />
         )}
         {!isMobile ? <LinkPopover /> : <LinkButton onClick={onLinkClick} />}
+        <ClearFormattingButton />
       </ToolbarGroup>
 
       <ToolbarSeparator />
