@@ -2931,7 +2931,7 @@ export default function ArticlesPage() {
                     <input
                       ref={iconSvgUploadInputRef}
                       type="file"
-                      accept=".svg,image/svg+xml"
+                      accept=".svg,image/svg+xml,text/plain,text/xml,application/xml"
                       onChange={onUploadTopicIconSvg}
                       style={{ display: "none" }}
                     />
