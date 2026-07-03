@@ -271,10 +271,10 @@ export default function NewslettersPage() {
   const [newsletterTemplate, setNewsletterTemplate] = useState(DEFAULT_NEWSLETTER_TEMPLATE);
   const [publicLink, setPublicLink] = useState(false);
   const [publicSlug, setPublicSlug] = useState("");
-  const [, setIntroMarkdown] = useState("");
+  const [introMarkdown, setIntroMarkdown] = useState("");
   const [introContentHTML, setIntroContentHTML] = useState("");
   const [introEditorKey, setIntroEditorKey] = useState("");
-  const [, setFooterMarkdown] = useState("");
+  const [footerMarkdown, setFooterMarkdown] = useState("");
   const [footerContentHTML, setFooterContentHTML] = useState("");
   const [footerEditorKey, setFooterEditorKey] = useState("");
   const [includeIndex, setIncludeIndex] = useState(false);
@@ -639,12 +639,13 @@ export default function NewslettersPage() {
         template: (fullNewsletter.template ?? DEFAULT_NEWSLETTER_TEMPLATE).trim() || DEFAULT_NEWSLETTER_TEMPLATE,
         publicLink: Boolean(fullNewsletter.publicLink),
         headerId: fullNewsletter.headerId ?? "",
-        introMarkdown: "",
+        introMarkdown: fullNewsletter.introMarkdown ?? "",
         introHTML: introHTML,
-        footerMarkdown: "",
+        footerMarkdown: fullNewsletter.footerMarkdown ?? "",
         footerHTML: footerHTML,
         includeIndex: Boolean(fullNewsletter.includeIndex),
         contentWidth: fullNewsletter.contentWidth || 680,
+        archived: Boolean(fullNewsletter.archived),
         articleIds: fullNewsletter.articleIds,
         recipientIds: fullNewsletter.recipientIds,
         contactTags: fullNewsletter.contactTags ?? [],
@@ -786,9 +787,9 @@ export default function NewslettersPage() {
     template: newsletterTemplate,
     publicLink,
     headerId: headerId ?? "",
-    introMarkdown: "",
+    introMarkdown: introMarkdown,
     introHTML: introContentHTML,
-    footerMarkdown: "",
+    footerMarkdown: footerMarkdown,
     footerHTML: footerContentHTML,
     includeIndex,
     contentWidth,
@@ -1013,7 +1014,7 @@ export default function NewslettersPage() {
   };
 
   useEffect(() => {
-    if (!selectedNewsletterId || isSubmitting || isLoadingNewsletterRef.current) {
+    if (!selectedNewsletterId || isSubmitting || isLoadingNewsletterRef.current || autosaveStatus === "saving") {
       return;
     }
 
@@ -1065,7 +1066,7 @@ export default function NewslettersPage() {
         window.clearTimeout(autosaveTimerRef.current);
       }
     };
-  }, [selectedNewsletterId, title, newsletterLanguage, newsletterTemplate, publicLink, headerId, introContentHTML, footerContentHTML, includeIndex, contentWidth, archived, articleIds, recipientRaw, recipientMode, contactTags, contactTagsMode, hasTooManyRecipients, isSubmitting]);
+  }, [selectedNewsletterId, title, newsletterLanguage, newsletterTemplate, publicLink, headerId, introMarkdown, introContentHTML, footerMarkdown, footerContentHTML, includeIndex, contentWidth, archived, articleIds, recipientRaw, recipientMode, contactTags, contactTagsMode, hasTooManyRecipients, isSubmitting, autosaveStatus]);
 
   useEffect(() => () => {
     if (autosaveTimerRef.current !== null) {
