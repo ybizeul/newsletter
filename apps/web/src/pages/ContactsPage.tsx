@@ -81,7 +81,7 @@ export default function ContactsPage() {
     if (!query) return contacts;
     const words = query.split(/\s+/).filter(Boolean);
     return contacts.filter((contact) => {
-      const haystack = [contact.firstName, contact.lastName, contact.email].join(" ").toLowerCase();
+      const haystack = [contact.firstName, contact.lastName, contact.email, ...(contact.tags ?? [])].join(" ").toLowerCase();
       return words.every((word) => haystack.includes(word));
     });
   }, [contactSearchQuery, contacts]);
