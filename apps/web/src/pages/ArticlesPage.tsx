@@ -1385,9 +1385,20 @@ export default function ArticlesPage() {
         return;
       }
 
+      // On iOS, SVG files may be reported with a non-SVG MIME type (e.g. text/plain).
+      // Normalize the data URL to use image/svg+xml so downstream consumers accept it.
+      let dataUrl = reader.result;
+      if (!dataUrl.startsWith("data:image/svg+xml")) {
+        const commaIndex = dataUrl.indexOf(",");
+        if (commaIndex !== -1) {
+          const isBase64 = dataUrl.slice(0, commaIndex).includes(";base64");
+          dataUrl = `data:image/svg+xml${isBase64 ? ";base64" : ""},${dataUrl.slice(commaIndex + 1)}`;
+        }
+      }
+
       setTopicIcon("");
       setCustomIconImageSizeDelta(0);
-      setCustomIconImageDataUrl(reader.result);
+      setCustomIconImageDataUrl(dataUrl);
     };
     reader.onerror = () => {
       setError("Failed to read SVG file");
@@ -2931,7 +2942,7 @@ export default function ArticlesPage() {
                     <input
                       ref={iconSvgUploadInputRef}
                       type="file"
-                      accept=".svg,image/svg+xml"
+                      accept=".svg,image/svg+xml,text/plain,text/xml,application/xml"
                       onChange={onUploadTopicIconSvg}
                       style={{ display: "none" }}
                     />
