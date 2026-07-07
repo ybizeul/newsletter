@@ -1612,6 +1612,11 @@ func (h *Handler) ScheduleNewsletter(w http.ResponseWriter, r *http.Request, id 
 }
 
 func (h *Handler) SendNewsletterNow(w http.ResponseWriter, r *http.Request, id string) {
+	if !h.cfg.UseGraphAPI && (h.cfg.SMTPHost == "" || h.cfg.SMTPFrom == "") {
+		h.writeError(w, http.StatusBadRequest, "smtp is not configured")
+		return
+	}
+
 	var newsletter model.Newsletter
 	if err := h.newsletters.FindOne(r.Context(), bson.M{"_id": id}).Decode(&newsletter); err != nil {
 		if err == mongo.ErrNoDocuments {
@@ -1634,46 +1639,65 @@ func (h *Handler) SendNewsletterNow(w http.ResponseWriter, r *http.Request, id s
 		})
 	}
 
-	if err := h.processScheduledNewsletter(r.Context(), newsletter); err != nil {
-		if errors.Is(err, errNewsletterAlreadySending) {
-			h.writeError(w, http.StatusConflict, "newsletter is already sending")
-			return
-		}
-
-		log.Printf("send-now failed newsletter_id=%s error=%v", newsletter.ID, err)
-
-		if errors.Is(err, errTokenExpired) {
-			h.writeJSON(w, http.StatusUnauthorized, map[string]any{
-				"error":   "token_expired",
-				"message": "Your session token has expired. Please re-authenticate to send.",
-			})
-			return
-		}
-
-		_, _ = h.newsletters.UpdateByID(r.Context(), newsletter.ID, bson.M{
-			"$set": bson.M{
-				"status":        model.NewsletterStatusFailed,
-				"deliveryError": err.Error(),
-				"updatedAt":     time.Now().UTC(),
-			},
-		})
-		h.writeError(w, http.StatusBadGateway, "failed to send newsletter now: "+err.Error())
-		return
-	}
-
-	log.Printf("send-now succeeded newsletter_id=%s", newsletter.ID)
-
-	var sent model.Newsletter
-	if err := h.newsletters.FindOne(r.Context(), bson.M{"_id": id}).Decode(&sent); err != nil {
-		h.writeError(w, http.StatusInternalServerError, "failed to load updated newsletter")
-		return
-	}
-
-	h.writeJSON(w, http.StatusOK, map[string]any{
-		"id":     sent.ID,
-		"status": sent.Status,
-		"sentAt": sent.SentAt,
+	// Acquire the send lock synchronously so the client gets an immediate,
+	// authoritative response about whether the send was accepted.
+	lockResult, err := h.newsletters.UpdateOne(r.Context(), bson.M{
+		"_id":    newsletter.ID,
+		"status": bson.M{"$ne": model.NewsletterStatusSending},
+	}, bson.M{
+		"$set": bson.M{
+			"status":    model.NewsletterStatusSending,
+			"updatedAt": time.Now().UTC(),
+		},
+		"$unset": bson.M{"deliveryError": ""},
 	})
+	if err != nil {
+		h.writeError(w, http.StatusInternalServerError, "failed to lock newsletter for sending")
+		return
+	}
+	if lockResult.MatchedCount == 0 {
+		h.writeError(w, http.StatusConflict, "newsletter is already sending")
+		return
+	}
+
+	// Capture auth credentials from the request context before returning, as
+	// the goroutine below outlives the HTTP request.
+	accessToken := AccessTokenFromContext(r.Context())
+	senderEmail := resolveOwnerEmail(UserFromContext(r.Context()), "")
+
+	// Return 202 immediately so the browser is not blocked. The actual
+	// delivery runs in the background; clients poll GET /newsletters/{id} to
+	// track progress via the newsletter status field.
+	h.writeJSON(w, http.StatusAccepted, map[string]any{
+		"id":     newsletter.ID,
+		"status": model.NewsletterStatusSending,
+	})
+
+	go func() {
+		// context.Background() is intentional: the delivery must outlive the HTTP
+		// request. The server has no graceful shutdown context today, so using the
+		// request context would cancel the send as soon as the 202 is written.
+		ctx := context.Background()
+		log.Printf("send-now background start newsletter_id=%s", newsletter.ID)
+		if err := h.doSendNewsletter(ctx, newsletter.ID, accessToken, senderEmail); err != nil {
+			log.Printf("send-now background failed newsletter_id=%s error=%v", newsletter.ID, err)
+			deliveryErr := err.Error()
+			if errors.Is(err, errTokenExpired) {
+				deliveryErr = "token_expired"
+			}
+			if _, dbErr := h.newsletters.UpdateByID(ctx, newsletter.ID, bson.M{
+				"$set": bson.M{
+					"status":        model.NewsletterStatusFailed,
+					"deliveryError": deliveryErr,
+					"updatedAt":     time.Now().UTC(),
+				},
+			}); dbErr != nil {
+				log.Printf("send-now background: failed to persist error status newsletter_id=%s db_error=%v", newsletter.ID, dbErr)
+			}
+			return
+		}
+		log.Printf("send-now background succeeded newsletter_id=%s", newsletter.ID)
+	}()
 }
 
 func (h *Handler) DeleteNewsletter(w http.ResponseWriter, r *http.Request, id string) {
@@ -1749,7 +1773,20 @@ func (h *Handler) processScheduledNewsletter(ctx context.Context, newsletter mod
 		return errNewsletterAlreadySending
 	}
 
-	loadedNewsletter, articles, err := h.loadNewsletterWithArticles(ctx, newsletter.ID)
+	accessToken := AccessTokenFromContext(ctx)
+	var senderEmail string
+	if u := UserFromContext(ctx); u != nil {
+		senderEmail = u.Email
+	}
+
+	return h.doSendNewsletter(ctx, newsletter.ID, accessToken, senderEmail)
+}
+
+// doSendNewsletter performs the actual newsletter delivery. It must only be
+// called once the newsletter document has already been locked (status set to
+// "sending"). On failure the caller is responsible for updating the status.
+func (h *Handler) doSendNewsletter(ctx context.Context, id string, accessToken string, senderEmail string) error {
+	loadedNewsletter, articles, err := h.loadNewsletterWithArticles(ctx, id)
 	if err != nil {
 		return err
 	}
@@ -1760,12 +1797,6 @@ func (h *Handler) processScheduledNewsletter(ctx context.Context, newsletter mod
 	htmlBody, textBody, err := h.renderNewsletter(ctx, *loadedNewsletter, articles)
 	if err != nil {
 		return err
-	}
-
-	accessToken := AccessTokenFromContext(ctx)
-	var senderEmail string
-	if u := UserFromContext(ctx); u != nil {
-		senderEmail = u.Email
 	}
 
 	// Collect all recipients, deduplicated for per-recipient delivery.
