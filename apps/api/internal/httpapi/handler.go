@@ -1674,6 +1674,9 @@ func (h *Handler) SendNewsletterNow(w http.ResponseWriter, r *http.Request, id s
 	})
 
 	go func() {
+		// context.Background() is intentional: the delivery must outlive the HTTP
+		// request. The server has no graceful shutdown context today, so using the
+		// request context would cancel the send as soon as the 202 is written.
 		ctx := context.Background()
 		log.Printf("send-now background start newsletter_id=%s", newsletter.ID)
 		if err := h.doSendNewsletter(ctx, newsletter.ID, accessToken, senderEmail); err != nil {
@@ -1682,13 +1685,15 @@ func (h *Handler) SendNewsletterNow(w http.ResponseWriter, r *http.Request, id s
 			if errors.Is(err, errTokenExpired) {
 				deliveryErr = "token_expired"
 			}
-			_, _ = h.newsletters.UpdateByID(ctx, newsletter.ID, bson.M{
+			if _, dbErr := h.newsletters.UpdateByID(ctx, newsletter.ID, bson.M{
 				"$set": bson.M{
 					"status":        model.NewsletterStatusFailed,
 					"deliveryError": deliveryErr,
 					"updatedAt":     time.Now().UTC(),
 				},
-			})
+			}); dbErr != nil {
+				log.Printf("send-now background: failed to persist error status newsletter_id=%s db_error=%v", newsletter.ID, dbErr)
+			}
 			return
 		}
 		log.Printf("send-now background succeeded newsletter_id=%s", newsletter.ID)

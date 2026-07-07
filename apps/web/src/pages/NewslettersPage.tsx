@@ -1087,8 +1087,11 @@ export default function NewslettersPage() {
     stopSendPolling();
     let consecutiveErrors = 0;
     const MAX_CONSECUTIVE_ERRORS = 10;
+    let pollInFlight = false;
     // isSendingNow is intentionally left true here; polling clears it when the status changes.
     sendPollingRef.current = setInterval(() => {
+      if (pollInFlight) return;
+      pollInFlight = true;
       void (async () => {
         try {
           const polled = await getNewsletter(newsletterId);
@@ -1115,6 +1118,8 @@ export default function NewslettersPage() {
             setIsSendingNow(false);
             setError("Lost contact with the server while waiting for send to complete. Please reload the page.");
           }
+        } finally {
+          pollInFlight = false;
         }
       })();
     }, 2000);
