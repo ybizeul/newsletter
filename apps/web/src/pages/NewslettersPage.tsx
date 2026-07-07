@@ -48,8 +48,7 @@ import {
   scheduleNewsletter,
   sendNewsletterNow,
   updateNewsletter,
-  renderMarkdown,
-  TokenExpiredError
+  renderMarkdown
 } from "../lib/api";
 import type { ArticleLanguageCode, ArticleSummary, Contact, Header, Newsletter, NewsletterSummary } from "../types/domain";
 import { useLocation, useNavigate } from "react-router-dom";
@@ -236,6 +235,7 @@ export default function NewslettersPage() {
   const autosaveTimerRef = useRef<number | null>(null);
   const autosaveClearSavedRef = useRef<number | null>(null);
   const lastSavedDraftRef = useRef<string>("");
+  const sendPollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const isLoadingNewsletterRef = useRef(false);
   const pendingEditRef = useRef<string | null>(null);
   const wasNewslettersRouteActiveRef = useRef(false);
@@ -573,6 +573,8 @@ export default function NewslettersPage() {
   };
 
   const onSelectNewsletter = async (newsletter: NewsletterSummary) => {
+    stopSendPolling();
+    setIsSendingNow(false);
     pendingEditRef.current = newsletter.id;
     isLoadingNewsletterRef.current = true;
     setIsManualNewNewsletterMode(false);
@@ -661,18 +663,14 @@ export default function NewslettersPage() {
         setIsSendingNow(true);
         try {
           await sendNewsletterNow(fullNewsletter.id);
-          await loadData();
+          startSendPolling(fullNewsletter.id);
         } catch (sendErr) {
-          if (sendErr instanceof TokenExpiredError) {
-            window.sessionStorage.setItem(PENDING_SEND_NEWSLETTER_ID_KEY, fullNewsletter.id);
-            const returnTo = `/newsletters?selected=${encodeURIComponent(fullNewsletter.id)}`;
-            window.location.href = `/api/auth/login?returnTo=${encodeURIComponent(returnTo)}`;
-            return;
-          }
           setError(sendErr instanceof Error ? sendErr.message : "Failed to send newsletter now");
-        } finally {
           setIsSendingNow(false);
         }
+      } else if (fullNewsletter.status === "sending") {
+        setIsSendingNow(true);
+        startSendPolling(fullNewsletter.id);
       }
     } catch (err) {
       isLoadingNewsletterRef.current = false;
@@ -1075,7 +1073,42 @@ export default function NewslettersPage() {
     if (autosaveClearSavedRef.current !== null) {
       window.clearTimeout(autosaveClearSavedRef.current);
     }
+    stopSendPolling();
   }, []);
+
+  const stopSendPolling = () => {
+    if (sendPollingRef.current !== null) {
+      clearInterval(sendPollingRef.current);
+      sendPollingRef.current = null;
+    }
+  };
+
+  const startSendPolling = (newsletterId: string) => {
+    stopSendPolling();
+    sendPollingRef.current = setInterval(() => {
+      void (async () => {
+        try {
+          const polled = await getNewsletter(newsletterId);
+          if (polled.status !== "sending") {
+            stopSendPolling();
+            setIsSendingNow(false);
+            if (polled.status === "failed") {
+              if (polled.deliveryError === "token_expired") {
+                window.sessionStorage.setItem(PENDING_SEND_NEWSLETTER_ID_KEY, newsletterId);
+                const returnTo = `/newsletters?selected=${encodeURIComponent(newsletterId)}`;
+                window.location.href = `/api/auth/login?returnTo=${encodeURIComponent(returnTo)}`;
+                return;
+              }
+              setError(polled.deliveryError ?? "Failed to send newsletter");
+            }
+            await loadData();
+          }
+        } catch {
+          // ignore transient poll errors
+        }
+      })();
+    }, 2000);
+  };
 
   const onSchedule = async () => {
     if (!selectedNewsletterId) {
@@ -1110,16 +1143,9 @@ export default function NewslettersPage() {
     setIsSendingNow(true);
     try {
       await sendNewsletterNow(selectedNewsletterId);
-      await loadData();
+      startSendPolling(selectedNewsletterId);
     } catch (err) {
-      if (err instanceof TokenExpiredError) {
-        window.sessionStorage.setItem(PENDING_SEND_NEWSLETTER_ID_KEY, selectedNewsletterId);
-        const returnTo = `/newsletters?selected=${encodeURIComponent(selectedNewsletterId)}`;
-        window.location.href = `/api/auth/login?returnTo=${encodeURIComponent(returnTo)}`;
-        return;
-      }
       setError(err instanceof Error ? err.message : "Failed to send newsletter now");
-    } finally {
       setIsSendingNow(false);
     }
   };
