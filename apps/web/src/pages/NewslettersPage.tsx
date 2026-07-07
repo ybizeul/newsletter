@@ -61,6 +61,8 @@ const NEWSLETTERS_PANE_WIDTH_STORAGE_KEY = "newsletter.newsletters.pane.width";
 const FAVORITE_NEWSLETTER_ID_STORAGE_KEY = "newsletter.favorite.id";
 const PENDING_SEND_NEWSLETTER_ID_KEY = "newsletter.pending_send.id";
 const MAX_RECIPIENTS = 3;
+const SEND_POLL_INTERVAL_MS = 2000;
+const SEND_POLL_MAX_ERRORS = 10;
 const ARTICLE_REUSE_WARNING_TEXT = "already used in another newsletter";
 const DEFAULT_NEWSLETTER_TEMPLATE = "default";
 const DEFAULT_NEWSLETTER_LANGUAGE: ArticleLanguageCode = "fr";
@@ -1086,7 +1088,6 @@ export default function NewslettersPage() {
   const startSendPolling = (newsletterId: string) => {
     stopSendPolling();
     let consecutiveErrors = 0;
-    const MAX_CONSECUTIVE_ERRORS = 10;
     let pollInFlight = false;
     // isSendingNow is intentionally left true here; polling clears it when the status changes.
     sendPollingRef.current = setInterval(() => {
@@ -1113,7 +1114,7 @@ export default function NewslettersPage() {
         } catch (pollErr) {
           consecutiveErrors++;
           console.warn("send polling error", pollErr);
-          if (consecutiveErrors >= MAX_CONSECUTIVE_ERRORS) {
+          if (consecutiveErrors >= SEND_POLL_MAX_ERRORS) {
             stopSendPolling();
             setIsSendingNow(false);
             setError("Lost contact with the server while waiting for send to complete. Please reload the page.");
@@ -1122,7 +1123,7 @@ export default function NewslettersPage() {
           pollInFlight = false;
         }
       })();
-    }, 2000);
+    }, SEND_POLL_INTERVAL_MS);
   };
 
   const onSchedule = async () => {
