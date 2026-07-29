@@ -36,6 +36,26 @@ func (h *Handler) GetReport(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// --- Fetch headers ---
+	headerFilter := headerOwnerFilter(UserFromContext(ctx))
+	headerCursor, err := h.headers.Find(ctx, headerFilter)
+	if err != nil {
+		h.writeError(w, http.StatusInternalServerError, "failed to fetch headers")
+		return
+	}
+	defer headerCursor.Close(ctx)
+	var headers []model.Header
+	if err := headerCursor.All(ctx, &headers); err != nil {
+		h.writeError(w, http.StatusInternalServerError, "failed to decode headers")
+		return
+	}
+
+	// Build header ID -> title map
+	headerIDToTitle := make(map[string]string)
+	for _, h := range headers {
+		headerIDToTitle[h.ID] = h.Title
+	}
+
 	// --- Fetch newsletters ---
 	newsletterFilter := newsletterVisibilityFilter(UserFromContext(ctx))
 	newsletterCursor, err := h.newsletters.Find(ctx, newsletterFilter,
@@ -157,7 +177,7 @@ func (h *Handler) GetReport(w http.ResponseWriter, r *http.Request) {
 	f.NewSheet(newslettersSheet)
 
 	newsletterHeaders := []string{
-		"Title", "Language", "Header ID", "Template", "Archived", "Link",
+		"Title", "Language", "Header Name", "Template", "Archived", "Link",
 		"Sent Date", "Archived Date", "Recipients", "Opens",
 	}
 	if err := writeHeaderRow(f, newslettersSheet, newsletterHeaders); err != nil {
@@ -169,13 +189,20 @@ func (h *Handler) GetReport(w http.ResponseWriter, r *http.Request) {
 		row := i + 2
 		link := ""
 		if nl.PublicLink && nl.PublicSlug != "" {
-			link = nl.PublicSlug
+			link = h.newsletterPublicViewURL(nl)
+		}
+
+		headerName := ""
+		if nl.HeaderID != "" {
+			if title, exists := headerIDToTitle[nl.HeaderID]; exists {
+				headerName = title
+			}
 		}
 
 		cells := []interface{}{
 			nl.Title,
 			string(nl.Language),
-			nl.HeaderID,
+			headerName,
 			normalizeNewsletterTemplateName(nl.Template),
 			nl.Archived,
 			link,
@@ -198,7 +225,7 @@ func (h *Handler) GetReport(w http.ResponseWriter, r *http.Request) {
 		f.SetCellValue(newslettersSheet, colOpens, nl.OpenedUniqueCount)
 	}
 
-	setColumnWidths(f, newslettersSheet, []float64{34, 12, 28, 16, 10, 28, 14, 16, 12, 8})
+	setColumnWidths(f, newslettersSheet, []float64{34, 12, 28, 16, 10, 50, 14, 16, 12, 8})
 
 	// --- Stream the file to the client ---
 	w.Header().Set("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")

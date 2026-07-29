@@ -49,9 +49,9 @@ function App() {
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      const disposition = response.headers.get("Content-Disposition") ?? "";
-      const match = disposition.match(/filename="([^"]+)"/);
-      a.download = match ? match[1] : "report.xlsx";
+      const today = new Date().toISOString().split("T")[0];
+      const userName = user?.name || user?.email || "User";
+      a.download = `Newsletter Workspace Report ${userName} ${today}.xlsx`;
       a.click();
       setTimeout(() => URL.revokeObjectURL(url), 60_000);
     } catch (err) {
@@ -113,21 +113,21 @@ function App() {
             variant="subtle"
             color="gray"
             size="lg"
-            aria-label="Toggle color scheme"
-            title="Toggle color scheme"
-            onClick={toggleColorScheme}
-          >
-            {computedColorScheme === "dark" ? <IconSun size={18} /> : <IconMoon size={18} />}
-          </ActionIcon>
-          <ActionIcon
-            variant="subtle"
-            color="gray"
-            size="lg"
             aria-label="Download report"
             title="Download report"
             onClick={handleDownloadReport}
           >
             <IconDownload size={18} />
+          </ActionIcon>
+          <ActionIcon
+            variant="subtle"
+            color="gray"
+            size="lg"
+            aria-label="Toggle color scheme"
+            title="Toggle color scheme"
+            onClick={toggleColorScheme}
+          >
+            {computedColorScheme === "dark" ? <IconSun size={18} /> : <IconMoon size={18} />}
           </ActionIcon>
           <ActionIcon
             variant="subtle"
