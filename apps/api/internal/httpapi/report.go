@@ -86,7 +86,7 @@ func (h *Handler) GetReport(w http.ResponseWriter, r *http.Request) {
 		if nl.Status != model.NewsletterStatusSent || nl.SentAt == nil {
 			continue
 		}
-		log.Printf("report: processing newsletter %s (title=%q status=%s sentAt=%v tags=%v)", 
+		log.Printf("report: processing newsletter %s (title=%q status=%s sentAt=%v tags=%v)",
 			nl.ID, nl.Title, nl.Status, nl.SentAt != nil, nl.ContactTags)
 
 		var recipientEmails []string
@@ -99,7 +99,7 @@ func (h *Handler) GetReport(w http.ResponseWriter, r *http.Request) {
 			if err != nil {
 				log.Printf("report: failed to resolve contact recipients for newsletter %s: %v", nl.ID, err)
 			} else {
-				log.Printf("report: newsletter %s (owner=%q tags=%v mode=%q) resolved %d contacts", 
+				log.Printf("report: newsletter %s (owner=%q tags=%v mode=%q) resolved %d contacts",
 					nl.ID, newsletterOwner, nl.ContactTags, nl.ContactTagsMode, len(resolved))
 			}
 			for _, c := range resolved {
