@@ -1,7 +1,7 @@
 import { type MouseEvent as ReactMouseEvent, lazy, Suspense, useEffect, useState } from "react";
 import { ActionIcon, Anchor, AppShell, Box, Burger, Center, Group, Loader, Modal, NavLink, ScrollArea, Stack, Text, useComputedColorScheme, useMantineColorScheme } from "@mantine/core";
 import { useDisclosure } from "@mantine/hooks";
-import { IconAlignBoxCenterTop, IconArticle, IconClock, IconHelpCircle, IconList, IconLock, IconLogout, IconMail, IconMoon, IconStar, IconSun, IconUser, IconAddressBook, IconWorld } from "@tabler/icons-react";
+import { IconAlignBoxCenterTop, IconArticle, IconClock, IconDownload, IconHelpCircle, IconList, IconLock, IconLogout, IconMail, IconMoon, IconStar, IconSun, IconUser, IconAddressBook, IconWorld } from "@tabler/icons-react";
 import { Navigate, Route, Routes, useLocation, useNavigate } from "react-router-dom";
 
 const ArticlesPage = lazy(() => import("./pages/ArticlesPage"));
@@ -37,6 +37,27 @@ function App() {
   const [navbarWidth, setNavbarWidth] = useState(getStoredNavbarWidth);
   const location = useLocation();
   const navigate = useNavigate();
+
+  const handleDownloadReport = async () => {
+    try {
+      const response = await fetch("/api/report");
+      if (!response.ok) {
+        console.error("Failed to download report:", response.status, response.statusText);
+        return;
+      }
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      const today = new Date().toISOString().split("T")[0];
+      const userName = user?.name || user?.email || "User";
+      a.download = `Newsletter Workspace Report ${userName} ${today}.xlsx`;
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(url), 60_000);
+    } catch (err) {
+      console.error("Failed to download report:", err);
+    }
+  };
 
   const startNavbarResize = (event: ReactMouseEvent<HTMLDivElement>) => {
     event.preventDefault();
@@ -88,6 +109,16 @@ function App() {
               Newsletter Workspace
             </Text>
           </Group>
+          <ActionIcon
+            variant="subtle"
+            color="gray"
+            size="lg"
+            aria-label="Download report"
+            title="Download report"
+            onClick={handleDownloadReport}
+          >
+            <IconDownload size={18} />
+          </ActionIcon>
           <ActionIcon
             variant="subtle"
             color="gray"

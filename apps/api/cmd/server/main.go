@@ -168,6 +168,8 @@ func main() {
 				})
 			})
 
+			protected.Get("/report", h.GetReport)
+
 			protected.Post("/render/markdown", h.RenderMarkdown)
 		})
 	})
