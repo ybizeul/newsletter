@@ -86,6 +86,8 @@ func (h *Handler) GetReport(w http.ResponseWriter, r *http.Request) {
 		if nl.Status != model.NewsletterStatusSent || nl.SentAt == nil {
 			continue
 		}
+		log.Printf("report: processing newsletter %s (title=%q status=%s sentAt=%v tags=%v)", 
+			nl.ID, nl.Title, nl.Status, nl.SentAt != nil, nl.ContactTags)
 
 		var recipientEmails []string
 
@@ -96,6 +98,9 @@ func (h *Handler) GetReport(w http.ResponseWriter, r *http.Request) {
 			resolved, err := h.resolveContactRecipients(ctx, newsletterOwner, nl.ContactTags, nl.ContactTagsMode)
 			if err != nil {
 				log.Printf("report: failed to resolve contact recipients for newsletter %s: %v", nl.ID, err)
+			} else {
+				log.Printf("report: newsletter %s (owner=%q tags=%v mode=%q) resolved %d contacts", 
+					nl.ID, newsletterOwner, nl.ContactTags, nl.ContactTagsMode, len(resolved))
 			}
 			for _, c := range resolved {
 				email := strings.ToLower(strings.TrimSpace(c.Email))
@@ -118,6 +123,7 @@ func (h *Handler) GetReport(w http.ResponseWriter, r *http.Request) {
 
 		// Store the actual recipient count for this newsletter
 		newsletterRecipientCount[nl.ID] = len(recipientEmails)
+		log.Printf("report: newsletter %s final recipient count: %d", nl.ID, len(recipientEmails))
 
 		entry := sentEntry{title: nl.Title, sentAt: *nl.SentAt}
 		for _, email := range recipientEmails {
@@ -233,6 +239,9 @@ func (h *Handler) GetReport(w http.ResponseWriter, r *http.Request) {
 		if nl.SentAt != nil {
 			if count, exists := newsletterRecipientCount[nl.ID]; exists {
 				recipientCount = int64(count)
+				log.Printf("report: using resolved count for newsletter %s: %d (stored was %d)", nl.ID, count, nl.SentCount)
+			} else {
+				log.Printf("report: no resolved count found for newsletter %s, using stored %d", nl.ID, nl.SentCount)
 			}
 		}
 		f.SetCellValue(newslettersSheet, colRecipients, recipientCount)
