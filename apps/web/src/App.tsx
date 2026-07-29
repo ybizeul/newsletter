@@ -39,17 +39,24 @@ function App() {
   const navigate = useNavigate();
 
   const handleDownloadReport = async () => {
-    const response = await fetch("/api/report");
-    if (!response.ok) return;
-    const blob = await response.blob();
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    const disposition = response.headers.get("Content-Disposition") ?? "";
-    const match = disposition.match(/filename="([^"]+)"/);
-    a.download = match ? match[1] : "report.xlsx";
-    a.click();
-    URL.revokeObjectURL(url);
+    try {
+      const response = await fetch("/api/report");
+      if (!response.ok) {
+        console.error("Failed to download report:", response.status, response.statusText);
+        return;
+      }
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      const disposition = response.headers.get("Content-Disposition") ?? "";
+      const match = disposition.match(/filename="([^"]+)"/);
+      a.download = match ? match[1] : "report.xlsx";
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error("Failed to download report:", err);
+    }
   };
 
   const startNavbarResize = (event: ReactMouseEvent<HTMLDivElement>) => {

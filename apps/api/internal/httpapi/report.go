@@ -2,6 +2,7 @@ package httpapi
 
 import (
 	"fmt"
+	"log"
 	"net/http"
 	"net/mail"
 	"strings"
@@ -203,8 +204,8 @@ func (h *Handler) GetReport(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="report-%s.xlsx"`, time.Now().UTC().Format("2006-01-02")))
 
 	if err := f.Write(w); err != nil {
-		// Headers are already sent; log only.
-		_ = err
+		// Headers are already sent; log the error for debugging.
+		log.Printf("report: failed to write xlsx to response: %v", err)
 	}
 }
 
