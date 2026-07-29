@@ -1,7 +1,7 @@
 import { type MouseEvent as ReactMouseEvent, lazy, Suspense, useEffect, useState } from "react";
 import { ActionIcon, Anchor, AppShell, Box, Burger, Center, Group, Loader, Modal, NavLink, ScrollArea, Stack, Text, useComputedColorScheme, useMantineColorScheme } from "@mantine/core";
 import { useDisclosure } from "@mantine/hooks";
-import { IconAlignBoxCenterTop, IconArticle, IconClock, IconHelpCircle, IconList, IconLock, IconLogout, IconMail, IconMoon, IconStar, IconSun, IconUser, IconAddressBook, IconWorld } from "@tabler/icons-react";
+import { IconAlignBoxCenterTop, IconArticle, IconClock, IconDownload, IconHelpCircle, IconList, IconLock, IconLogout, IconMail, IconMoon, IconStar, IconSun, IconUser, IconAddressBook, IconWorld } from "@tabler/icons-react";
 import { Navigate, Route, Routes, useLocation, useNavigate } from "react-router-dom";
 
 const ArticlesPage = lazy(() => import("./pages/ArticlesPage"));
@@ -37,6 +37,20 @@ function App() {
   const [navbarWidth, setNavbarWidth] = useState(getStoredNavbarWidth);
   const location = useLocation();
   const navigate = useNavigate();
+
+  const handleDownloadReport = async () => {
+    const response = await fetch("/api/report");
+    if (!response.ok) return;
+    const blob = await response.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    const disposition = response.headers.get("Content-Disposition") ?? "";
+    const match = disposition.match(/filename="([^"]+)"/);
+    a.download = match ? match[1] : "report.xlsx";
+    a.click();
+    URL.revokeObjectURL(url);
+  };
 
   const startNavbarResize = (event: ReactMouseEvent<HTMLDivElement>) => {
     event.preventDefault();
@@ -97,6 +111,16 @@ function App() {
             onClick={toggleColorScheme}
           >
             {computedColorScheme === "dark" ? <IconSun size={18} /> : <IconMoon size={18} />}
+          </ActionIcon>
+          <ActionIcon
+            variant="subtle"
+            color="gray"
+            size="lg"
+            aria-label="Download report"
+            title="Download report"
+            onClick={handleDownloadReport}
+          >
+            <IconDownload size={18} />
           </ActionIcon>
           <ActionIcon
             variant="subtle"
