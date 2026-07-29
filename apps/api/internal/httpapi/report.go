@@ -69,12 +69,13 @@ func (h *Handler) GetReport(w http.ResponseWriter, r *http.Request) {
 
 		if len(nl.ContactTags) > 0 {
 			resolved, err := h.resolveContactRecipients(ctx, owner, nl.ContactTags, nl.ContactTagsMode)
-			if err == nil {
-				for _, c := range resolved {
-					email := strings.ToLower(strings.TrimSpace(c.Email))
-					if email != "" {
-						recipientEmails = append(recipientEmails, email)
-					}
+			if err != nil {
+				log.Printf("report: failed to resolve contact recipients for newsletter %s: %v", nl.ID, err)
+			}
+			for _, c := range resolved {
+				email := strings.ToLower(strings.TrimSpace(c.Email))
+				if email != "" {
+					recipientEmails = append(recipientEmails, email)
 				}
 			}
 		} else {

@@ -53,7 +53,7 @@ function App() {
       const match = disposition.match(/filename="([^"]+)"/);
       a.download = match ? match[1] : "report.xlsx";
       a.click();
-      URL.revokeObjectURL(url);
+      setTimeout(() => URL.revokeObjectURL(url), 60_000);
     } catch (err) {
       console.error("Failed to download report:", err);
     }
