@@ -88,7 +88,10 @@ func (h *Handler) GetReport(w http.ResponseWriter, r *http.Request) {
 		var recipientEmails []string
 
 		if len(nl.ContactTags) > 0 {
-			resolved, err := h.resolveContactRecipients(ctx, owner, nl.ContactTags, nl.ContactTagsMode)
+			// Use the newsletter's owner (from when it was sent) to resolve contacts,
+			// not the current user's owner, to match the actual send-time behavior
+			newsletterOwner := nl.Owner
+			resolved, err := h.resolveContactRecipients(ctx, newsletterOwner, nl.ContactTags, nl.ContactTagsMode)
 			if err != nil {
 				log.Printf("report: failed to resolve contact recipients for newsletter %s: %v", nl.ID, err)
 			}
