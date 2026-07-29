@@ -79,6 +79,8 @@ func (h *Handler) GetReport(w http.ResponseWriter, r *http.Request) {
 	}
 	// Map from lowercase email -> slice of sent newsletters
 	emailToSentEntries := make(map[string][]sentEntry)
+	// Map from newsletter ID -> actual recipient count (for newsletters with sentAt != nil)
+	newsletterRecipientCount := make(map[string]int)
 
 	for _, nl := range newsletters {
 		if nl.Status != model.NewsletterStatusSent || nl.SentAt == nil {
@@ -113,6 +115,9 @@ func (h *Handler) GetReport(w http.ResponseWriter, r *http.Request) {
 				}
 			}
 		}
+
+		// Store the actual recipient count for this newsletter
+		newsletterRecipientCount[nl.ID] = len(recipientEmails)
 
 		entry := sentEntry{title: nl.Title, sentAt: *nl.SentAt}
 		for _, email := range recipientEmails {
@@ -223,7 +228,14 @@ func (h *Handler) GetReport(w http.ResponseWriter, r *http.Request) {
 			f.SetCellValue(newslettersSheet, cell, nl.ArchivedAt.Format("2006-01-02"))
 		}
 		colRecipients, _ := excelize.CoordinatesToCellName(9, row)
-		f.SetCellValue(newslettersSheet, colRecipients, nl.SentCount)
+		// Use tag-resolved recipient count for sent newsletters, fall back to stored count
+		recipientCount := nl.SentCount
+		if nl.SentAt != nil {
+			if count, exists := newsletterRecipientCount[nl.ID]; exists {
+				recipientCount = int64(count)
+			}
+		}
+		f.SetCellValue(newslettersSheet, colRecipients, recipientCount)
 		colOpens, _ := excelize.CoordinatesToCellName(10, row)
 		f.SetCellValue(newslettersSheet, colOpens, nl.OpenedUniqueCount)
 	}
