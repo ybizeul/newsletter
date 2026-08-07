@@ -364,16 +364,6 @@ func (h *Handler) UpdateArticle(w http.ResponseWriter, r *http.Request, id strin
 	userOwnsArticle := currentOwner != "" && currentOwner == requester
 	articleIsUnclaimed := currentOwner == ""
 
-	// Non-article-owners can only update translations, not article metadata
-	if !userOwnsArticle && !articleIsUnclaimed {
-		// Article has an owner, and it's not this user
-		// Only allow translation content updates
-		if req.Public != nil {
-			h.writeError(w, http.StatusForbidden, "only the article owner can change visibility")
-			return
-		}
-	}
-
 	language := normalizeArticleLanguage(req.Language, model.LanguageFrench)
 	now := time.Now().UTC()
 
