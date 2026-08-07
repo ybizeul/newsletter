@@ -732,6 +732,10 @@ export default function ArticlesPage() {
   const currentUserEmail = (user?.email ?? "").trim().toLowerCase();
   const currentTranslationOwner = (currentArticle?.translationOwner ?? "").trim().toLowerCase();
   
+  // Check if the current language translation exists
+  const currentTranslationExists = 
+    selectedArticleSummary?.availableLanguages?.includes(selectedLanguage) ?? false;
+  
   const isArticleOwner = 
     !editingId ||
     !oidcEnabled ||
@@ -740,6 +744,9 @@ export default function ArticlesPage() {
   const isTranslationOwner = 
     !editingId ||
     !oidcEnabled ||
+    // If translation doesn't exist yet, anyone can create it
+    !currentTranslationExists ||
+    // If translation exists, check if user owns it
     (currentTranslationOwner !== "" && currentUserEmail !== "" && currentTranslationOwner === currentUserEmail);
   
   const isEditingOwnedByCurrentUser = isArticleOwner || isTranslationOwner;
