@@ -10,6 +10,7 @@ export interface Article {
   owner?: string;
   public: boolean;
   availableLanguages?: ArticleLanguageCode[];
+  translationOwner?: string;
   title: string;
   markdown: string;
   contentHTML?: string;

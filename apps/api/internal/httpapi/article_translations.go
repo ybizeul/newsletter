@@ -221,6 +221,7 @@ func (h *Handler) applyArticleTranslations(ctx context.Context, articles []model
 			articles[i].Title = translation.Title
 			articles[i].Markdown = translation.Markdown
 			articles[i].ContentHTML = translation.ContentHTML
+			articles[i].TranslationOwner = translation.Owner
 			continue
 		}
 
@@ -228,6 +229,7 @@ func (h *Handler) applyArticleTranslations(ctx context.Context, articles []model
 			articles[i].Title = ""
 			articles[i].Markdown = ""
 			articles[i].ContentHTML = ""
+			articles[i].TranslationOwner = ""
 		}
 	}
 

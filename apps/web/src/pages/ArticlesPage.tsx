@@ -661,6 +661,7 @@ export default function ArticlesPage() {
   const [iconSearch, setIconSearch] = useState("");
   const [tagSearch, setTagSearch] = useState("");
   const [editingId, setEditingID] = useState<string | null>(null);
+  const [currentArticle, setCurrentArticle] = useState<Article | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isDuplicatingArticle, setIsDuplicatingArticle] = useState(false);
@@ -729,12 +730,21 @@ export default function ArticlesPage() {
       : "All";
   const selectedArticleOwner = (selectedArticleSummary?.owner ?? "").trim().toLowerCase();
   const currentUserEmail = (user?.email ?? "").trim().toLowerCase();
-  const isEditingOwnedByCurrentUser =
+  const currentTranslationOwner = (currentArticle?.translationOwner ?? "").trim().toLowerCase();
+  
+  const isArticleOwner = 
     !editingId ||
     !oidcEnabled ||
     (selectedArticleOwner !== "" && currentUserEmail !== "" && selectedArticleOwner === currentUserEmail);
-  const canEditVisibility =
-    !editingId || isEditingOwnedByCurrentUser;
+  
+  const isTranslationOwner = 
+    !editingId ||
+    !oidcEnabled ||
+    (currentTranslationOwner !== "" && currentUserEmail !== "" && currentTranslationOwner === currentUserEmail);
+  
+  const isEditingOwnedByCurrentUser = isArticleOwner || isTranslationOwner;
+  
+  const canEditVisibility = isArticleOwner;
   const isReadOnlyArticleView = Boolean(editingId && !isEditingOwnedByCurrentUser);
 
   const loadArticles = async () => {
@@ -1005,6 +1015,7 @@ export default function ArticlesPage() {
     setTopicIconFillColor("");
     setTopicIconIllustration("");
     setEditingID(null);
+    setCurrentArticle(null);
     setSelectedArticleID(null);
     lastSavedDraftRef.current = "";
     setAutosaveStatus("idle");
@@ -1097,6 +1108,7 @@ export default function ArticlesPage() {
       const requestedLanguage = resolveArticleOpenLanguage(article, languageOverride);
       const fullArticle = await getArticle(article.id, requestedLanguage);
       if (pendingEditRef.current !== article.id || editRequestSeqRef.current !== editRequestSeq) return;
+      setCurrentArticle(fullArticle);
       setEditingID(fullArticle.id);
       setSelectedArticleID(fullArticle.id);
       const hasRequestedLanguageTranslation = (article.availableLanguages ?? []).includes(requestedLanguage);

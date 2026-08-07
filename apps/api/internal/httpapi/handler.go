@@ -359,50 +359,63 @@ func (h *Handler) UpdateArticle(w http.ResponseWriter, r *http.Request, id strin
 
 	currentOwner := strings.TrimSpace(strings.ToLower(existing.Owner))
 	requester := resolveOwnerEmail(UserFromContext(r.Context()), existing.AuthorID)
-	if currentOwner != "" && currentOwner != requester {
-		h.writeError(w, http.StatusForbidden, "only the owner can update this article")
-		return
+	isArticleOwner := currentOwner == "" || currentOwner == requester
+
+	// Non-article-owners can only update translations, not article metadata
+	if !isArticleOwner {
+		// Only allow translation content updates for non-owners
+		// Block any attempt to change article-level properties
+		if req.Public != nil {
+			h.writeError(w, http.StatusForbidden, "only the article owner can change visibility")
+			return
+		}
 	}
-	if currentOwner == "" && UserFromContext(r.Context()) != nil {
+
+	// Article owners need to claim unclaimed articles before making changes
+	if currentOwner == "" && UserFromContext(r.Context()) != nil && !removeTranslation {
 		h.writeError(w, http.StatusForbidden, "claim the article before saving changes")
 		return
 	}
 
-	if req.Public != nil {
-		if currentOwner != "" && currentOwner != requester {
-			h.writeError(w, http.StatusForbidden, "only the owner can change article visibility")
-			return
-		}
-	}
 	language := normalizeArticleLanguage(req.Language, model.LanguageFrench)
 	now := time.Now().UTC()
 
-	setFields := bson.M{
-		"preview":         contentPreview(req.Markdown, req.ContentHTML, 3, 180),
-		"tags":            normalizeArticleTags(req.Tags),
-		"topicIcon":       strings.TrimSpace(req.TopicIcon),
-		"illustration":    strings.TrimSpace(req.Illustration),
-		"iconSource":      strings.TrimSpace(req.IconSource),
-		"iconZoom":        normalizeIconZoom(req.IconZoom),
-		"iconBgColor":     strings.TrimSpace(req.IconBgColor),
-		"iconStrokeColor": strings.TrimSpace(req.IconStrokeColor),
-		"updatedAt":       now,
-	}
-	if req.Public != nil {
-		currentVisibility := existing.Public
-		if currentOwner == "" {
-			// Legacy unowned articles are effectively public even when the field is absent.
-			currentVisibility = true
+	// Only update article metadata if user is the article owner
+	var update bson.M
+	if isArticleOwner {
+		setFields := bson.M{
+			"preview":         contentPreview(req.Markdown, req.ContentHTML, 3, 180),
+			"tags":            normalizeArticleTags(req.Tags),
+			"topicIcon":       strings.TrimSpace(req.TopicIcon),
+			"illustration":    strings.TrimSpace(req.Illustration),
+			"iconSource":      strings.TrimSpace(req.IconSource),
+			"iconZoom":        normalizeIconZoom(req.IconZoom),
+			"iconBgColor":     strings.TrimSpace(req.IconBgColor),
+			"iconStrokeColor": strings.TrimSpace(req.IconStrokeColor),
+			"updatedAt":       now,
 		}
-		setFields["public"] = *req.Public
-		if currentOwner == "" && requester != "" && currentVisibility != *req.Public {
-			setFields["owner"] = requester
+		if req.Public != nil {
+			currentVisibility := existing.Public
+			if currentOwner == "" {
+				// Legacy unowned articles are effectively public even when the field is absent.
+				currentVisibility = true
+			}
+			setFields["public"] = *req.Public
+			if currentOwner == "" && requester != "" && currentVisibility != *req.Public {
+				setFields["owner"] = requester
+			}
 		}
-	}
 
-	update := bson.M{
-		"$set": setFields,
-		"$inc": bson.M{"version": 1},
+		update = bson.M{
+			"$set": setFields,
+			"$inc": bson.M{"version": 1},
+		}
+	} else {
+		// Non-owners only update timestamp and version
+		update = bson.M{
+			"$set": bson.M{"updatedAt": now},
+			"$inc": bson.M{"version": 1},
+		}
 	}
 
 	result, err := h.articles.UpdateByID(r.Context(), id, update)
