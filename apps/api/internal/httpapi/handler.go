@@ -169,7 +169,7 @@ func (h *Handler) CreateArticle(w http.ResponseWriter, r *http.Request) {
 		h.writeError(w, http.StatusInternalServerError, "failed to create article")
 		return
 	}
-	if err := h.upsertArticleTranslation(r.Context(), article.ID, language, req.Title, req.Markdown, req.ContentHTML, now); err != nil {
+	if err := h.upsertArticleTranslation(r.Context(), article.ID, language, owner, req.Title, req.Markdown, req.ContentHTML, now); err != nil {
 		_, _ = h.articles.DeleteOne(r.Context(), bson.M{"_id": article.ID})
 		h.writeError(w, http.StatusInternalServerError, "failed to create article translation")
 		return
@@ -415,12 +415,16 @@ func (h *Handler) UpdateArticle(w http.ResponseWriter, r *http.Request, id strin
 		return
 	}
 	if removeTranslation {
-		if err := h.deleteArticleTranslation(r.Context(), id, language); err != nil {
+		if err := h.deleteArticleTranslation(r.Context(), id, language, requester); err != nil {
 			h.writeError(w, http.StatusInternalServerError, "failed to remove article translation")
 			return
 		}
 	} else {
-		if err := h.upsertArticleTranslation(r.Context(), id, language, req.Title, req.Markdown, req.ContentHTML, now); err != nil {
+		if err := h.upsertArticleTranslation(r.Context(), id, language, requester, req.Title, req.Markdown, req.ContentHTML, now); err != nil {
+			if strings.Contains(err.Error(), "only the translation owner") {
+				h.writeError(w, http.StatusForbidden, err.Error())
+				return
+			}
 			h.writeError(w, http.StatusInternalServerError, "failed to update article translation")
 			return
 		}

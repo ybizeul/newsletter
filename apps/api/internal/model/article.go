@@ -34,6 +34,7 @@ type ArticleTranslation struct {
 	ID          string       `bson:"_id" json:"id"`
 	ArticleID   string       `bson:"articleId" json:"articleId"`
 	Language    LanguageCode `bson:"language" json:"language"`
+	Owner       string       `bson:"owner,omitempty" json:"owner,omitempty"`
 	Title       string       `bson:"title" json:"title"`
 	Markdown    string       `bson:"markdown" json:"markdown"`
 	ContentHTML string       `bson:"contentHTML,omitempty" json:"contentHTML,omitempty"`

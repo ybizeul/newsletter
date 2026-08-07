@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"html"
+	"log"
 	"strings"
 	"time"
 
@@ -34,9 +35,24 @@ func defaultArticleLanguage(value model.LanguageCode) model.LanguageCode {
 	return normalizeArticleLanguage(string(value), model.LanguageFrench)
 }
 
-func (h *Handler) upsertArticleTranslation(ctx context.Context, articleID string, language model.LanguageCode, title string, markdown string, contentHTML string, now time.Time) error {
+func (h *Handler) upsertArticleTranslation(ctx context.Context, articleID string, language model.LanguageCode, owner string, title string, markdown string, contentHTML string, now time.Time) error {
 	lang := defaultArticleLanguage(language)
 	filter := bson.M{"articleId": articleID, "language": lang}
+
+	// Check if translation exists and verify ownership before updating
+	var existing model.ArticleTranslation
+	err := h.articleTranslations.FindOne(ctx, filter).Decode(&existing)
+	if err == nil {
+		// Translation exists, check ownership
+		existingOwner := strings.TrimSpace(strings.ToLower(existing.Owner))
+		requesterOwner := strings.TrimSpace(strings.ToLower(owner))
+		if existingOwner != "" && existingOwner != requesterOwner {
+			return fmt.Errorf("only the translation owner can update this translation")
+		}
+	} else if err != mongo.ErrNoDocuments {
+		return err
+	}
+
 	update := bson.M{
 		"$set": bson.M{
 			"title":       strings.TrimSpace(title),
@@ -48,16 +64,35 @@ func (h *Handler) upsertArticleTranslation(ctx context.Context, articleID string
 			"_id":       bson.NewObjectID().Hex(),
 			"articleId": articleID,
 			"language":  lang,
+			"owner":     owner,
 			"createdAt": now,
 		},
 	}
-	_, err := h.articleTranslations.UpdateOne(ctx, filter, update, options.UpdateOne().SetUpsert(true))
+	_, err = h.articleTranslations.UpdateOne(ctx, filter, update, options.UpdateOne().SetUpsert(true))
 	return err
 }
 
-func (h *Handler) deleteArticleTranslation(ctx context.Context, articleID string, language model.LanguageCode) error {
+func (h *Handler) deleteArticleTranslation(ctx context.Context, articleID string, language model.LanguageCode, owner string) error {
 	lang := defaultArticleLanguage(language)
-	_, err := h.articleTranslations.DeleteOne(ctx, bson.M{"articleId": articleID, "language": lang})
+
+	// Check ownership before deleting
+	var existing model.ArticleTranslation
+	filter := bson.M{"articleId": articleID, "language": lang}
+	err := h.articleTranslations.FindOne(ctx, filter).Decode(&existing)
+	if err != nil {
+		if err == mongo.ErrNoDocuments {
+			return nil // Already deleted
+		}
+		return err
+	}
+
+	existingOwner := strings.TrimSpace(strings.ToLower(existing.Owner))
+	requesterOwner := strings.TrimSpace(strings.ToLower(owner))
+	if existingOwner != "" && existingOwner != requesterOwner {
+		return fmt.Errorf("only the translation owner can delete this translation")
+	}
+
+	_, err = h.articleTranslations.DeleteOne(ctx, filter)
 	return err
 }
 
@@ -213,11 +248,79 @@ func (h *Handler) EnsureArticleTranslations(ctx context.Context) error {
 			Keys:    bson.D{{Key: "articleId", Value: 1}},
 			Options: options.Index().SetName("article_id_idx"),
 		},
+		{
+			Keys:    bson.D{{Key: "owner", Value: 1}},
+			Options: options.Index().SetName("owner_idx"),
+		},
 	})
 	if err != nil {
 		return fmt.Errorf("create article translation indexes: %w", err)
 	}
 
+	// Migration 1: Delete translations that are missing both title and content
+	deleteFilter := bson.M{
+		"$or": []bson.M{
+			{
+				"title":    bson.M{"$in": []interface{}{"", nil}},
+				"markdown": bson.M{"$in": []interface{}{"", nil}},
+			},
+			{
+				"title":    bson.M{"$exists": false},
+				"markdown": bson.M{"$exists": false},
+			},
+		},
+	}
+	deleteResult, err := h.articleTranslations.DeleteMany(ctx, deleteFilter)
+	if err != nil {
+		return fmt.Errorf("delete incomplete translations: %w", err)
+	}
+	if deleteResult.DeletedCount > 0 {
+		log.Printf("Deleted %d incomplete translations", deleteResult.DeletedCount)
+	}
+
+	// Migration 2: Set owner on translations without owner (from article owner)
+	cursor, err := h.articleTranslations.Find(ctx, bson.M{
+		"$or": []bson.M{
+			{"owner": bson.M{"$exists": false}},
+			{"owner": ""},
+		},
+	})
+	if err != nil {
+		return fmt.Errorf("find translations without owner: %w", err)
+	}
+	defer cursor.Close(ctx)
+
+	var translationsWithoutOwner []model.ArticleTranslation
+	if err := cursor.All(ctx, &translationsWithoutOwner); err != nil {
+		return fmt.Errorf("decode translations without owner: %w", err)
+	}
+
+	for _, translation := range translationsWithoutOwner {
+		if strings.TrimSpace(translation.ArticleID) == "" {
+			continue
+		}
+
+		// Get article owner
+		var article model.Article
+		if err := h.articles.FindOne(ctx, bson.M{"_id": translation.ArticleID}).Decode(&article); err != nil {
+			if err == mongo.ErrNoDocuments {
+				// Article doesn't exist, delete orphaned translation
+				_, _ = h.articleTranslations.DeleteOne(ctx, bson.M{"_id": translation.ID})
+				continue
+			}
+			return fmt.Errorf("find article %s for translation owner migration: %w", translation.ArticleID, err)
+		}
+
+		// Set translation owner to article owner
+		_, err := h.articleTranslations.UpdateByID(ctx, translation.ID, bson.M{
+			"$set": bson.M{"owner": article.Owner},
+		})
+		if err != nil {
+			return fmt.Errorf("set owner on translation %s: %w", translation.ID, err)
+		}
+	}
+
+	// Migration 3: Move legacy article content to translations
 	migrationFilter := bson.M{
 		"$or": []bson.M{
 			{"title": bson.M{"$exists": true}},
@@ -226,14 +329,14 @@ func (h *Handler) EnsureArticleTranslations(ctx context.Context) error {
 		},
 	}
 
-	cursor, err := h.articles.Find(ctx, migrationFilter)
+	legacyCursor, err := h.articles.Find(ctx, migrationFilter)
 	if err != nil {
 		return fmt.Errorf("find legacy articles for translation migration: %w", err)
 	}
-	defer cursor.Close(ctx)
+	defer legacyCursor.Close(ctx)
 
 	var legacyArticles []model.Article
-	if err := cursor.All(ctx, &legacyArticles); err != nil {
+	if err := legacyCursor.All(ctx, &legacyArticles); err != nil {
 		return fmt.Errorf("decode legacy articles for translation migration: %w", err)
 	}
 
@@ -243,19 +346,31 @@ func (h *Handler) EnsureArticleTranslations(ctx context.Context) error {
 		}
 
 		now := time.Now().UTC()
-		if err := h.upsertArticleTranslation(
-			ctx,
-			legacy.ID,
-			model.LanguageFrench,
-			legacy.Title,
-			legacy.Markdown,
-			legacy.ContentHTML,
-			now,
-		); err != nil {
+
+		// Use direct insert/update without ownership check for migration
+		lang := model.LanguageFrench
+		filter := bson.M{"articleId": legacy.ID, "language": lang}
+		update := bson.M{
+			"$set": bson.M{
+				"title":       strings.TrimSpace(legacy.Title),
+				"markdown":    legacy.Markdown,
+				"contentHTML": legacy.ContentHTML,
+				"owner":       legacy.Owner,
+				"updatedAt":   now,
+			},
+			"$setOnInsert": bson.M{
+				"_id":       bson.NewObjectID().Hex(),
+				"articleId": legacy.ID,
+				"language":  lang,
+				"createdAt": now,
+			},
+		}
+		_, err := h.articleTranslations.UpdateOne(ctx, filter, update, options.UpdateOne().SetUpsert(true))
+		if err != nil {
 			return fmt.Errorf("upsert article translation for article %s: %w", legacy.ID, err)
 		}
 
-		_, err := h.articles.UpdateByID(ctx, legacy.ID, bson.M{
+		_, err = h.articles.UpdateByID(ctx, legacy.ID, bson.M{
 			"$unset": bson.M{
 				"title":           "",
 				"markdown":        "",
