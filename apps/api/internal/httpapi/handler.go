@@ -359,30 +359,27 @@ func (h *Handler) UpdateArticle(w http.ResponseWriter, r *http.Request, id strin
 
 	currentOwner := strings.TrimSpace(strings.ToLower(existing.Owner))
 	requester := resolveOwnerEmail(UserFromContext(r.Context()), existing.AuthorID)
-	isArticleOwner := currentOwner == "" || currentOwner == requester
+
+	// Determine if user owns the article
+	userOwnsArticle := currentOwner != "" && currentOwner == requester
+	articleIsUnclaimed := currentOwner == ""
 
 	// Non-article-owners can only update translations, not article metadata
-	if !isArticleOwner {
-		// Only allow translation content updates for non-owners
-		// Block any attempt to change article-level properties
+	if !userOwnsArticle && !articleIsUnclaimed {
+		// Article has an owner, and it's not this user
+		// Only allow translation content updates
 		if req.Public != nil {
 			h.writeError(w, http.StatusForbidden, "only the article owner can change visibility")
 			return
 		}
 	}
 
-	// Article owners need to claim unclaimed articles before making changes
-	if currentOwner == "" && UserFromContext(r.Context()) != nil && !removeTranslation {
-		h.writeError(w, http.StatusForbidden, "claim the article before saving changes")
-		return
-	}
-
 	language := normalizeArticleLanguage(req.Language, model.LanguageFrench)
 	now := time.Now().UTC()
 
-	// Only update article metadata if user is the article owner
+	// Only update article metadata if user owns the article or it's unclaimed
 	var update bson.M
-	if isArticleOwner {
+	if userOwnsArticle || articleIsUnclaimed {
 		setFields := bson.M{
 			"preview":         contentPreview(req.Markdown, req.ContentHTML, 3, 180),
 			"tags":            normalizeArticleTags(req.Tags),
@@ -396,12 +393,12 @@ func (h *Handler) UpdateArticle(w http.ResponseWriter, r *http.Request, id strin
 		}
 		if req.Public != nil {
 			currentVisibility := existing.Public
-			if currentOwner == "" {
+			if articleIsUnclaimed {
 				// Legacy unowned articles are effectively public even when the field is absent.
 				currentVisibility = true
 			}
 			setFields["public"] = *req.Public
-			if currentOwner == "" && requester != "" && currentVisibility != *req.Public {
+			if articleIsUnclaimed && requester != "" && currentVisibility != *req.Public {
 				setFields["owner"] = requester
 			}
 		}
