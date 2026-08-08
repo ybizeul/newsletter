@@ -105,6 +105,11 @@ function App() {
         <Group h="100%" px="md" justify="space-between" wrap="nowrap">
           <Group wrap="nowrap" style={{ flex: 1, minWidth: 0 }}>
             <Burger opened={opened} onClick={toggle} hiddenFrom="sm" size="sm" />
+            <img 
+              src="/favicon.svg" 
+              alt="Newsletter Platform Logo" 
+              style={{ height: 32, width: 32 }} 
+            />
             <Text fw={700} truncate>
               Newsletter Workspace
             </Text>
