@@ -611,6 +611,7 @@ export default function ArticlesPage() {
   const location = useLocation();
   const articleSmartFilter = normalizeArticleSmartFilter(smartFilter);
   const { oidcEnabled, user } = useAuth();
+  const incomingArticleId = (location.state as { articleId?: string } | null)?.articleId;
   const containerRef = useRef<HTMLDivElement | null>(null);
   const headerRowRef = useRef<HTMLDivElement | null>(null);
   const headerLeftRef = useRef<HTMLDivElement | null>(null);
@@ -1461,6 +1462,18 @@ export default function ArticlesPage() {
     }
     setIsMobileEditorOpen(false);
   }, [isMobile, location.key, location.state]);
+
+  useEffect(() => {
+    if (incomingArticleId && articles.length > 0) {
+      const article = articles.find((a) => a.id === incomingArticleId);
+      if (article) {
+        void onEdit(article);
+        if (isMobile) {
+          setIsMobileEditorOpen(true);
+        }
+      }
+    }
+  }, [incomingArticleId, articles.length]);
 
   useEffect(() => {
     const row = headerRowRef.current;

@@ -23,6 +23,7 @@ import { useMediaQuery } from "@mantine/hooks";
 import {
   IconChevronDown,
   IconChevronUp,
+  IconExternalLink,
   IconEye,
   IconFiles,
   IconGripVertical,
@@ -1874,6 +1875,14 @@ export default function NewslettersPage() {
                           </ActionIcon>
                         </>
                       ) : null}
+                      <ActionIcon
+                        variant="subtle"
+                        color="blue"
+                        onClick={() => navigate("/articles/all", { state: { articleId: article.id } })}
+                        title="Go to article"
+                      >
+                        <IconExternalLink size={16} />
+                      </ActionIcon>
                       <ActionIcon
                         color="red"
                         variant="subtle"
