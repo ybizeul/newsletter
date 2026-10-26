@@ -1,4 +1,4 @@
-import type { Article, ArticleLanguageCode, ArticleSummary, Contact, Header, ListResponse, Newsletter, NewsletterPreview, NewsletterSummary } from "../types/domain";
+import type { Article, ArticleLanguageCode, ArticleSummary, Contact, Header, ListResponse, MCPToken, Newsletter, NewsletterPreview, NewsletterSummary } from "../types/domain";
 
 const API_ROOT = "/api";
 
@@ -325,4 +325,22 @@ export async function putSavedIcons(icons: string[]): Promise<string[]> {
     body: JSON.stringify({ icons })
   });
   return data.icons;
+}
+
+export async function listMCPTokens(): Promise<MCPToken[]> {
+  const data = await request<ListResponse<MCPToken>>("/mcp-tokens");
+  return data.items ?? [];
+}
+
+export async function createMCPToken(label: string): Promise<MCPToken> {
+  return request<MCPToken>("/mcp-tokens", {
+    method: "POST",
+    body: JSON.stringify({ label })
+  });
+}
+
+export async function revokeMCPToken(id: string): Promise<void> {
+  await request(`/mcp-tokens/${encodeURIComponent(id)}`, {
+    method: "DELETE"
+  });
 }

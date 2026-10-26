@@ -141,3 +141,12 @@ export interface NewsletterPreview {
 export interface ListResponse<T> {
   items: T[];
 }
+
+export interface MCPToken {
+  id: string;
+  label: string;
+  tokenHint: string;
+  createdAt: string;
+  lastUsedAt?: string;
+  token?: string;
+}

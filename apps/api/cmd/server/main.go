@@ -54,6 +54,9 @@ func main() {
 	go startScheduler(h, cfg.ScheduleTick)
 
 	r := chi.NewRouter()
+	// Drop token query params before the request logger runs. MCP authenticates
+	// only from the Authorization header.
+	r.Use(httpapi.StripCredentialQuery)
 	r.Use(middleware.RequestID)
 	r.Use(middleware.RealIP)
 	r.Use(middleware.Logger)
@@ -82,6 +85,13 @@ func main() {
 		h.TrackNewsletterOpen(w, r, chi.URLParam(r, "token"))
 	})
 
+	// MCP sits outside the session-cookie group. Callers authenticate with a
+	// personal access token. The handler is stateless JSON, so this route does
+	// not hold the 30s request timeout open with an event stream.
+	mcpEndpoint := h.MCPEndpoint(auth)
+	r.Handle("/mcp", mcpEndpoint)
+	r.Handle("/mcp/", mcpEndpoint)
+
 	r.Route("/api", func(api chi.Router) {
 		// OIDC auth routes (outside auth middleware)
 		api.Get("/auth/login", auth.HandleLogin)
@@ -94,6 +104,12 @@ func main() {
 
 		api.Group(func(protected chi.Router) {
 			protected.Use(auth.Middleware)
+
+			protected.Post("/mcp-tokens", auth.CreateMCPToken)
+			protected.Get("/mcp-tokens", auth.ListMCPTokens)
+			protected.Delete("/mcp-tokens/{id}", func(w http.ResponseWriter, r *http.Request) {
+				auth.RevokeMCPToken(w, r, chi.URLParam(r, "id"))
+			})
 
 			protected.Route("/articles", func(article chi.Router) {
 				article.Post("/", h.CreateArticle)

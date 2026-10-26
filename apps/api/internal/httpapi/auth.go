@@ -3,11 +3,13 @@ package httpapi
 import (
 	"context"
 	"crypto/rand"
+	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
+	"strings"
 	"time"
 
 	"newsletter/api/internal/config"
@@ -67,6 +69,7 @@ type OIDCAuth struct {
 	smtpXoauth2  bool
 	useGraphAPI  bool
 	sessions     *mongo.Collection
+	mcpTokens    *mongo.Collection
 }
 
 // NewOIDCAuth initialises the OIDC provider via discovery.
@@ -88,10 +91,28 @@ func NewOIDCAuth(cfg config.Config, db *mongo.Database) (*OIDCAuth, error) {
 	verifier := provider.Verifier(&oidc.Config{ClientID: cfg.OIDCApplicationID})
 
 	sessions := db.Collection("sessions")
+	mcpTokens := db.Collection("mcp_tokens")
 	// Create TTL index so expired sessions are auto-removed by MongoDB.
 	_, _ = sessions.Indexes().CreateOne(ctx, mongo.IndexModel{
 		Keys:    bson.D{{Key: "expiresAt", Value: 1}},
 		Options: options.Index().SetExpireAfterSeconds(0),
+	})
+	_, _ = mcpTokens.Indexes().CreateMany(ctx, []mongo.IndexModel{
+		{
+			Keys:    bson.D{{Key: "tokenHash", Value: 1}},
+			Options: options.Index().SetUnique(true),
+		},
+		{
+			Keys: bson.D{
+				{Key: "userID", Value: 1},
+				{Key: "email", Value: 1},
+				{Key: "createdAt", Value: -1},
+			},
+		},
+		{
+			Keys:    bson.D{{Key: "expiresAt", Value: 1}},
+			Options: options.Index().SetExpireAfterSeconds(0),
+		},
 	})
 
 	log.Printf("oidc: enabled issuer=%s client_id=%s", cfg.OIDCIssuer, cfg.OIDCApplicationID)
@@ -105,6 +126,7 @@ func NewOIDCAuth(cfg config.Config, db *mongo.Database) (*OIDCAuth, error) {
 		smtpXoauth2:  cfg.SMTPXoauth2,
 		useGraphAPI:  cfg.UseGraphAPI,
 		sessions:     sessions,
+		mcpTokens:    mcpTokens,
 	}, nil
 }
 
@@ -380,6 +402,80 @@ func (a *OIDCAuth) Middleware(next http.Handler) http.Handler {
 		}
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
+}
+
+// MCPBearerMiddleware validates an MCP personal access token and injects its
+// OIDC user into the request context. It is intentionally never a no-op:
+// MCP access is unavailable while OIDC is disabled.
+func (a *OIDCAuth) MCPBearerMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if !a.enabled {
+			mcpUnauthorized(w)
+			return
+		}
+
+		token, ok := bearerToken(r.Header.Get("Authorization"))
+		if !ok {
+			mcpUnauthorized(w)
+			return
+		}
+
+		user, err := a.verifyMCPToken(r.Context(), token)
+		if err != nil {
+			mcpUnauthorized(w)
+			return
+		}
+		next.ServeHTTP(w, r.WithContext(contextWithUser(r.Context(), user)))
+	})
+}
+
+func mcpUnauthorized(w http.ResponseWriter) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusUnauthorized)
+	_, _ = w.Write([]byte(`{"error":"invalid MCP token"}`))
+}
+
+func bearerToken(header string) (string, bool) {
+	parts := strings.Fields(header)
+	if len(parts) != 2 || !strings.EqualFold(parts[0], "Bearer") || parts[1] == "" {
+		return "", false
+	}
+	return parts[1], true
+}
+
+func (a *OIDCAuth) verifyMCPToken(ctx context.Context, token string) (*User, error) {
+	if a.mcpTokens == nil {
+		return nil, fmt.Errorf("MCP token store unavailable")
+	}
+
+	now := time.Now().UTC()
+	hash := sha256.Sum256([]byte(token))
+	filter := bson.M{
+		"tokenHash": base64.RawURLEncoding.EncodeToString(hash[:]),
+		"$and": []bson.M{
+			{"$or": []bson.M{{"revokedAt": bson.M{"$exists": false}}, {"revokedAt": nil}}},
+			{"$or": []bson.M{{"expiresAt": bson.M{"$exists": false}}, {"expiresAt": nil}, {"expiresAt": bson.M{"$gt": now}}}},
+		},
+	}
+
+	var doc mcpTokenDoc
+	err := a.mcpTokens.FindOneAndUpdate(
+		ctx,
+		filter,
+		bson.M{"$set": bson.M{"lastUsedAt": now}},
+		options.FindOneAndUpdate().SetReturnDocument(options.After),
+	).Decode(&doc)
+	if err != nil {
+		return nil, fmt.Errorf("MCP token not found: %w", err)
+	}
+	if strings.TrimSpace(doc.UserID) == "" || strings.TrimSpace(doc.Email) == "" {
+		return nil, fmt.Errorf("MCP token has no bound user")
+	}
+	return &User{
+		ID:    doc.UserID,
+		Email: strings.ToLower(strings.TrimSpace(doc.Email)),
+		Name:  doc.Name,
+	}, nil
 }
 
 // ---------------------------------------------------------------------------

@@ -1,7 +1,7 @@
 import { type MouseEvent as ReactMouseEvent, lazy, Suspense, useEffect, useState } from "react";
-import { ActionIcon, Anchor, AppShell, Box, Burger, Center, Group, Loader, Modal, NavLink, ScrollArea, Stack, Text, useComputedColorScheme, useMantineColorScheme } from "@mantine/core";
+import { ActionIcon, Anchor, AppShell, Box, Burger, Button, Center, Group, Loader, Modal, NavLink, ScrollArea, Stack, Text, useComputedColorScheme, useMantineColorScheme } from "@mantine/core";
 import { useDisclosure } from "@mantine/hooks";
-import { IconAlignBoxCenterTop, IconArticle, IconClock, IconDownload, IconHelpCircle, IconList, IconLock, IconLogout, IconMail, IconMoon, IconStar, IconSun, IconUser, IconAddressBook, IconWorld } from "@tabler/icons-react";
+import { IconAlignBoxCenterTop, IconArticle, IconClock, IconDownload, IconHelpCircle, IconKey, IconList, IconLock, IconLogout, IconMail, IconMoon, IconStar, IconSun, IconUser, IconAddressBook, IconWorld } from "@tabler/icons-react";
 import { Navigate, Route, Routes, useLocation, useNavigate } from "react-router-dom";
 
 const ArticlesPage = lazy(() => import("./pages/ArticlesPage"));
@@ -9,6 +9,7 @@ const ContactsPage = lazy(() => import("./pages/ContactsPage"));
 const HeadersPage = lazy(() => import("./pages/HeadersPage"));
 const NewslettersPage = lazy(() => import("./pages/NewslettersPage"));
 const NewsletterPreviewPage = lazy(() => import("./pages/NewsletterPreviewPage"));
+const McpAccessPage = lazy(() => import("./pages/McpAccessPage"));
 import LoginPage from "./pages/LoginPage";
 import { AuthProvider, useAuth } from "./lib/auth";
 
@@ -37,6 +38,11 @@ function App() {
   const [navbarWidth, setNavbarWidth] = useState(getStoredNavbarWidth);
   const location = useLocation();
   const navigate = useNavigate();
+
+  const openMcpAccess = () => {
+    navigate("/mcp-access");
+    close();
+  };
 
   const handleDownloadReport = async () => {
     try {
@@ -146,6 +152,29 @@ function App() {
           </ActionIcon>
           {oidcEnabled && user && (
             <Group gap="xs" wrap="nowrap">
+              <ActionIcon
+                hiddenFrom="sm"
+                variant={location.pathname === "/mcp-access" ? "light" : "subtle"}
+                color={location.pathname === "/mcp-access" ? "blue" : "gray"}
+                size="lg"
+                aria-label="MCP access"
+                title="MCP access"
+                onClick={openMcpAccess}
+              >
+                <IconKey size={18} />
+              </ActionIcon>
+              <Button
+                visibleFrom="sm"
+                variant={location.pathname === "/mcp-access" ? "light" : "subtle"}
+                color={location.pathname === "/mcp-access" ? "blue" : "gray"}
+                size="compact-sm"
+                leftSection={<IconKey size={16} />}
+                aria-label="MCP access"
+                title="MCP access"
+                onClick={openMcpAccess}
+              >
+                MCP
+              </Button>
               <Text size="sm" c="dimmed" truncate style={{ maxWidth: 160 }}>
                 {user.name || user.email}
               </Text>
@@ -383,6 +412,7 @@ function App() {
             <Route path="/headers" element={<HeadersPage />} />
             <Route path="/contacts" element={contactsDisabled ? <Navigate to="/articles" replace /> : <ContactsPage />} />
             <Route path="/newsletters/:id/preview" element={<NewsletterPreviewPage />} />
+            <Route path="/mcp-access" element={oidcEnabled ? <McpAccessPage /> : <Navigate to="/articles" replace />} />
             <Route path="*" element={<Navigate to="/articles" replace />} />
           </Routes>
         </Suspense>
