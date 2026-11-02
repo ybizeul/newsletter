@@ -158,6 +158,169 @@ func TestMCPTranslationAndQueryMatch(t *testing.T) {
 	if mcpHasTag([]string{"Finance"}, "news") {
 		t.Fatal("unrelated tag matched")
 	}
+	byLang[model.LanguageFrench] = model.ArticleTranslation{Language: model.LanguageFrench, Title: "Bonjour", Markdown: "chiffre d'affaires"}
+	if !mcpMatchesAnyTranslation(article, byLang, nil, "chiffre") {
+		t.Fatal("query did not match a translation other than the displayed language")
+	}
+	if mcpMatchesAnyTranslation(article, byLang, nil, "absent") {
+		t.Fatal("unrelated query matched a translation")
+	}
+}
+
+func TestMCPCreateTranslations(t *testing.T) {
+	legacy, err := mcpCreateTranslations(mcpCreateArticleInput{Title: "  Hello ", Markdown: "Body", Language: "EN"})
+	if err != nil {
+		t.Fatalf("legacy create: %v", err)
+	}
+	if len(legacy) != 1 || legacy[0].Language != model.LanguageEnglish || legacy[0].Title != "Hello" {
+		t.Fatalf("legacy translations = %#v", legacy)
+	}
+	if strings.Contains(strings.ToLower(legacy[0].ContentHTML), "<script") {
+		t.Fatal("legacy translation was not rendered")
+	}
+
+	multi, err := mcpCreateTranslations(mcpCreateArticleInput{Translations: []mcpTranslationInput{
+		{Language: "en", Title: "Hello", Markdown: "English body"},
+		{Language: "fr", Title: "Bonjour", Markdown: "Corps français"},
+	}})
+	if err != nil {
+		t.Fatalf("multi create: %v", err)
+	}
+	preview := mcpPreviewTranslation(multi)
+	if preview.Language != model.LanguageFrench || preview.Title != "Bonjour" {
+		t.Fatalf("preview = %#v, want the french translation", preview)
+	}
+	languages := mcpPreparedLanguages(multi)
+	if len(languages) != 2 || languages[0] != "en" || languages[1] != "fr" {
+		t.Fatalf("languages = %#v", languages)
+	}
+
+	if _, err := mcpCreateTranslations(mcpCreateArticleInput{
+		Title:        "Hello",
+		Markdown:     "Body",
+		Translations: []mcpTranslationInput{{Language: "fr", Title: "Bonjour", Markdown: "Corps"}},
+	}); err == nil || !strings.Contains(err.Error(), "not both") {
+		t.Fatalf("both shapes error = %v", err)
+	}
+	if _, err := mcpCreateTranslations(mcpCreateArticleInput{Translations: []mcpTranslationInput{
+		{Language: "en", Title: "One", Markdown: "A"},
+		{Language: "EN", Title: "Two", Markdown: "B"},
+	}}); err == nil || !strings.Contains(err.Error(), "duplicate language") {
+		t.Fatalf("duplicate language error = %v", err)
+	}
+	if _, err := mcpCreateTranslations(mcpCreateArticleInput{Translations: []mcpTranslationInput{
+		{Language: "english", Title: "Hello", Markdown: "Body"},
+	}}); err == nil {
+		t.Fatal("unsupported language was accepted")
+	}
+	if _, err := mcpCreateTranslations(mcpCreateArticleInput{Translations: []mcpTranslationInput{
+		{Language: "en", Title: " ", Markdown: "  "},
+	}}); err == nil {
+		t.Fatal("blank create translation was accepted")
+	}
+
+	removed, err := prepareMCPTranslations([]mcpTranslationInput{{Language: "de", Title: " ", Markdown: ""}}, true)
+	if err != nil || len(removed) != 1 || !removed[0].Remove || removed[0].Language != model.LanguageGerman {
+		t.Fatalf("remove translation = %#v, err = %v", removed, err)
+	}
+}
+
+func TestMCPVisibleNewsletterFilterScopesToCaller(t *testing.T) {
+	userA := &User{ID: "a", Email: "A@Example.com"}
+	filter := mcpVisibleNewsletterByIDFilter(userA, "newsletter-1")
+	raw, err := bson.Marshal(filter)
+	if err != nil {
+		t.Fatalf("marshal filter: %v", err)
+	}
+	if filter["_id"] != "newsletter-1" {
+		t.Fatalf("id filter = %#v", filter["_id"])
+	}
+	if !bytes.Contains(raw, []byte("a@example.com")) {
+		t.Fatal("visibility filter does not include the caller email")
+	}
+	if bytes.Contains(raw, []byte("b@example.com")) {
+		t.Fatal("visibility filter includes another user's email")
+	}
+	if bytes.Contains(raw, []byte("public")) {
+		t.Fatal("newsletter visibility filter includes a public rule")
+	}
+
+	search := mcpVisibleNewsletterFilter(userA, model.NewsletterStatusDraft)
+	searchRaw, err := bson.Marshal(search)
+	if err != nil {
+		t.Fatalf("marshal search filter: %v", err)
+	}
+	if !bytes.Contains(searchRaw, []byte("a@example.com")) || !bytes.Contains(searchRaw, []byte("draft")) {
+		t.Fatal("search filter lost the caller or status constraint")
+	}
+}
+
+func TestNewMCPDraftNewsletterIsPrivateDraft(t *testing.T) {
+	user := &User{ID: "subject-a", Email: "A@Example.com", Name: "A"}
+	newsletter, err := newMCPDraftNewsletter(user, mcpCreateNewsletterInput{
+		Title:           "  November  ",
+		IntroMarkdown:   "Hello <script>alert(1)</script>",
+		ArticleIDs:      []string{" a ", "a", "b"},
+		ContactTags:     []string{"Customers", "customers"},
+		ContactTagsMode: "all",
+		RecipientIDs:    []string{"Ada <Ada@Example.com>"},
+		IncludeIndex:    true,
+	}, time.Date(2026, 11, 2, 8, 0, 0, 0, time.UTC))
+	if err != nil {
+		t.Fatalf("newMCPDraftNewsletter() error = %v", err)
+	}
+	if newsletter.PublicLink || newsletter.Status != model.NewsletterStatusDraft {
+		t.Fatalf("newsletter = %#v, want a private draft", newsletter)
+	}
+	if newsletter.Owner != "a@example.com" || newsletter.CreatorID != "subject-a" {
+		t.Fatalf("owner = %q creator = %q", newsletter.Owner, newsletter.CreatorID)
+	}
+	if newsletter.Title != "November" || newsletter.Language != model.LanguageFrench || newsletter.Template != defaultNewsletterTemplateName {
+		t.Fatalf("title/language/template = %q %q %q", newsletter.Title, newsletter.Language, newsletter.Template)
+	}
+	if newsletter.IncludeIndex != true || len(newsletter.ArticleIDs) != 2 || newsletter.ArticleIDs[0] != "a" || newsletter.ArticleIDs[1] != "b" {
+		t.Fatalf("articles = %#v includeIndex=%t", newsletter.ArticleIDs, newsletter.IncludeIndex)
+	}
+	if len(newsletter.ContactTags) != 1 || newsletter.ContactTagsMode != "all" {
+		t.Fatalf("tags = %#v mode=%q", newsletter.ContactTags, newsletter.ContactTagsMode)
+	}
+	if strings.Contains(strings.ToLower(newsletter.IntroHTML), "<script") || strings.Contains(newsletter.IntroHTML, "alert(1)") {
+		t.Fatalf("intro html kept script content: %s", newsletter.IntroHTML)
+	}
+	if !strings.Contains(newsletter.IntroHTML, "Hello") {
+		t.Fatalf("intro html dropped the text: %s", newsletter.IntroHTML)
+	}
+
+	if _, err := newMCPDraftNewsletter(user, mcpCreateNewsletterInput{Title: " "}, time.Now()); err == nil {
+		t.Fatal("blank title was accepted")
+	}
+	if _, err := newMCPDraftNewsletter(&User{ID: "subject-a"}, mcpCreateNewsletterInput{Title: "November"}, time.Now()); err == nil {
+		t.Fatal("draft without an owner email succeeded")
+	}
+	if _, err := newMCPDraftNewsletter(user, mcpCreateNewsletterInput{Title: "November", Template: "missing"}, time.Now()); err == nil {
+		t.Fatal("unknown template was accepted")
+	}
+	if _, err := newMCPDraftNewsletter(user, mcpCreateNewsletterInput{Title: "November", RecipientIDs: []string{"not-an-email"}}, time.Now()); err == nil {
+		t.Fatal("invalid recipient was accepted")
+	}
+	if _, err := parseMCPNewsletterStatus("nope"); err == nil {
+		t.Fatal("invalid newsletter status was accepted")
+	}
+	if _, err := parseMCPContactTagsMode("or"); err == nil {
+		t.Fatal("invalid contact tag mode was accepted")
+	}
+
+	updated, err := applyMCPNewsletterUpdate(newsletter, mcpUpdateNewsletterInput{Title: "December", Language: stringPtr("en")}, time.Now())
+	if err != nil {
+		t.Fatalf("applyMCPNewsletterUpdate() error = %v", err)
+	}
+	if updated.Title != "December" || updated.Language != model.LanguageEnglish || updated.IntroMarkdown != newsletter.IntroMarkdown {
+		t.Fatalf("partial update = %#v", updated)
+	}
+}
+
+func stringPtr(value string) *string {
+	return &value
 }
 
 func TestMCPRateLimiterHidesToken(t *testing.T) {
@@ -265,12 +428,15 @@ func TestMCPToolsAreStatelessAndUseTheRequestUser(t *testing.T) {
 		props, _ := tool.InputSchema["properties"].(map[string]any)
 		tools[tool.Name] = props
 	}
-	for _, name := range []string{"search_articles", "get_article", "create_article"} {
+	for _, name := range []string{
+		"search_articles", "get_article", "create_article", "update_article", "delete_article",
+		"search_newsletters", "get_newsletter", "create_newsletter", "update_newsletter", "delete_newsletter",
+	} {
 		if _, ok := tools[name]; !ok {
 			t.Fatalf("missing tool %s in %#v", name, tools)
 		}
 	}
-	for _, required := range []string{"title", "markdown"} {
+	for _, required := range []string{"title", "markdown", "translations"} {
 		if _, ok := tools["create_article"][required]; !ok {
 			t.Fatalf("create_article schema = %#v", tools["create_article"])
 		}
@@ -280,9 +446,30 @@ func TestMCPToolsAreStatelessAndUseTheRequestUser(t *testing.T) {
 			t.Fatalf("search_articles schema = %#v", tools["search_articles"])
 		}
 	}
-	for _, forbidden := range []string{"owner", "authorId", "author", "public"} {
+	for _, name := range []string{"id", "tags", "translations"} {
+		if _, ok := tools["update_article"][name]; !ok {
+			t.Fatalf("update_article schema = %#v", tools["update_article"])
+		}
+	}
+	for _, name := range []string{"title", "language", "template", "introMarkdown", "footerMarkdown", "articleIds"} {
+		if _, ok := tools["create_newsletter"][name]; !ok {
+			t.Fatalf("create_newsletter schema = %#v", tools["create_newsletter"])
+		}
+	}
+	for _, forbidden := range []string{"owner", "authorId", "author", "public", "status"} {
 		if _, ok := tools["create_article"][forbidden]; ok {
 			t.Fatalf("create_article accepts %s from the model", forbidden)
+		}
+		if _, ok := tools["update_article"][forbidden]; ok {
+			t.Fatalf("update_article accepts %s from the model", forbidden)
+		}
+	}
+	for _, forbidden := range []string{"owner", "creatorId", "publicLink", "status"} {
+		if _, ok := tools["create_newsletter"][forbidden]; ok {
+			t.Fatalf("create_newsletter accepts %s from the model", forbidden)
+		}
+		if _, ok := tools["update_newsletter"][forbidden]; ok {
+			t.Fatalf("update_newsletter accepts %s from the model", forbidden)
 		}
 	}
 
@@ -295,16 +482,33 @@ func TestMCPToolsAreStatelessAndUseTheRequestUser(t *testing.T) {
 		id   int
 		name string
 		args string
+		want string
 	}{
-		{3, "search_articles", `{}`},
-		{4, "get_article", `{"id":"article-1"}`},
-		{5, "create_article", `{"title":"Draft","markdown":"Hello"}`},
+		{3, "search_articles", `{}`, "article store unavailable"},
+		{4, "get_article", `{"id":"article-1"}`, "article store unavailable"},
+		{5, "create_article", `{"title":"Draft","markdown":"Hello"}`, "article store unavailable"},
+		{7, "update_article", `{"id":"article-1","tags":["News"]}`, "article store unavailable"},
+		{8, "delete_article", `{"id":"article-1"}`, "article store unavailable"},
+		{9, "search_newsletters", `{}`, "newsletter store unavailable"},
+		{10, "get_newsletter", `{"id":"newsletter-1"}`, "newsletter store unavailable"},
+		{11, "create_newsletter", `{"title":"November"}`, "newsletter store unavailable"},
+		{12, "update_newsletter", `{"id":"newsletter-1","title":"November"}`, "newsletter store unavailable"},
+		{13, "delete_newsletter", `{"id":"newsletter-1"}`, "newsletter store unavailable"},
 	} {
 		body := fmt.Sprintf(`{"jsonrpc":"2.0","id":%d,"method":"tools/call","params":{"name":%q,"arguments":%s}}`, call.id, call.name, call.args)
 		authed := postMCP(t, withUser, body)
-		if !strings.Contains(authed.Body.String(), "article store unavailable") {
+		if !strings.Contains(authed.Body.String(), call.want) {
 			t.Fatalf("%s body = %s", call.name, authed.Body.String())
 		}
+	}
+
+	bothShapes := postMCP(t, withUser, `{"jsonrpc":"2.0","id":14,"method":"tools/call","params":{"name":"create_article","arguments":{"title":"Draft","markdown":"Hello","translations":[{"language":"en","title":"Draft","markdown":"Hello"}]}}}`)
+	if !strings.Contains(bothShapes.Body.String(), "provide translations or title and markdown, not both") {
+		t.Fatalf("create_article accepted both shapes: %s", bothShapes.Body.String())
+	}
+	missingChange := postMCP(t, withUser, `{"jsonrpc":"2.0","id":15,"method":"tools/call","params":{"name":"update_article","arguments":{"id":"article-1"}}}`)
+	if !strings.Contains(missingChange.Body.String(), "tags or translations are required") {
+		t.Fatalf("update_article accepted an empty change: %s", missingChange.Body.String())
 	}
 
 	rejected := postMCP(t, withUser, `{"jsonrpc":"2.0","id":6,"method":"tools/call","params":{"name":"create_article","arguments":{"title":"Draft","markdown":"Hello","owner":"other@example.com","public":true,"authorId":"someone-else"}}}`)
