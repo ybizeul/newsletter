@@ -165,6 +165,14 @@ func TestMCPTranslationAndQueryMatch(t *testing.T) {
 	if mcpMatchesAnyTranslation(article, byLang, nil, "absent") {
 		t.Fatal("unrelated query matched a translation")
 	}
+
+	listed := mcpListedTranslations(article, byLang)
+	if len(listed) != 2 || listed[0].Language != "en" || listed[0].Title != "Hello" || listed[1].Language != "fr" || listed[1].Title != "Bonjour" {
+		t.Fatalf("listed translations = %#v, want both languages", listed)
+	}
+	if listed[0].Preview == "" || listed[1].Preview == "" {
+		t.Fatalf("listed previews = %#v", listed)
+	}
 }
 
 func TestMCPCreateTranslations(t *testing.T) {

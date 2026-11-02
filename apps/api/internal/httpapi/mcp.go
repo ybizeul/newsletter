@@ -25,7 +25,7 @@ const (
 
 	mcpInstructions = "Search, read, create, update, and delete articles and newsletters for the authenticated user. " +
 		"Articles store one translation per language (en, fr, de, es, it, ja, zh). " +
-		"search_articles and search_newsletters return at most 20 summaries the caller is allowed to see. " +
+		"search_articles returns at most 20 articles and includes every translation on each article. search_newsletters returns at most 20 summaries. " +
 		"Article search includes the caller's articles plus articles that are already public or unclaimed. " +
 		"Newsletter search includes the caller's newsletters plus unclaimed newsletters. " +
 		"create_article and create_newsletter always store a private draft. The owner and author come from the access token, not from tool arguments. " +
@@ -81,7 +81,7 @@ func (h *Handler) mcpStreamHandler() http.Handler {
 	remove := &mcp.ToolAnnotations{DestructiveHint: &destructive, OpenWorldHint: &closedWorld}
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "search_articles",
-		Description: "Search articles visible to the authenticated user. Returns at most 20 summaries with id, title, preview, tags, status, language, available languages, and updated time. A language filter matches that translation only. Without one, the query matches every translation.",
+		Description: "Search articles visible to the authenticated user. Returns at most 20 articles. Each article includes every translation, with its language, title, and preview. A language filter keeps articles that have that translation. Without one, the query matches every translation.",
 		Annotations: readOnly,
 	}, h.mcpSearchArticles)
 	mcp.AddTool(server, &mcp.Tool{
@@ -141,15 +141,18 @@ type mcpPreparedTranslation struct {
 	Remove      bool
 }
 
+type mcpListedTranslation struct {
+	Language string `json:"language" jsonschema:"language code"`
+	Title    string `json:"title" jsonschema:"title in this language"`
+	Preview  string `json:"preview" jsonschema:"short plain-text preview in this language"`
+}
+
 type mcpArticleSummary struct {
-	ID                 string   `json:"id" jsonschema:"article id"`
-	Title              string   `json:"title" jsonschema:"article title in the selected language"`
-	Preview            string   `json:"preview" jsonschema:"short plain-text preview"`
-	Tags               []string `json:"tags" jsonschema:"article tags"`
-	Status             string   `json:"status" jsonschema:"draft, published, or archived"`
-	Language           string   `json:"language" jsonschema:"language code of the returned text"`
-	AvailableLanguages []string `json:"availableLanguages" jsonschema:"language codes that have content"`
-	UpdatedAt          string   `json:"updatedAt" jsonschema:"last update time in RFC3339"`
+	ID           string                 `json:"id" jsonschema:"article id"`
+	Tags         []string               `json:"tags" jsonschema:"article tags"`
+	Status       string                 `json:"status" jsonschema:"draft, published, or archived"`
+	Translations []mcpListedTranslation `json:"translations" jsonschema:"every stored translation, one entry per language"`
+	UpdatedAt    string                 `json:"updatedAt" jsonschema:"last update time in RFC3339"`
 }
 
 type mcpSearchArticlesOutput struct {
@@ -257,19 +260,15 @@ func (h *Handler) mcpSearchArticles(ctx context.Context, _ *mcp.CallToolRequest,
 	query := strings.TrimSpace(in.Query)
 	for _, article := range candidates {
 		byLang := translations[article.ID]
-		translation, ok := mcpSearchTranslation(article, byLang, language, query)
-		if !ok {
+		if _, ok := mcpSearchTranslation(article, byLang, language, query); !ok {
 			continue
 		}
 		out.Articles = append(out.Articles, mcpArticleSummary{
-			ID:                 article.ID,
-			Title:              translation.Title,
-			Preview:            contentPreview(translation.Markdown, translation.ContentHTML, 3, 180),
-			Tags:               mcpStringList(article.Tags),
-			Status:             string(article.Status),
-			Language:           string(translation.Language),
-			AvailableLanguages: mcpAvailableLanguages(byLang),
-			UpdatedAt:          article.UpdatedAt.UTC().Format(time.RFC3339),
+			ID:           article.ID,
+			Tags:         mcpStringList(article.Tags),
+			Status:       string(article.Status),
+			Translations: mcpListedTranslations(article, byLang),
+			UpdatedAt:    article.UpdatedAt.UTC().Format(time.RFC3339),
 		})
 		if len(out.Articles) >= mcpSearchLimit {
 			break
@@ -648,6 +647,31 @@ func mcpAvailableLanguages(byLang map[model.LanguageCode]model.ArticleTranslatio
 			continue
 		}
 		out = append(out, string(supported))
+	}
+	return out
+}
+
+func mcpListedTranslations(article model.Article, byLang map[model.LanguageCode]model.ArticleTranslation) []mcpListedTranslation {
+	languages := mcpAvailableLanguages(byLang)
+	if len(languages) == 0 {
+		translation, ok := mcpTranslation(article, nil, "")
+		if !ok {
+			return []mcpListedTranslation{}
+		}
+		return []mcpListedTranslation{{
+			Language: string(translation.Language),
+			Title:    translation.Title,
+			Preview:  contentPreview(translation.Markdown, translation.ContentHTML, 3, 180),
+		}}
+	}
+	out := make([]mcpListedTranslation, 0, len(languages))
+	for _, language := range languages {
+		translation := byLang[model.LanguageCode(language)]
+		out = append(out, mcpListedTranslation{
+			Language: language,
+			Title:    translation.Title,
+			Preview:  contentPreview(translation.Markdown, translation.ContentHTML, 3, 180),
+		})
 	}
 	return out
 }
