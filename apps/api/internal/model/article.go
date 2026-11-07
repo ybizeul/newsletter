@@ -42,13 +42,16 @@ type ArticleTranslation struct {
 	UpdatedAt   time.Time    `bson:"updatedAt" json:"updatedAt"`
 }
 
+// Title, Markdown and ContentHTML on Article are legacy fields kept only so old documents
+// can be migrated into article_translations. They must never be written as empty values
+// for new articles, or the migration would treat placeholders as real content.
 type Article struct {
 	ID               string         `bson:"_id" json:"id"`
 	AuthorID         string         `bson:"authorId" json:"authorId"`
 	Owner            string         `bson:"owner,omitempty" json:"owner,omitempty"`
 	Public           bool           `bson:"public" json:"public"`
-	Title            string         `bson:"title" json:"title"`
-	Markdown         string         `bson:"markdown" json:"markdown"`
+	Title            string         `bson:"title,omitempty" json:"title"`
+	Markdown         string         `bson:"markdown,omitempty" json:"markdown"`
 	ContentHTML      string         `bson:"contentHTML,omitempty" json:"contentHTML,omitempty"`
 	Tags             []string       `bson:"tags,omitempty" json:"tags,omitempty"`
 	TopicIcon        string         `bson:"topicIcon,omitempty" json:"topicIcon,omitempty"`

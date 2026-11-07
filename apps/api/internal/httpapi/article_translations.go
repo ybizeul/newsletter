@@ -259,18 +259,13 @@ func (h *Handler) EnsureArticleTranslations(ctx context.Context) error {
 		return fmt.Errorf("create article translation indexes: %w", err)
 	}
 
-	// Migration 1: Delete translations that are missing both title and content
+	// Migration 1: Delete translations that are empty in every content field.
+	// Missing fields match $in: [null] as well, so this covers absent and blank values.
+	// contentHTML is included so a translation holding only HTML content is never removed.
 	deleteFilter := bson.M{
-		"$or": []bson.M{
-			{
-				"title":    bson.M{"$in": []interface{}{"", nil}},
-				"markdown": bson.M{"$in": []interface{}{"", nil}},
-			},
-			{
-				"title":    bson.M{"$exists": false},
-				"markdown": bson.M{"$exists": false},
-			},
-		},
+		"title":       bson.M{"$in": []interface{}{"", nil}},
+		"markdown":    bson.M{"$in": []interface{}{"", nil}},
+		"contentHTML": bson.M{"$in": []interface{}{"", nil}},
 	}
 	deleteResult, err := h.articleTranslations.DeleteMany(ctx, deleteFilter)
 	if err != nil {
@@ -349,27 +344,26 @@ func (h *Handler) EnsureArticleTranslations(ctx context.Context) error {
 
 		now := time.Now().UTC()
 
-		// Use direct insert/update without ownership check for migration
-		lang := model.LanguageFrench
-		filter := bson.M{"articleId": legacy.ID, "language": lang}
-		update := bson.M{
-			"$set": bson.M{
-				"title":       strings.TrimSpace(legacy.Title),
-				"markdown":    legacy.Markdown,
-				"contentHTML": legacy.ContentHTML,
-				"owner":       legacy.Owner,
-				"updatedAt":   now,
-			},
-			"$setOnInsert": bson.M{
-				"_id":       bson.NewObjectID().Hex(),
-				"articleId": legacy.ID,
-				"language":  lang,
-				"createdAt": now,
-			},
-		}
-		_, err := h.articleTranslations.UpdateOne(ctx, filter, update, options.UpdateOne().SetUpsert(true))
-		if err != nil {
-			return fmt.Errorf("upsert article translation for article %s: %w", legacy.ID, err)
+		// Only copy legacy content that is actually present, and only when no French
+		// translation exists yet. Overwriting with $set here used to replace real
+		// translations with the empty legacy placeholders of newer articles.
+		if !isBlankArticleTranslationInput(legacy.Title, legacy.Markdown, legacy.ContentHTML) {
+			lang := model.LanguageFrench
+			filter := bson.M{"articleId": legacy.ID, "language": lang}
+			update := bson.M{
+				"$setOnInsert": bson.M{
+					"_id":         bson.NewObjectID().Hex(),
+					"title":       strings.TrimSpace(legacy.Title),
+					"markdown":    legacy.Markdown,
+					"contentHTML": legacy.ContentHTML,
+					"owner":       legacy.Owner,
+					"createdAt":   now,
+					"updatedAt":   now,
+				},
+			}
+			if _, err := h.articleTranslations.UpdateOne(ctx, filter, update, options.UpdateOne().SetUpsert(true)); err != nil {
+				return fmt.Errorf("upsert article translation for article %s: %w", legacy.ID, err)
+			}
 		}
 
 		_, err = h.articles.UpdateByID(ctx, legacy.ID, bson.M{
