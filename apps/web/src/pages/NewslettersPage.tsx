@@ -64,7 +64,7 @@ const PENDING_SEND_NEWSLETTER_ID_KEY = "newsletter.pending_send.id";
 const MAX_RECIPIENTS = 3;
 const SEND_POLL_INTERVAL_MS = 2000;
 const SEND_POLL_MAX_ERRORS = 10;
-const ARTICLE_REUSE_WARNING_TEXT = "already used in another newsletter";
+const ARTICLE_REUSE_WARNING_TEXT = "already used in another newsletter with this header";
 const DEFAULT_NEWSLETTER_TEMPLATE = "default";
 const DEFAULT_NEWSLETTER_LANGUAGE: ArticleLanguageCode = "fr";
 const NO_HEADER_OPTION_VALUE = "__none__";
@@ -321,8 +321,16 @@ export default function NewslettersPage() {
 
   const articleIdsUsedInOtherNewsletters = useMemo(() => {
     const used = new Set<string>();
+    const currentHeaderId = (headerId ?? "").trim();
+    // A header identifies the customer. Without one, reuse cannot be scoped.
+    if (!currentHeaderId) {
+      return used;
+    }
     for (const newsletter of newsletters) {
       if (newsletter.id === selectedNewsletterId) {
+        continue;
+      }
+      if ((newsletter.headerId ?? "").trim() !== currentHeaderId) {
         continue;
       }
       if (oidcEnabled) {
@@ -339,7 +347,7 @@ export default function NewslettersPage() {
       }
     }
     return used;
-  }, [newsletters, selectedNewsletterId, oidcEnabled, normalizedUserEmail]);
+  }, [newsletters, selectedNewsletterId, oidcEnabled, normalizedUserEmail, headerId]);
 
   const availableArticleOptions = useMemo(
     () =>
@@ -1735,7 +1743,7 @@ export default function NewslettersPage() {
             <Group align="end" grow>
               <Select
                 label="Add existing article"
-                description="Choose an article from the library to append to this newsletter. Articles already used in another newsletter appear last."
+                description="Choose an article from the library to append to this newsletter. Articles already used in another newsletter with the same header appear last."
                 placeholder="Choose an article"
                 data={articleOptionsForAdd}
                 renderOption={({ option }) => (
