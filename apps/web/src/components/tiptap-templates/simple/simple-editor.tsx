@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useRef, useState } from "react"
+import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from "react"
 import { EditorContent, EditorContext, useEditor } from "@tiptap/react"
 
 // --- Tiptap Core Extensions ---
@@ -216,15 +216,18 @@ const MobileToolbarContent = ({
   </>
 )
 
-export function SimpleEditor({
-  initialContent,
-  onContentChange,
-  minHeight,
-}: {
-  initialContent?: string
-  onContentChange?: (html: string) => void
-  minHeight?: number
-}) {
+export type SimpleEditorHandle = {
+  getHTML: () => string
+}
+
+export const SimpleEditor = forwardRef<
+  SimpleEditorHandle,
+  {
+    initialContent?: string
+    onContentChange?: (html: string) => void
+    minHeight?: number
+  }
+>(function SimpleEditor({ initialContent, onContentChange, minHeight }, ref) {
   const isMobile = useIsBreakpoint()
   useWindowSize()
   const [mobileView, setMobileView] = useState<
@@ -353,9 +356,25 @@ export function SimpleEditor({
     content: initialContent ?? "<p></p>",
   })
 
+  useImperativeHandle(ref, () => ({
+    getHTML: () => {
+      if (!editor || editor.isDestroyed || !editor.view || editor.view.isDestroyed) return ""
+      return editor.getHTML()
+    },
+  }), [editor])
+
   useEffect(() => {
     if (!editor || !onContentChange) return
-    const handler = () => onContentChange(editor.getHTML())
+    const handler = () => {
+      // Unmounting the editor detaches its DOM and can emit an update whose
+      // document is empty. Publishing that would wipe the introduction.
+      try {
+        if (editor.isDestroyed || editor.view.isDestroyed || !editor.view.dom?.isConnected) return
+        onContentChange(editor.getHTML())
+      } catch {
+        return
+      }
+    }
     editor.on("update", handler)
     return () => { editor.off("update", handler) }
   }, [editor, onContentChange])
@@ -407,4 +426,4 @@ export function SimpleEditor({
       </EditorContext.Provider>
     </div>
   )
-}
+})

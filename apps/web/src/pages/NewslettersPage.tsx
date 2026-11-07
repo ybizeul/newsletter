@@ -1,4 +1,4 @@
-import { type MouseEvent as ReactMouseEvent, useEffect, useMemo, useRef, useState } from "react";
+import { type MouseEvent as ReactMouseEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActionIcon,
   Box,
@@ -55,7 +55,7 @@ import type { ArticleLanguageCode, ArticleSummary, Contact, Header, Newsletter, 
 import { useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../lib/auth";
 import { DatePicker, DateTimePicker } from "@mantine/dates";
-import { SimpleEditor } from "@/components/tiptap-templates/simple/simple-editor";
+import { SimpleEditor, type SimpleEditorHandle } from "@/components/tiptap-templates/simple/simple-editor";
 
 const FALLBACK_CREATOR_ID = "demo-user";
 const NEWSLETTERS_PANE_WIDTH_STORAGE_KEY = "newsletter.newsletters.pane.width";
@@ -228,6 +228,23 @@ function toNewsletterSummary(newsletter: Newsletter): NewsletterSummary {
   };
 }
 
+function editorHTML(editor: SimpleEditorHandle | null, fallback: string) {
+  if (!editor) {
+    return fallback;
+  }
+  try {
+    const html = editor.getHTML();
+    const blank = !html || html === "<p></p>" || html === "<p><br></p>";
+    const fallbackHasText = Boolean(fallback.trim()) && fallback !== "<p></p>" && fallback !== "<p><br></p>";
+    if (blank && fallbackHasText) {
+      return fallback;
+    }
+    return html || fallback;
+  } catch {
+    return fallback;
+  }
+}
+
 export default function NewslettersPage() {
   const { user, oidcEnabled, contactsDisabled, scheduleDisabled } = useAuth();
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -240,6 +257,9 @@ export default function NewslettersPage() {
   const lastSavedDraftRef = useRef<string>("");
   const sendPollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const isLoadingNewsletterRef = useRef(false);
+  const blockEditorSyncRef = useRef(false);
+  const introEditorRef = useRef<SimpleEditorHandle | null>(null);
+  const footerEditorRef = useRef<SimpleEditorHandle | null>(null);
   const pendingEditRef = useRef<string | null>(null);
   const wasNewslettersRouteActiveRef = useRef(false);
   const [leftPaneWidth, setLeftPaneWidth] = useState(getStoredNewslettersPaneWidth);
@@ -277,6 +297,7 @@ export default function NewslettersPage() {
   const [introMarkdown, setIntroMarkdown] = useState("");
   const [introContentHTML, setIntroContentHTML] = useState("");
   const [introEditorKey, setIntroEditorKey] = useState("");
+  const [editorSyncEpoch, setEditorSyncEpoch] = useState(0);
   const [footerMarkdown, setFooterMarkdown] = useState("");
   const [footerContentHTML, setFooterContentHTML] = useState("");
   const [footerEditorKey, setFooterEditorKey] = useState("");
@@ -610,8 +631,6 @@ export default function NewslettersPage() {
       } else {
         introHTML = "<p></p>";
       }
-      setIntroContentHTML(introHTML || "");
-      setIntroEditorKey(fullNewsletter.id);
       setFooterMarkdown(fullNewsletter.footerMarkdown);
       let footerHTML: string;
       if (fullNewsletter.footerHTML?.trim()) {
@@ -621,6 +640,12 @@ export default function NewslettersPage() {
       } else {
         footerHTML = "<p></p>";
       }
+      // Remounting the editors can emit an empty document. Ignore those events
+      // until this commit finishes, or that empty HTML replaces the introduction.
+      blockEditorSyncRef.current = true;
+      setEditorSyncEpoch((current) => current + 1);
+      setIntroContentHTML(introHTML || "");
+      setIntroEditorKey(fullNewsletter.id);
       setFooterContentHTML(footerHTML || "");
       setFooterEditorKey(fullNewsletter.id + "-footer");
       setIncludeIndex(Boolean(fullNewsletter.includeIndex));
@@ -684,10 +709,25 @@ export default function NewslettersPage() {
         startSendPolling(fullNewsletter.id);
       }
     } catch (err) {
+      blockEditorSyncRef.current = false;
       isLoadingNewsletterRef.current = false;
       setError(err instanceof Error ? err.message : "Failed to load newsletter details");
     }
   };
+
+  useEffect(() => {
+    blockEditorSyncRef.current = false;
+  }, [editorSyncEpoch]);
+
+  const onIntroContentChange = useCallback((html: string) => {
+    if (isLoadingNewsletterRef.current || blockEditorSyncRef.current) return;
+    setIntroContentHTML(html);
+  }, []);
+
+  const onFooterContentChange = useCallback((html: string) => {
+    if (isLoadingNewsletterRef.current || blockEditorSyncRef.current) return;
+    setFooterContentHTML(html);
+  }, []);
 
   useEffect(() => {
     if (newsletters.length === 0) {
@@ -1231,7 +1271,7 @@ export default function NewslettersPage() {
   };
 
   const onDuplicateNewsletter = async () => {
-    if (!selectedNewsletterId) {
+    if (!selectedNewsletterId || isLoadingNewsletterRef.current) {
       return;
     }
 
@@ -1239,23 +1279,35 @@ export default function NewslettersPage() {
     setError(null);
 
     try {
-      const source = await getNewsletter(selectedNewsletterId);
+      if (autosaveTimerRef.current !== null) {
+        window.clearTimeout(autosaveTimerRef.current);
+        autosaveTimerRef.current = null;
+      }
+
+      // React state can already be blank here: remounting the editor emits an
+      // empty document. Read the document that is actually on screen.
+      const draft = {
+        ...buildNewsletterDraftPayload(),
+        introHTML: editorHTML(introEditorRef.current, introContentHTML),
+        footerHTML: editorHTML(footerEditorRef.current, footerContentHTML)
+      };
+
       const created = await createNewsletter({
         creatorId: oidcEnabled ? undefined : FALLBACK_CREATOR_ID,
-        title: `${source.title} (copy)`,
-        language: source.language ?? DEFAULT_NEWSLETTER_LANGUAGE,
-        template: source.template ?? DEFAULT_NEWSLETTER_TEMPLATE,
-        publicLink: Boolean(source.publicLink),
-        headerId: source.headerId ?? "",
-        introMarkdown: source.introMarkdown ?? "",
-        introHTML: source.introHTML ?? "",
-        footerMarkdown: source.footerMarkdown ?? "",
-        footerHTML: source.footerHTML ?? "",
-        includeIndex: Boolean(source.includeIndex),
-        articleIds: source.articleIds,
-        recipientIds: source.recipientIds,
-        contactTags: source.contactTags ?? [],
-        contactTagsMode: source.contactTagsMode ?? "any"
+        title: `${draft.title} (copy)`,
+        language: draft.language,
+        template: draft.template,
+        publicLink: draft.publicLink,
+        headerId: draft.headerId,
+        introMarkdown: draft.introMarkdown,
+        introHTML: draft.introHTML,
+        footerMarkdown: draft.footerMarkdown,
+        footerHTML: draft.footerHTML,
+        includeIndex: draft.includeIndex,
+        articleIds: draft.articleIds,
+        recipientIds: draft.recipientIds,
+        contactTags: draft.contactTags,
+        contactTagsMode: draft.contactTagsMode
       });
 
       const createdSummary = withFavoriteFlag(toNewsletterSummary(created));
@@ -1724,9 +1776,10 @@ export default function NewslettersPage() {
             description="Write the opening section shown before the selected articles."
           >
             <SimpleEditor
+              ref={introEditorRef}
               key={introEditorKey}
               initialContent={introContentHTML || undefined}
-              onContentChange={setIntroContentHTML}
+              onContentChange={onIntroContentChange}
               minHeight={150}
             />
           </Input.Wrapper>
@@ -1917,9 +1970,10 @@ export default function NewslettersPage() {
             description="Write the closing section shown after the selected articles."
           >
             <SimpleEditor
+              ref={footerEditorRef}
               key={footerEditorKey}
               initialContent={footerContentHTML || undefined}
-              onContentChange={setFooterContentHTML}
+              onContentChange={onFooterContentChange}
               minHeight={150}
             />
           </Input.Wrapper>
