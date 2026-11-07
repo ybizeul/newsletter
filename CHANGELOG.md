@@ -2,6 +2,19 @@
 
 All notable changes are documented from git tags and commit messages.
 
+## v1.5.0 - 2026-11-07
+
+- Added a personal MCP server so Claude can search and create articles in your account, using a personal access token that keeps results private to you.
+- For MCP users, agents can now read and write every language version of an article in one call, and draft newsletters without sending them.
+- Added XLSX report downloads with recipient and newsletter tabs, for editors who want to work with the data in a spreadsheet.
+- Sending a newsletter now runs in the background: the send action returns immediately, progress stays visible while it sends, and it keeps going if you reload the page.
+- Translations now have their own owner, so teammates can update a language version of an article, including unclaimed articles.
+- Contact search now also matches tags, and the article editor has a new Clear Formatting button.
+- Refreshed the logo and favicon, with new icon sizes for browsers and home screens.
+- Fixed newsletter intro and footer text being lost while editing, and copying a newsletter now keeps its intro.
+- Fixed several editor issues: SVG uploads work from the iPhone file picker, ordered list numbering is preserved, blank translations are no longer created, and the article reuse warning only appears for newsletters with the same header.
+- On touch devices, reordering uses arrow buttons instead of drag handles, and the mobile article editor has a back button.
+
 ## v1.4 - 2026-06-07
 
 - Added newsletter open tracking and open-rate reporting so editors can see how many recipients opened a sent edition.
